@@ -18,6 +18,7 @@ interface AuthContextValue {
   user: User | null;
   profile: Profile | null;
   isLoading: boolean;
+  signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
@@ -26,6 +27,7 @@ export const AuthContext = createContext<AuthContextValue>({
   user: null,
   profile: null,
   isLoading: true,
+  signInWithGoogle: async () => {},
   signInWithEmail: async () => ({ error: null }),
   signOut: async () => {},
 });
@@ -93,6 +95,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, [supabase, fetchProfile]);
 
+  const signInWithGoogle = useCallback(async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: window.location.origin + "/api/auth/callback",
+      },
+    });
+  }, [supabase]);
+
   const signInWithEmail = useCallback(
     async (email: string): Promise<{ error: string | null }> => {
       const { error } = await supabase.auth.signInWithOtp({
@@ -115,7 +126,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   return (
     <AuthContext.Provider
-      value={{ user, profile, isLoading, signInWithEmail, signOut }}
+      value={{ user, profile, isLoading, signInWithGoogle, signInWithEmail, signOut }}
     >
       {children}
     </AuthContext.Provider>
