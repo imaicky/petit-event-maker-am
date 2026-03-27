@@ -18,6 +18,7 @@ export const CATEGORIES = [
   "ネイル",
   "占い",
   "ヨガ",
+  "Instagram",
   "その他",
 ] as const;
 
@@ -83,5 +84,15 @@ export const TEMPLATES: EventTemplate[] = [
     defaultCapacity: 8,
     defaultPrice: 1500,
     category: "ヨガ",
+  },
+  {
+    id: "instagram",
+    icon: "📱",
+    title: "📱 Instagram集客・運用講座",
+    description:
+      "Instagramを使った集客・ブランディングの基本を学べる講座です。\n\nプロフィール設計・投稿の作り方・リール活用・フォロワーの増やし方まで、実践的なノウハウをお伝えします。\n\n📦 持ち物：スマートフォン（Instagram アプリ入り）\n📊 その場でアカウント診断も行います。\n✅ 個人事業主・教室運営者におすすめです。",
+    defaultCapacity: 10,
+    defaultPrice: 5000,
+    category: "Instagram",
   },
 ];
