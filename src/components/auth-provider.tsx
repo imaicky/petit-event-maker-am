@@ -18,8 +18,14 @@ interface AuthContextValue {
   user: User | null;
   profile: Profile | null;
   isLoading: boolean;
-  signInWithGoogle: () => Promise<void>;
-  signInWithEmail: (email: string) => Promise<{ error: string | null }>;
+  signInWithPassword: (
+    email: string,
+    password: string
+  ) => Promise<{ error: string | null }>;
+  signUpWithPassword: (
+    email: string,
+    password: string
+  ) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -27,8 +33,8 @@ export const AuthContext = createContext<AuthContextValue>({
   user: null,
   profile: null,
   isLoading: true,
-  signInWithGoogle: async () => {},
-  signInWithEmail: async () => ({ error: null }),
+  signInWithPassword: async () => ({ error: null }),
+  signUpWithPassword: async () => ({ error: null }),
   signOut: async () => {},
 });
 
@@ -66,7 +72,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   );
 
   useEffect(() => {
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       const u = session?.user ?? null;
       setUser(u);
@@ -77,7 +82,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     });
 
-    // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -95,22 +99,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, [supabase, fetchProfile]);
 
-  const signInWithGoogle = useCallback(async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: window.location.origin + "/api/auth/callback",
-      },
-    });
-  }, [supabase]);
-
-  const signInWithEmail = useCallback(
-    async (email: string): Promise<{ error: string | null }> => {
-      const { error } = await supabase.auth.signInWithOtp({
+  const signInWithPassword = useCallback(
+    async (
+      email: string,
+      password: string
+    ): Promise<{ error: string | null }> => {
+      const { error } = await supabase.auth.signInWithPassword({
         email,
-        options: {
-          emailRedirectTo: window.location.origin + "/api/auth/callback",
-        },
+        password,
+      });
+      if (error) return { error: error.message };
+      return { error: null };
+    },
+    [supabase]
+  );
+
+  const signUpWithPassword = useCallback(
+    async (
+      email: string,
+      password: string
+    ): Promise<{ error: string | null }> => {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
       });
       if (error) return { error: error.message };
       return { error: null };
@@ -126,7 +137,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   return (
     <AuthContext.Provider
-      value={{ user, profile, isLoading, signInWithGoogle, signInWithEmail, signOut }}
+      value={{
+        user,
+        profile,
+        isLoading,
+        signInWithPassword,
+        signUpWithPassword,
+        signOut,
+      }}
     >
       {children}
     </AuthContext.Provider>
