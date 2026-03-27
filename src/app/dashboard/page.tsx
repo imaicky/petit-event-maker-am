@@ -344,7 +344,10 @@ function EventCard({
       {/* Booking stats + progress */}
       <div className="mt-3 pt-3 border-t border-[#F2F2F2]">
         <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-1.5">
+          <Link
+            href={`/events/${event.id}/attendees`}
+            className="flex items-center gap-1.5 hover:opacity-70 transition-opacity"
+          >
             <Users className="h-3.5 w-3.5 text-[#1A1A1A]" />
             <span className="text-sm font-medium text-[#1A1A1A]">
               {event.booking_count}
@@ -355,7 +358,8 @@ function EventCard({
               )}
             </span>
             <span className="text-xs text-[#999999]">申込</span>
-          </div>
+            <ChevronRight className="h-3 w-3 text-[#999999]" />
+          </Link>
           {fillRate !== null && event.capacity !== null && (
             <span
               className={`text-xs font-medium px-2 py-0.5 rounded-full ${
