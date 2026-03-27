@@ -1,14 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth-provider";
+import { LoginDialog } from "@/components/login-dialog";
 import { LogIn, CalendarDays, Loader2 } from "lucide-react";
 
 export function LandingHeader() {
-  const { user, isLoading, signInWithGoogle } = useAuth();
+  const { user, isLoading } = useAuth();
+  const [loginOpen, setLoginOpen] = useState(false);
 
   return (
+    <>
     <header className="sticky top-0 z-30 w-full glass border-b border-[#E5E5E5]">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3.5">
         <Link
@@ -68,7 +72,7 @@ export function LandingHeader() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => signInWithGoogle()}
+                onClick={() => setLoginOpen(true)}
                 className="rounded-full border-[#E5E5E5] text-[#1A1A1A] hover:bg-[#F2F2F2] hover:border-[#1A1A1A]/30 gap-1.5"
               >
                 <LogIn className="h-3.5 w-3.5" />
@@ -87,5 +91,7 @@ export function LandingHeader() {
         </nav>
       </div>
     </header>
+    <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} />
+    </>
   );
 }

@@ -26,6 +26,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { TEMPLATES, type EventTemplate } from "@/lib/templates";
+import { useAuth } from "@/components/auth-provider";
+import { LoginDialog } from "@/components/login-dialog";
 
 // ─── Schema ────────────────────────────────────────────────────────────────
 
@@ -413,9 +415,11 @@ function EventPreview({ values }: { values: Partial<CreateEventFormValues> }) {
 
 export default function NewEventPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [showPreview, setShowPreview] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<StepId>(1);
+  const [showLoginDialog, setShowLoginDialog] = useState(false);
 
   const {
     register,
@@ -444,6 +448,11 @@ export default function NewEventPage() {
   };
 
   const onSubmit = async (data: CreateEventFormValues) => {
+    if (!user) {
+      setShowLoginDialog(true);
+      return;
+    }
+
     setServerError(null);
 
     const payload: CreateEventPayload = {
@@ -468,6 +477,10 @@ export default function NewEventPage() {
       const json = await res.json();
 
       if (!res.ok) {
+        if (res.status === 401) {
+          setShowLoginDialog(true);
+          return;
+        }
         setServerError(json.error ?? "イベントの作成に失敗しました");
         return;
       }
@@ -762,6 +775,8 @@ export default function NewEventPage() {
           </div>
         </div>
       </div>
+
+      <LoginDialog open={showLoginDialog} onOpenChange={setShowLoginDialog} />
     </main>
   );
 }

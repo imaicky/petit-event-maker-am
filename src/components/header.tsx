@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/components/auth-provider";
 import { NotificationBell } from "@/components/notification-bell";
+import { LoginDialog } from "@/components/login-dialog";
 
 const NAV_LINKS = [
   { href: "/explore", label: "イベントを探す" },
@@ -25,10 +26,11 @@ const NAV_LINKS = [
 ];
 
 export function Header() {
-  const { user, profile, isLoading, signInWithGoogle, signOut } = useAuth();
+  const { user, profile, isLoading, signOut } = useAuth();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
 
   const displayName = profile?.display_name ?? user?.email ?? "";
   const username = profile?.username ?? "";
@@ -42,7 +44,7 @@ export function Header() {
   };
 
   const handleLogin = () => {
-    signInWithGoogle();
+    setLoginOpen(true);
     setMenuOpen(false);
   };
 
@@ -230,7 +232,7 @@ export function Header() {
                   className="rounded-full text-[#1A1A1A] hover:bg-[#F2F2F2] hover:text-[#1A1A1A] transition-colors duration-150 gap-1.5"
                 >
                   <LogIn className="h-3.5 w-3.5" />
-                  Googleでログイン
+                  ログイン
                 </Button>
                 <Link href="/events/new">
                   <Button
@@ -379,7 +381,7 @@ export function Header() {
                   onClick={handleLogin}
                 >
                   <LogIn className="h-4 w-4" />
-                  Googleでログイン
+                  ログイン
                 </Button>
                 <Link href="/events/new" onClick={() => setMenuOpen(false)}>
                   <Button className="w-full rounded-full bg-[#1A1A1A] text-white hover:bg-[#111111]">
@@ -391,6 +393,7 @@ export function Header() {
           </div>
         </div>
       </header>
+      <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} />
     </>
   );
 }
