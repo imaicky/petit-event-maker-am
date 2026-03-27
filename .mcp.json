@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "ccagi-tools": {
+      "command": "/Users/mashimaro/.ccagi/bin/ccagi-tools-server",
+      "args": []
+    }
+  }
+}

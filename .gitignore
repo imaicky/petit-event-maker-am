@@ -1,0 +1,74 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+# supabase
+supabase/.temp/
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# CCAGI SDK (auto-added by upgrade)
+
+.claude/
+!.claude/.gitkeep
+!.claude/hooks/
+!.claude/settings.json
+!.claude/agents/
+!.claude/commands/
+!.claude/rules/
+.claude-plugin/
+!.claude-plugin/.gitkeep
+.ai/
+!.ai/.gitkeep
+src/sdk/
+src/lib/db/
+.claude/project-rag-*.ccm
+.claude/bin/
+.ccagi-cache/
+.ccagi-upgrade-tmp/
+~/.ccagi-global.ccm
+.mock-logs/
+!.mock-logs/.gitkeep
+*.tgz
+.npmrc
+logs/
+!logs/.gitkeep
+gitleaks*.json
+gitleaks*.log
+.fastembed_cache/

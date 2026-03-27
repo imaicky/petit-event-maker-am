@@ -1,0 +1,633 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter, useParams } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import {
+  Calendar,
+  MapPin,
+  Users,
+  JapaneseYen,
+  ImageIcon,
+  Loader2,
+  Trash2,
+  Eye,
+  EyeOff,
+  ArrowLeft,
+  ExternalLink,
+  AlertTriangle,
+  CheckCircle2,
+} from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+
+// ─── Schema ───────────────────────────────────────────────────────────────────
+
+const editEventSchema = z.object({
+  title: z
+    .string()
+    .min(1, "タイトルを入力してください")
+    .max(100, "100文字以内で入力してください"),
+  description: z.string().min(1, "説明を入力してください"),
+  datetime: z.string().min(1, "日時を入力してください"),
+  location: z.string().min(1, "場所を入力してください"),
+  capacity: z
+    .string()
+    .min(1, "定員を入力してください")
+    .refine(
+      (v) => !isNaN(Number(v)) && Number(v) >= 1,
+      "1名以上にしてください"
+    ),
+  price: z
+    .string()
+    .min(1, "料金を入力してください")
+    .refine(
+      (v) => !isNaN(Number(v)) && Number(v) >= 0,
+      "0円以上にしてください"
+    ),
+  image_url: z
+    .union([z.string().url("有効なURLを入力してください"), z.literal("")])
+    .optional(),
+  teacher_name: z.string().optional(),
+  teacher_bio: z.string().optional(),
+});
+
+type EditEventFormValues = z.infer<typeof editEventSchema>;
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return <p className="mt-1 text-xs text-red-500">{message}</p>;
+}
+
+function FormSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl bg-white border border-[#E5E5E5] overflow-hidden">
+      <div className="px-6 py-3.5 border-b border-[#F2F2F2]">
+        <h2 className="text-xs font-bold uppercase tracking-wider text-[#999999]">
+          {title}
+        </h2>
+      </div>
+      <div className="p-6">{children}</div>
+    </section>
+  );
+}
+
+function FieldWrapper({
+  label,
+  required,
+  optional,
+  hint,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  optional?: boolean;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1">
+        <span className="text-sm font-medium text-[#1A1A1A]">{label}</span>
+        {required && <span className="text-[#1A1A1A] text-sm">*</span>}
+        {optional && (
+          <span className="text-xs text-[#999999] font-normal">（任意）</span>
+        )}
+      </div>
+      {hint && (
+        <p className="text-xs text-[#999999] leading-relaxed">{hint}</p>
+      )}
+      {children}
+    </div>
+  );
+}
+
+// ─── Loading skeleton ─────────────────────────────────────────────────────────
+
+function LoadingSkeleton() {
+  return (
+    <main className="min-h-dvh bg-[#FAFAFA]">
+      <div className="sticky top-0 z-10 border-b border-[#E5E5E5] bg-white/80 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
+          <div className="h-5 w-40 animate-pulse rounded-lg bg-[#E5E5E5]" />
+          <div className="h-7 w-20 animate-pulse rounded-full bg-[#E5E5E5]" />
+        </div>
+      </div>
+      <div className="mx-auto max-w-3xl space-y-5 px-4 py-8">
+        {[1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className="h-44 animate-pulse rounded-2xl bg-[#E5E5E5]"
+          />
+        ))}
+      </div>
+    </main>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default function EditEventPage() {
+  const router = useRouter();
+  const params = useParams<{ id: string }>();
+  const eventId = params.id;
+
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isPublished, setIsPublished] = useState(true);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting, isDirty },
+  } = useForm<EditEventFormValues>({
+    resolver: zodResolver(editEventSchema),
+  });
+
+  // ── Load existing event ───────────────────────────────────────────────────
+
+  useEffect(() => {
+    async function fetchEvent() {
+      try {
+        const res = await fetch(`/api/events/${eventId}`);
+        if (!res.ok) {
+          setNotFound(true);
+          return;
+        }
+        const json = await res.json();
+        const event = json.event;
+
+        let datetimeLocal = "";
+        try {
+          const d = new Date(event.datetime);
+          const pad = (n: number) => String(n).padStart(2, "0");
+          datetimeLocal = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        } catch {
+          datetimeLocal = event.datetime;
+        }
+
+        reset({
+          title: event.title ?? "",
+          description: event.description ?? "",
+          datetime: datetimeLocal,
+          location: event.location ?? "",
+          capacity: String(event.capacity ?? 10),
+          price: String(event.price ?? 0),
+          image_url: event.image_url ?? "",
+          teacher_name: event.teacher_name ?? "",
+          teacher_bio: event.teacher_bio ?? "",
+        });
+        setIsPublished(event.is_published ?? true);
+      } catch {
+        setServerError("イベントの読み込みに失敗しました");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchEvent();
+  }, [eventId, reset]);
+
+  // ── Submit ────────────────────────────────────────────────────────────────
+
+  const onSubmit = async (data: EditEventFormValues) => {
+    setServerError(null);
+    setSaveSuccess(false);
+
+    const payload = {
+      title: data.title,
+      description: data.description,
+      datetime: data.datetime,
+      location: data.location,
+      capacity: Number(data.capacity),
+      price: Number(data.price),
+      image_url: data.image_url || undefined,
+      teacher_name: data.teacher_name,
+      teacher_bio: data.teacher_bio,
+      is_published: isPublished,
+    };
+
+    try {
+      const res = await fetch(`/api/events/${eventId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        setServerError(json.error ?? "イベントの更新に失敗しました");
+        return;
+      }
+
+      setSaveSuccess(true);
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 1500);
+    } catch {
+      setServerError(
+        "ネットワークエラーが発生しました。もう一度お試しください。"
+      );
+    }
+  };
+
+  // ── Delete ────────────────────────────────────────────────────────────────
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/events/${eventId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const json = await res.json();
+        setServerError(json.error ?? "イベントの削除に失敗しました");
+        setShowDeleteDialog(false);
+        return;
+      }
+      router.push("/dashboard");
+    } catch {
+      setServerError(
+        "ネットワークエラーが発生しました。もう一度お試しください。"
+      );
+      setShowDeleteDialog(false);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  if (loading) return <LoadingSkeleton />;
+
+  if (notFound) {
+    return (
+      <main className="flex min-h-dvh flex-col items-center justify-center bg-[#FAFAFA] px-4">
+        <div className="text-5xl mb-4">🔍</div>
+        <p className="text-lg font-bold text-[#1A1A1A] mb-2">
+          イベントが見つかりませんでした
+        </p>
+        <p className="text-sm text-[#999999] mb-6">
+          URLを確認するか、ダッシュボードから操作してください。
+        </p>
+        <Button
+          variant="outline"
+          className="rounded-full border-[#E5E5E5] hover:border-[#1A1A1A]/30"
+          onClick={() => router.push("/dashboard")}
+        >
+          ダッシュボードに戻る
+        </Button>
+      </main>
+    );
+  }
+
+  const inputCls =
+    "h-10 rounded-xl border-[#E5E5E5] focus-visible:border-[#1A1A1A] focus-visible:ring-[#1A1A1A]/20 bg-[#FAFAFA]";
+  const inputWithIconCls = `${inputCls} pl-9`;
+
+  return (
+    <>
+      <main className="min-h-dvh bg-[#FAFAFA]">
+        {/* Sticky header */}
+        <div className="sticky top-0 z-10 border-b border-[#E5E5E5] bg-white/90 backdrop-blur-sm">
+          <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3 gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => router.back()}
+                aria-label="戻る"
+                className="h-8 w-8 p-0 rounded-xl text-[#999999] hover:bg-[#F2F2F2] hover:text-[#1A1A1A] shrink-0"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <div className="min-w-0">
+                <h1 className="text-base font-bold text-[#1A1A1A] truncate">
+                  イベントを編集
+                </h1>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Preview link */}
+              <a
+                href={`/events/${eventId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden sm:flex items-center gap-1.5 rounded-full border border-[#E5E5E5] px-3 py-1.5 text-xs text-[#999999] hover:text-[#1A1A1A] hover:border-[#1A1A1A]/30 transition-all"
+              >
+                <ExternalLink className="h-3 w-3" />
+                プレビュー
+              </a>
+
+              {/* Publish toggle */}
+              <button
+                type="button"
+                onClick={() => setIsPublished((v) => !v)}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all border ${
+                  isPublished
+                    ? "bg-[#404040]/10 text-[#404040] border-[#404040]/20 hover:bg-[#404040]/20"
+                    : "bg-[#F2F2F2] text-[#999999] border-[#E5E5E5] hover:bg-[#E5E5E5]"
+                }`}
+              >
+                {isPublished ? (
+                  <>
+                    <Eye className="h-3.5 w-3.5" />
+                    公開中
+                  </>
+                ) : (
+                  <>
+                    <EyeOff className="h-3.5 w-3.5" />
+                    下書き
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Save success banner */}
+        {saveSuccess && (
+          <div className="mx-auto max-w-3xl px-4 pt-4">
+            <div className="flex items-center gap-3 rounded-2xl bg-[#404040]/10 border border-[#404040]/20 px-4 py-3 animate-in fade-in-0 slide-in-from-top-2">
+              <CheckCircle2 className="h-5 w-5 text-[#404040] shrink-0" />
+              <p className="text-sm font-medium text-[#404040]">
+                保存しました。ダッシュボードに戻ります…
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="mx-auto max-w-3xl px-4 py-6">
+          <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
+            {/* Basic info */}
+            <FormSection title="基本情報">
+              <div className="space-y-5">
+                <FieldWrapper label="イベントタイトル" required>
+                  <Input
+                    placeholder="例：🌿 体験ヨガレッスン｜初心者歓迎"
+                    aria-invalid={!!errors.title}
+                    {...register("title")}
+                    className={inputCls}
+                  />
+                  <FieldError message={errors.title?.message} />
+                </FieldWrapper>
+
+                <FieldWrapper label="イベントの説明" required>
+                  <Textarea
+                    placeholder="どんなイベントか、持ち物、注意事項など詳しく書いてみましょう"
+                    rows={6}
+                    aria-invalid={!!errors.description}
+                    {...register("description")}
+                    className="rounded-xl border-[#E5E5E5] focus-visible:border-[#1A1A1A] focus-visible:ring-[#1A1A1A]/20 bg-[#FAFAFA] resize-none"
+                  />
+                  <FieldError message={errors.description?.message} />
+                </FieldWrapper>
+              </div>
+            </FormSection>
+
+            {/* Date / Location */}
+            <FormSection title="日時・場所">
+              <div className="space-y-5">
+                <FieldWrapper label="開催日時" required>
+                  <div className="relative">
+                    <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
+                    <Input
+                      type="datetime-local"
+                      aria-invalid={!!errors.datetime}
+                      {...register("datetime")}
+                      className={inputWithIconCls}
+                    />
+                  </div>
+                  <FieldError message={errors.datetime?.message} />
+                </FieldWrapper>
+
+                <FieldWrapper
+                  label="場所・会場"
+                  required
+                  hint="オンラインの場合はURLや「Zoom」と入力してください"
+                >
+                  <div className="relative">
+                    <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
+                    <Input
+                      placeholder="例：渋谷区○○スタジオ / Zoom"
+                      aria-invalid={!!errors.location}
+                      {...register("location")}
+                      className={inputWithIconCls}
+                    />
+                  </div>
+                  <FieldError message={errors.location?.message} />
+                </FieldWrapper>
+              </div>
+            </FormSection>
+
+            {/* Capacity / Price */}
+            <FormSection title="定員・料金">
+              <div className="grid gap-5 sm:grid-cols-2">
+                <FieldWrapper label="定員（名）" required>
+                  <div className="relative">
+                    <Users className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
+                    <Input
+                      type="number"
+                      min={1}
+                      max={10000}
+                      aria-invalid={!!errors.capacity}
+                      {...register("capacity")}
+                      className={inputWithIconCls}
+                    />
+                  </div>
+                  <FieldError message={errors.capacity?.message} />
+                </FieldWrapper>
+
+                <FieldWrapper
+                  label="参加費（円）"
+                  required
+                  hint="無料の場合は 0 と入力"
+                >
+                  <div className="relative">
+                    <JapaneseYen className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
+                    <Input
+                      type="number"
+                      min={0}
+                      aria-invalid={!!errors.price}
+                      {...register("price")}
+                      className={inputWithIconCls}
+                    />
+                  </div>
+                  <FieldError message={errors.price?.message} />
+                </FieldWrapper>
+              </div>
+            </FormSection>
+
+            {/* Image */}
+            <FormSection title="画像">
+              <FieldWrapper
+                label="画像URL"
+                optional
+                hint="画像の直リンクURL（Imgur、Cloudinary等）を入力してください"
+              >
+                <div className="relative">
+                  <ImageIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
+                  <Input
+                    type="url"
+                    placeholder="https://example.com/image.jpg"
+                    aria-invalid={!!errors.image_url}
+                    {...register("image_url")}
+                    className={inputWithIconCls}
+                  />
+                </div>
+                <FieldError message={errors.image_url?.message} />
+              </FieldWrapper>
+            </FormSection>
+
+            {/* Teacher info */}
+            <FormSection title="先生・主催者プロフィール（任意）">
+              <div className="space-y-5">
+                <FieldWrapper label="お名前">
+                  <Input
+                    placeholder="例：田中 さくら"
+                    {...register("teacher_name")}
+                    className={inputCls}
+                  />
+                </FieldWrapper>
+                <FieldWrapper label="一言プロフィール">
+                  <Textarea
+                    placeholder="例：ヨガインストラクター歴10年。笑顔と丁寧な指導が信条です。"
+                    rows={3}
+                    {...register("teacher_bio")}
+                    className="rounded-xl border-[#E5E5E5] focus-visible:border-[#1A1A1A] focus-visible:ring-[#1A1A1A]/20 bg-[#FAFAFA] resize-none"
+                  />
+                </FieldWrapper>
+              </div>
+            </FormSection>
+
+            {/* Server error */}
+            {serverError && (
+              <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3">
+                <p className="text-sm text-red-500">{serverError}</p>
+              </div>
+            )}
+
+            {/* Save button */}
+            <Button
+              type="submit"
+              disabled={isSubmitting || !isDirty}
+              className="h-12 w-full rounded-xl bg-[#1A1A1A] text-base font-bold text-white hover:bg-[#111111] disabled:opacity-60 gap-2 shadow-sm"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  保存中...
+                </>
+              ) : (
+                "変更を保存する"
+              )}
+            </Button>
+
+            {/* Mobile preview link */}
+            <a
+              href={`/events/${eventId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="sm:hidden flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#E5E5E5] bg-white text-sm text-[#999999] hover:border-[#1A1A1A]/30 hover:text-[#1A1A1A] transition-all"
+            >
+              <ExternalLink className="h-4 w-4" />
+              公開ページをプレビュー
+            </a>
+
+            {/* Danger zone */}
+            <div className="rounded-2xl border border-red-100 bg-red-50/50 overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-red-100 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-red-400" />
+                <h3 className="text-sm font-bold text-red-500">
+                  危険ゾーン
+                </h3>
+              </div>
+              <div className="p-5">
+                <p className="mb-4 text-sm text-red-400/80 leading-relaxed">
+                  イベントを削除すると元に戻すことはできません。
+                  すべての申し込みデータも失われます。
+                </p>
+                <Button
+                  type="button"
+                  onClick={() => setShowDeleteDialog(true)}
+                  className="gap-2 bg-white border border-red-200 text-red-500 hover:bg-red-50 hover:border-red-300 rounded-xl h-9"
+                  variant="outline"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  このイベントを削除する
+                </Button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </main>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-red-50">
+                <Trash2 className="h-4 w-4 text-red-500" />
+              </div>
+              イベントを削除しますか？
+            </DialogTitle>
+            <DialogDescription>
+              この操作は取り消せません。イベントと関連する申し込みデータがすべて削除されます。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteDialog(false)}
+              disabled={isDeleting}
+              className="rounded-xl"
+            >
+              キャンセル
+            </Button>
+            <Button
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="gap-2 rounded-xl bg-red-500 hover:bg-red-600 text-white"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  削除中...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4" />
+                  削除する
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
