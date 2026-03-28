@@ -12,10 +12,12 @@ import {
   Phone,
   Clock,
   UserX,
+  Send,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/header";
+import { MessageDialog } from "@/components/message-dialog";
 import { useAuth } from "@/components/auth-provider";
 import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database";
@@ -104,6 +106,7 @@ export default function AttendeesPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [messageOpen, setMessageOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!eventId || !user) return;
@@ -224,11 +227,22 @@ export default function AttendeesPage() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <h1
-            className="text-lg font-bold text-[#1A1A1A] truncate"
+            className="text-lg font-bold text-[#1A1A1A] truncate flex-1"
             style={{ fontFamily: "var(--font-zen-maru)" }}
           >
             参加者一覧
           </h1>
+          {bookings.length > 0 && (
+            <Button
+              type="button"
+              size="sm"
+              className="rounded-full bg-[#1A1A1A] text-white hover:bg-[#111111] gap-1.5 shrink-0"
+              onClick={() => setMessageOpen(true)}
+            >
+              <Send className="h-3.5 w-3.5" />
+              メッセージ送信
+            </Button>
+          )}
         </div>
 
         {/* Event summary card */}
@@ -402,6 +416,19 @@ export default function AttendeesPage() {
               </span>
             </div>
           </div>
+        )}
+
+        {/* Message dialog */}
+        {event && (
+          <MessageDialog
+            eventId={eventId}
+            eventTitle={event.title}
+            eventDate={formatDate(event.datetime)}
+            eventLocation={event.location ?? ""}
+            recipientCount={bookings.length}
+            open={messageOpen}
+            onClose={() => setMessageOpen(false)}
+          />
         )}
       </div>
     </main>

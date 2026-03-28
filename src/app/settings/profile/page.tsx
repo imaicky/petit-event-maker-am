@@ -21,6 +21,9 @@ import {
   Facebook,
   ExternalLink,
   Camera,
+  Link2,
+  Copy,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -160,6 +163,7 @@ export default function ProfileSettingsPage() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const {
     register,
@@ -494,6 +498,67 @@ export default function ProfileSettingsPage() {
                   <ExternalLink className="h-3 w-3" />
                   設定する
                 </Button>
+              </Link>
+            </div>
+          </SectionCard>
+
+          {/* Instagram link page */}
+          <SectionCard title="Instagram用リンク">
+            <div className="space-y-3">
+              <p className="text-sm text-[#999999] leading-relaxed">
+                Instagramのプロフィールに貼れるリンクページです。公開中のイベントが一覧表示されます。
+              </p>
+              <div className="flex items-center gap-3">
+                <div className="flex-1 min-w-0 rounded-xl bg-[#FAFAFA] border border-[#E5E5E5] px-3 py-2.5">
+                  <p className="text-sm text-[#1A1A1A] truncate">
+                    {typeof window !== "undefined"
+                      ? `${window.location.origin}/${username || "username"}/links`
+                      : `/${username || "username"}/links`}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full gap-1.5 border-[#E5E5E5] hover:border-[#1A1A1A]/30 shrink-0"
+                  onClick={async () => {
+                    const linkUrl = `${window.location.origin}/${username || "username"}/links`;
+                    try {
+                      await navigator.clipboard.writeText(linkUrl);
+                    } catch {
+                      const textarea = document.createElement("textarea");
+                      textarea.value = linkUrl;
+                      textarea.style.position = "fixed";
+                      textarea.style.opacity = "0";
+                      document.body.appendChild(textarea);
+                      textarea.select();
+                      document.execCommand("copy");
+                      document.body.removeChild(textarea);
+                    }
+                    setLinkCopied(true);
+                    setTimeout(() => setLinkCopied(false), 2000);
+                  }}
+                >
+                  {linkCopied ? (
+                    <>
+                      <Check className="h-3.5 w-3.5 text-green-600" />
+                      コピー済み
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3.5 w-3.5" />
+                      URLをコピー
+                    </>
+                  )}
+                </Button>
+              </div>
+              <Link
+                href={`/${username || "username"}/links`}
+                target="_blank"
+                className="inline-flex items-center gap-1.5 text-xs text-[#999999] hover:text-[#1A1A1A] transition-colors"
+              >
+                <Link2 className="h-3 w-3" />
+                リンクページをプレビュー
               </Link>
             </div>
           </SectionCard>

@@ -239,6 +239,51 @@ export type Database = {
           }
         ]
       }
+      event_messages: {
+        Row: {
+          id: string
+          event_id: string
+          sender_id: string
+          subject: string
+          body: string
+          recipient_count: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          event_id: string
+          sender_id: string
+          subject: string
+          body: string
+          recipient_count?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          event_id?: string
+          sender_id?: string
+          subject?: string
+          body?: string
+          recipient_count?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'event_messages_event_id_fkey'
+            columns: ['event_id']
+            isOneToOne: false
+            referencedRelation: 'events'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'event_messages_sender_id_fkey'
+            columns: ['sender_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
       notifications: {
         Row: {
           id: string
@@ -319,6 +364,9 @@ export type BookingUpdate = Database['public']['Tables']['bookings']['Update']
 export type Review = Database['public']['Tables']['reviews']['Row']
 export type ReviewInsert = Database['public']['Tables']['reviews']['Insert']
 export type ReviewUpdate = Database['public']['Tables']['reviews']['Update']
+
+export type EventMessage = Database['public']['Tables']['event_messages']['Row']
+export type EventMessageInsert = Database['public']['Tables']['event_messages']['Insert']
 
 export type Notification = Database['public']['Tables']['notifications']['Row']
 export type NotificationInsert = Database['public']['Tables']['notifications']['Insert']

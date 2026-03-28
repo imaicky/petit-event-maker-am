@@ -74,6 +74,17 @@ create table if not exists public.notifications (
   created_at      timestamptz not null default now()
 );
 
+-- event_messages: sent messages to event attendees
+create table if not exists public.event_messages (
+  id              uuid        primary key default gen_random_uuid(),
+  event_id        uuid        not null references public.events(id) on delete cascade,
+  sender_id       uuid        not null references public.profiles(id) on delete cascade,
+  subject         text        not null,
+  body            text        not null,
+  recipient_count integer     not null default 0,
+  created_at      timestamptz not null default now()
+);
+
 -- ─── Indexes ─────────────────────────────────────────────────
 
 create index if not exists idx_events_creator_id    on public.events(creator_id);
@@ -89,6 +100,9 @@ create index if not exists idx_reviews_event_id     on public.reviews(event_id);
 
 create index if not exists idx_notifications_email  on public.notifications(recipient_email);
 create index if not exists idx_notifications_is_read on public.notifications(is_read);
+
+create index if not exists idx_event_messages_event_id  on public.event_messages(event_id);
+create index if not exists idx_event_messages_sender_id on public.event_messages(sender_id);
 
 -- ─── updated_at trigger ──────────────────────────────────────
 
@@ -280,6 +294,15 @@ create policy "reviews_select_all"
 
 create policy "reviews_insert_any"
   on public.reviews for insert with check (true);
+
+-- event_messages: sender can view their own messages
+alter table public.event_messages enable row level security;
+
+create policy "event_messages_select_own"
+  on public.event_messages for select using (auth.uid() = sender_id);
+
+create policy "event_messages_insert_own"
+  on public.event_messages for insert with check (auth.uid() = sender_id);
 
 -- notifications: only recipient (matched by user email in auth.users)
 create policy "notifications_select_own"
