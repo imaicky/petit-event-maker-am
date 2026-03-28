@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PublicEventCard } from "./page";
+import { PublicEventCard } from "./public-event-card";
 import type { Event } from "@/types/database";
 
 type EventWithBookings = Event & { booking_count: number };
