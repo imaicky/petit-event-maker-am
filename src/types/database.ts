@@ -201,6 +201,44 @@ export type Database = {
           }
         ]
       }
+      line_accounts: {
+        Row: {
+          id: string
+          user_id: string
+          channel_name: string
+          channel_access_token: string
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          channel_name?: string
+          channel_access_token: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          channel_name?: string
+          channel_access_token?: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'line_accounts_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: true
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
       notifications: {
         Row: {
           id: string
@@ -285,6 +323,10 @@ export type ReviewUpdate = Database['public']['Tables']['reviews']['Update']
 export type Notification = Database['public']['Tables']['notifications']['Row']
 export type NotificationInsert = Database['public']['Tables']['notifications']['Insert']
 export type NotificationUpdate = Database['public']['Tables']['notifications']['Update']
+
+export type LineAccount = Database['public']['Tables']['line_accounts']['Row']
+export type LineAccountInsert = Database['public']['Tables']['line_accounts']['Insert']
+export type LineAccountUpdate = Database['public']['Tables']['line_accounts']['Update']
 
 export type BookingStatus = 'confirmed' | 'cancelled'
 

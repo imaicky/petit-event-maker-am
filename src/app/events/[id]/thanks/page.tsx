@@ -377,6 +377,18 @@ export default async function ThanksPage({
           </Link>
         </div>
 
+        {/* ── Review prompt ────────────────────────────────────────────── */}
+        <div className="mb-4 rounded-2xl border border-[#E5E5E5] bg-white p-4 text-center">
+          <p className="text-xs text-[#999999] mb-2">イベント参加後にぜひ感想をお聞かせください</p>
+          <Link
+            href={`/events/${id}#reviews`}
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#F7F7F7] px-4 py-2 text-sm font-medium text-[#1A1A1A] hover:bg-[#E5E5E5] transition-colors"
+          >
+            <span>⭐</span>
+            レビューを書く
+          </Link>
+        </div>
+
         {/* ── Social share ─────────────────────────────────────────────── */}
         <div className="mb-8 rounded-2xl border border-[#E5E5E5] bg-white p-4">
           <ShareButtons url={eventPageUrl} title={event?.title ?? "イベント"} />

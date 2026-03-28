@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Calendar, MapPin, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AverageRatingBadge } from "@/components/average-rating-badge";
 
 export interface EventCardProps {
   id: string;
@@ -13,6 +14,8 @@ export interface EventCardProps {
   image_url?: string;
   category?: string;
   teacher_name?: string;
+  averageRating?: number;
+  reviewCount?: number;
   className?: string;
 }
 
@@ -46,6 +49,8 @@ export function EventCard({
   image_url,
   category,
   teacher_name,
+  averageRating,
+  reviewCount,
   className,
 }: EventCardProps) {
   const remaining = capacity - booked_count;
@@ -155,6 +160,9 @@ export function EventCard({
               <User className="h-3.5 w-3.5 shrink-0 text-[#1A1A1A]" />
               <span className="truncate">{teacher_name}</span>
             </div>
+          )}
+          {averageRating != null && reviewCount != null && reviewCount > 0 && (
+            <AverageRatingBadge averageRating={averageRating} reviewCount={reviewCount} />
           )}
         </div>
 

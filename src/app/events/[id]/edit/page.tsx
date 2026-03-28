@@ -10,7 +10,6 @@ import {
   MapPin,
   Users,
   JapaneseYen,
-  ImageIcon,
   Loader2,
   Trash2,
   Eye,
@@ -32,6 +31,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { ImageUpload } from "@/components/image-upload";
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -164,6 +164,8 @@ export default function EditEventPage() {
     register,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<EditEventFormValues>({
     resolver: zodResolver(editEventSchema),
@@ -484,20 +486,14 @@ export default function EditEventPage() {
             {/* Image */}
             <FormSection title="画像">
               <FieldWrapper
-                label="画像URL"
+                label="イベント画像"
                 optional
-                hint="画像の直リンクURL（Imgur、Cloudinary等）を入力してください"
+                hint="イベントのカバー画像をアップロードできます"
               >
-                <div className="relative">
-                  <ImageIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
-                  <Input
-                    type="url"
-                    placeholder="https://example.com/image.jpg"
-                    aria-invalid={!!errors.image_url}
-                    {...register("image_url")}
-                    className={inputWithIconCls}
-                  />
-                </div>
+                <ImageUpload
+                  value={watch("image_url")}
+                  onChange={(url) => setValue("image_url", url, { shouldDirty: true })}
+                />
                 <FieldError message={errors.image_url?.message} />
               </FieldWrapper>
             </FormSection>

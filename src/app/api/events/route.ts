@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { broadcastLineMessage } from "@/lib/line";
 
 // ─── Validation ──────────────────────────────────────────────
 
@@ -117,6 +118,45 @@ export async function POST(request: NextRequest) {
         { error: "イベントの作成に失敗しました" },
         { status: 500 }
       );
+    }
+
+    // Send LINE notification (async, non-blocking)
+    if (event.is_published) {
+      (async () => {
+        try {
+          const { data: lineAccount } = await supabase
+            .from("line_accounts")
+            .select("channel_access_token, is_active")
+            .eq("user_id", user.id)
+            .maybeSingle();
+
+          if (lineAccount?.is_active && lineAccount.channel_access_token) {
+            const dateStr = new Date(event.datetime).toLocaleDateString("ja-JP", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+              weekday: "short",
+            });
+            const message = [
+              `🎉 新しいイベントが公開されました！`,
+              ``,
+              `📌 ${event.title}`,
+              event.location ? `📍 ${event.location}` : null,
+              `📅 ${dateStr}`,
+              event.price > 0 ? `💰 ¥${event.price.toLocaleString()}` : `💰 無料`,
+              ``,
+              `詳細・予約はこちら👇`,
+              `${process.env.NEXT_PUBLIC_BASE_URL || "https://example.com"}/events/${event.id}`,
+            ]
+              .filter(Boolean)
+              .join("\n");
+
+            await broadcastLineMessage(lineAccount.channel_access_token, message);
+          }
+        } catch (err) {
+          console.error("[POST /api/events] LINE notification error:", err);
+        }
+      })();
     }
 
     // Augment with booking count (always 0 for new events)

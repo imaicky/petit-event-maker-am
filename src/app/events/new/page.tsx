@@ -10,7 +10,6 @@ import {
   MapPin,
   Users,
   JapaneseYen,
-  ImageIcon,
   Loader2,
   Sparkles,
   Eye,
@@ -28,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { TEMPLATES, type EventTemplate } from "@/lib/templates";
 import { useAuth } from "@/components/auth-provider";
 import { LoginDialog } from "@/components/login-dialog";
+import { ImageUpload } from "@/components/image-upload";
 
 // ─── Schema ────────────────────────────────────────────────────────────────
 
@@ -426,6 +426,7 @@ export default function NewEventPage() {
     handleSubmit,
     reset,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<CreateEventFormValues>({
     resolver: zodResolver(createEventSchema),
@@ -651,20 +652,14 @@ export default function NewEventPage() {
 
                   {/* Image */}
                   <FieldWrapper
-                    label="画像URL"
+                    label="イベント画像"
                     optional
-                    hint="画像の直リンクURL（Imgur、Cloudinary等）を入力してください"
+                    hint="イベントのカバー画像をアップロードできます"
                   >
-                    <div className="relative">
-                      <ImageIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
-                      <Input
-                        type="url"
-                        placeholder="https://example.com/image.jpg"
-                        aria-invalid={!!errors.image_url}
-                        {...register("image_url")}
-                        className={inputWithIconCls}
-                      />
-                    </div>
+                    <ImageUpload
+                      value={watchedValues.image_url}
+                      onChange={(url) => setValue("image_url", url, { shouldDirty: true })}
+                    />
                     <FieldError message={errors.image_url?.message} />
                   </FieldWrapper>
 

@@ -28,6 +28,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Header } from "@/components/header";
+import { ImageUpload } from "@/components/image-upload";
 import { useAuth } from "@/components/auth-provider";
 import { createClient } from "@/lib/supabase/client";
 import type { SnsLinks } from "@/types/database";
@@ -165,6 +166,7 @@ export default function ProfileSettingsPage() {
     handleSubmit,
     watch,
     reset,
+    setValue,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<ProfileFormValues>({
     resolver: zodResolver(profileFormSchema),
@@ -312,7 +314,7 @@ export default function ProfileSettingsPage() {
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
           {/* Avatar section */}
           <SectionCard title="アバター">
-            <div className="flex items-center gap-6">
+            <div className="flex items-start gap-6">
               {/* Avatar preview */}
               <div className="relative shrink-0">
                 <Avatar className="size-20 ring-4 ring-[#E5E5E5]">
@@ -338,15 +340,11 @@ export default function ProfileSettingsPage() {
                     （任意）
                   </span>
                 </p>
-                <p className="text-xs text-[#999999] mb-2 leading-relaxed">
-                  ImgurやCloudinaryなどの画像直リンクURLを入力
-                </p>
-                <Input
-                  type="url"
-                  placeholder="https://example.com/avatar.jpg"
-                  aria-invalid={!!errors.avatar_url}
-                  {...register("avatar_url")}
-                  className={inputCls}
+                <ImageUpload
+                  value={avatarUrl ?? ""}
+                  onChange={(url) => {
+                    setValue("avatar_url", url, { shouldDirty: true });
+                  }}
                 />
                 <FieldError message={errors.avatar_url?.message} />
               </div>
@@ -457,6 +455,46 @@ export default function ProfileSettingsPage() {
                   <FieldError message={errors[field.key]?.message} />
                 </FormField>
               ))}
+            </div>
+          </SectionCard>
+
+          {/* 連携サービス */}
+          <SectionCard title="連携サービス">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#06C755]/10">
+                  <svg
+                    className="h-5 w-5 text-[#06C755]"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-[#1A1A1A]">
+                    LINE公式アカウント
+                  </p>
+                  <p className="text-xs text-[#999999]">
+                    イベント作成時にフォロワーへ自動通知
+                  </p>
+                </div>
+              </div>
+              <Link href="/settings/line">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full text-xs gap-1.5 border-[#E5E5E5] hover:border-[#1A1A1A]/30 shrink-0"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  設定する
+                </Button>
+              </Link>
             </div>
           </SectionCard>
 

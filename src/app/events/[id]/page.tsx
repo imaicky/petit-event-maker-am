@@ -1,13 +1,15 @@
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import type { Metadata, ResolvingMetadata } from "next";
-import { Calendar, MapPin, Users, JapaneseYen, ChevronRight, Share2 } from "lucide-react";
+import { Calendar, MapPin, Users, JapaneseYen, ChevronRight } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { BookingForm } from "@/components/booking-form";
 import { ReviewCard, type Review } from "@/components/review-card";
 import { ReviewSection } from "@/components/review-section";
+import { ShareButton } from "@/components/share-button";
+import { StoriesDownloadButton } from "@/components/stories-download-button";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -156,19 +158,7 @@ function formatTime(datetimeStr: string): string {
   }
 }
 
-// ─── Share Button (client) ───────────────────────────────────────────────────
-
-function ShareButtonInline() {
-  // Server-rendered; we use a plain anchor with JS inline
-  return (
-    <button
-      type="button"
-      onClick={undefined}
-      aria-label="リンクをコピー"
-      className="hidden"
-    />
-  );
-}
+// (ShareButtonInline removed — now using shared ShareButton client component)
 
 // ─── Spots Badge ─────────────────────────────────────────────────────────────
 
@@ -345,7 +335,7 @@ export default async function EventPage({ params }: EventPageProps) {
 
         {/* Share button overlay */}
         <div className="absolute right-4 top-4 sm:right-6 sm:top-6">
-          <ShareButton />
+          <ShareButton url={`${baseUrl}/events/${id}`} title={event.title} variant="overlay" />
         </div>
       </div>
 
@@ -410,6 +400,12 @@ export default async function EventPage({ params }: EventPageProps) {
                 </p>
               </div>
             </section>
+
+            {/* Share & Stories actions */}
+            <div className="mb-8 flex flex-wrap gap-2 animate-fade-in-up delay-200">
+              <ShareButton url={`${baseUrl}/events/${id}`} title={event.title} variant="inline" />
+              <StoriesDownloadButton eventId={id} eventTitle={event.title} />
+            </div>
 
             {/* Teacher profile */}
             {event.teacher_name && (
@@ -569,20 +565,3 @@ export default async function EventPage({ params }: EventPageProps) {
   );
 }
 
-// ─── Share Button (client component) ─────────────────────────────────────────
-
-function ShareButton() {
-  // Rendered as a server component; interaction handled via inline script
-  return (
-    <button
-      type="button"
-      aria-label="リンクをコピー"
-      className="glass flex h-10 w-10 items-center justify-center rounded-full border border-white/20 shadow-lg transition-all duration-200 hover:scale-110 hover:bg-white/40 active:scale-95"
-      onClick={undefined}
-      // Since this is a server component, we use a data attribute and handle via client script
-      data-share-button="true"
-    >
-      <Share2 className="h-4 w-4 text-white drop-shadow-sm" />
-    </button>
-  );
-}

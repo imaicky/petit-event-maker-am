@@ -1,14 +1,17 @@
-import { Suspense } from "react";
 import Link from "next/link";
 import { Search, SlidersHorizontal, Sparkles } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
 import type { EventWithBookingCount } from "@/types/database";
 import { CATEGORIES } from "@/lib/templates";
+import { CATEGORY_ICONS } from "@/lib/constants";
 import { EventCard } from "@/components/event-card";
 import { ExploreFilters } from "@/components/explore-filters";
+import { TrendingEvents } from "@/components/trending-events";
 
 // ─── Data ────────────────────────────────────────────────────────────────────
+
+type ReviewAgg = { averageRating: number; reviewCount: number };
 
 async function getPublishedEvents(): Promise<EventWithBookingCount[]> {
   try {
@@ -39,9 +42,46 @@ async function getPublishedEvents(): Promise<EventWithBookingCount[]> {
   }
 }
 
+async function getReviewAggregations(
+  eventIds: string[]
+): Promise<Record<string, ReviewAgg>> {
+  if (eventIds.length === 0) return {};
+  try {
+    const supabase = await createClient();
+    const { data: reviews } = await supabase
+      .from("reviews")
+      .select("event_id, rating")
+      .in("event_id", eventIds);
+
+    if (!reviews) return {};
+
+    const map: Record<string, { sum: number; count: number }> = {};
+    for (const r of reviews) {
+      if (!map[r.event_id]) map[r.event_id] = { sum: 0, count: 0 };
+      map[r.event_id].sum += r.rating;
+      map[r.event_id].count += 1;
+    }
+
+    const result: Record<string, ReviewAgg> = {};
+    for (const [id, { sum, count }] of Object.entries(map)) {
+      result[id] = {
+        averageRating: Math.round((sum / count) * 10) / 10,
+        reviewCount: count,
+      };
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
 // ─── Sort / Filter helpers ────────────────────────────────────────────────────
 
-function sortEvents(events: EventWithBookingCount[], sort: string): EventWithBookingCount[] {
+function sortEvents(
+  events: EventWithBookingCount[],
+  sort: string,
+  reviewAggs?: Record<string, ReviewAgg>
+): EventWithBookingCount[] {
   const now = Date.now();
   if (sort === "date") {
     return [...events].sort(
@@ -52,6 +92,14 @@ function sortEvents(events: EventWithBookingCount[], sort: string): EventWithBoo
   }
   if (sort === "popular") {
     return [...events].sort((a, b) => b.booking_count - a.booking_count);
+  }
+  if (sort === "rating" && reviewAggs) {
+    return [...events].sort((a, b) => {
+      const aRating = reviewAggs[a.id]?.averageRating ?? 0;
+      const bRating = reviewAggs[b.id]?.averageRating ?? 0;
+      if (bRating !== aRating) return bRating - aRating;
+      return (reviewAggs[b.id]?.reviewCount ?? 0) - (reviewAggs[a.id]?.reviewCount ?? 0);
+    });
   }
   // Default: newest (created_at desc)
   return [...events].sort(
@@ -85,17 +133,7 @@ function filterEvents(
   });
 }
 
-// ─── Category Icons ───────────────────────────────────────────────────────────
-
-const CATEGORY_ICONS: Record<string, string> = {
-  フラワー: "🌸",
-  ハンドメイド: "🧶",
-  カメラ: "📷",
-  ネイル: "💅",
-  占い: "🔮",
-  ヨガ: "🧘",
-  その他: "✨",
-};
+// Category icons imported from @/lib/constants
 
 // ─── Delay class helper ──────────────────────────────────────────────────────
 
@@ -131,9 +169,43 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   const { q = "", category = "", area = "", sort = "new" } = await searchParams;
 
   const allEvents = await getPublishedEvents();
+  const reviewAggs = await getReviewAggregations(allEvents.map((e) => e.id));
   const filtered = filterEvents(allEvents, q, category, area);
-  const sorted = sortEvents(filtered, sort);
+  const sorted = sortEvents(filtered, sort, reviewAggs);
   const isFiltered = !!(q || category || area);
+
+  // Category counts
+  const categoryCounts: Record<string, number> = {};
+  for (const e of allEvents) {
+    const cat = e.category ?? "";
+    if (cat) categoryCounts[cat] = (categoryCounts[cat] ?? 0) + 1;
+  }
+
+  // Trending events: top 4 by booking fill rate (upcoming only)
+  const now = new Date();
+  const trendingEvents = [...allEvents]
+    .filter((e) => new Date(e.datetime) >= now && (e.capacity ?? 0) > 0)
+    .sort((a, b) => {
+      const aRate = a.booking_count / (a.capacity ?? 1);
+      const bRate = b.booking_count / (b.capacity ?? 1);
+      return bRate - aRate;
+    })
+    .slice(0, 4);
+
+  // Area suggestions: unique location keywords from events
+  const areaSuggestions = Array.from(
+    new Set(
+      allEvents
+        .map((e) => e.location ?? "")
+        .filter(Boolean)
+        .map((loc) => {
+          // Extract city/area name (first segment before spaces/commas)
+          const match = loc.match(/^[^\s,、]+/);
+          return match ? match[0] : "";
+        })
+        .filter((a) => a.length >= 2)
+    )
+  ).slice(0, 5);
 
   return (
     <main className="min-h-dvh bg-[#FAFAFA]">
@@ -224,6 +296,11 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
                 >
                   <span className="inline-block transition-transform duration-200 group-hover/chip:scale-125 group-hover/chip:rotate-12">{icon}</span>
                   {cat}
+                  {categoryCounts[cat] != null && categoryCounts[cat] > 0 && (
+                    <span className={`ml-0.5 text-xs ${category === cat ? "text-white/70" : "text-[#999999]"}`}>
+                      ({categoryCounts[cat]})
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -232,6 +309,32 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
       </div>
 
       <div className="mx-auto max-w-5xl px-4 pb-12">
+
+        {/* ── Trending events (only on unfiltered view) ── */}
+        {!isFiltered && trendingEvents.length > 0 && (
+          <TrendingEvents events={trendingEvents} reviewAggs={reviewAggs} />
+        )}
+
+        {/* ── Area suggestion chips ── */}
+        {areaSuggestions.length > 0 && !area && (
+          <div className="mb-5 flex flex-wrap gap-1.5 animate-fade-in">
+            <span className="text-xs text-[#999999] mr-1 self-center">エリア:</span>
+            {areaSuggestions.map((a) => (
+              <Link
+                key={a}
+                href={`/explore?${new URLSearchParams({
+                  ...(q ? { q } : {}),
+                  ...(category ? { category } : {}),
+                  area: a,
+                  ...(sort !== "new" ? { sort } : {}),
+                }).toString()}`}
+                className="inline-flex h-7 items-center rounded-full bg-white px-3 text-xs text-[#999999] ring-1 ring-[#E5E5E5] hover:ring-[#1A1A1A]/30 hover:text-[#1A1A1A] transition-all"
+              >
+                {a}
+              </Link>
+            ))}
+          </div>
+        )}
 
         {/* ── Results count + clear ── */}
         <div className="mb-5 flex items-center justify-between animate-fade-in">
@@ -285,6 +388,8 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
                   image_url={event.image_url ?? undefined}
                   category={event.category ?? undefined}
                   teacher_name={event.teacher_name ?? undefined}
+                  averageRating={reviewAggs[event.id]?.averageRating}
+                  reviewCount={reviewAggs[event.id]?.reviewCount}
                 />
               </div>
             ))}

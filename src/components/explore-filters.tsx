@@ -79,6 +79,7 @@ export function ExploreFilters({
         <option value="new">新しい順</option>
         <option value="date">日付が近い順</option>
         <option value="popular">人気順</option>
+        <option value="rating">評価順</option>
       </select>
     </div>
   );

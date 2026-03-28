@@ -426,6 +426,79 @@ export default async function Home() {
           </div>
         </section>
 
+        {/* ── Features ────────────────────────────────────────────────────── */}
+        <section className="w-full bg-[#FAFAFA] py-20 sm:py-24 px-6 noise-bg">
+          <div className="mx-auto max-w-5xl">
+            <div className="text-center mb-14 animate-fade-in-up">
+              <p className="text-xs font-semibold uppercase tracking-widest text-[#1A1A1A] mb-3">
+                選ばれる理由
+              </p>
+              <h2
+                className="text-3xl sm:text-4xl font-bold text-[#1A1A1A]"
+                style={{ fontFamily: "var(--font-zen-maru)" }}
+              >
+                イベント運営を
+                <br className="sm:hidden" />
+                もっとラクに、もっと楽しく
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {[
+                {
+                  icon: "📲",
+                  title: "LINE・SNS共有",
+                  desc: "ワンタップでLINE・Twitter・インスタにイベントページを共有。フォロワーへの告知がこれまでにないほどスムーズです。",
+                },
+                {
+                  icon: "📸",
+                  title: "ストーリーズ画像生成",
+                  desc: "インスタストーリーズ用の縦型告知画像をワンクリックで自動生成。デザインツール不要で、すぐにストーリーズに投稿できます。",
+                },
+                {
+                  icon: "⭐",
+                  title: "レビュー＆評価",
+                  desc: "参加者からのリアルな声と星評価がイベントページに表示されます。口コミが信頼感を生み、次のイベントの集客力を高めます。",
+                },
+                {
+                  icon: "👩‍🏫",
+                  title: "先生ポートフォリオ",
+                  desc: "過去の開催実績・参加者の評価が一目でわかるプロフィールページ。あなたの魅力が伝わり、リピーターが増えます。",
+                },
+                {
+                  icon: "🔍",
+                  title: "イベント発見マーケット",
+                  desc: "カテゴリ・エリア・評価で自分にぴったりのイベントを見つけられる探索ページ。新しい参加者との出会いが広がります。",
+                },
+              ].map(({ icon, title, desc }, i) => (
+                <div
+                  key={title}
+                  className={`animate-fade-in-up ${
+                    i < 2 ? "delay-100" : i < 4 ? "delay-200" : "delay-300"
+                  } flex gap-4 rounded-2xl bg-white p-6 ring-1 ring-[#E5E5E5] hover:ring-[#1A1A1A]/30 hover:shadow-md transition-all duration-200 ${
+                    i === 4 ? "sm:col-span-2 sm:max-w-lg sm:mx-auto" : ""
+                  }`}
+                >
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#F7F7F7] text-2xl">
+                    {icon}
+                  </div>
+                  <div>
+                    <h3
+                      className="text-base font-bold text-[#1A1A1A] mb-1"
+                      style={{ fontFamily: "var(--font-zen-maru)" }}
+                    >
+                      {title}
+                    </h3>
+                    <p className="text-sm text-[#999999] leading-relaxed">
+                      {desc}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* ── Popular events ───────────────────────────────────────────────── */}
         <section className="w-full bg-[#FAFAFA] py-20 sm:py-24 px-6 noise-bg">
           <div className="mx-auto max-w-5xl">
