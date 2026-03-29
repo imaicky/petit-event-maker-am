@@ -26,6 +26,7 @@ interface AuthContextValue {
     email: string,
     password: string
   ) => Promise<{ error: string | null }>;
+  signInWithLINE: () => Promise<{ error: string | null }>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
@@ -36,6 +37,7 @@ export const AuthContext = createContext<AuthContextValue>({
   isLoading: true,
   signInWithPassword: async () => ({ error: null }),
   signUpWithPassword: async () => ({ error: null }),
+  signInWithLINE: async () => ({ error: null }),
   resetPassword: async () => ({ error: null }),
   signOut: async () => {},
 });
@@ -131,6 +133,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
     [supabase]
   );
 
+  const signInWithLINE = useCallback(async (): Promise<{
+    error: string | null;
+  }> => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "custom:line" as never,
+      options: {
+        redirectTo: window.location.origin + "/api/auth/callback",
+      },
+    });
+    if (error) return { error: error.message };
+    return { error: null };
+  }, [supabase]);
+
   const resetPassword = useCallback(
     async (email: string): Promise<{ error: string | null }> => {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -156,6 +171,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         isLoading,
         signInWithPassword,
         signUpWithPassword,
+        signInWithLINE,
         resetPassword,
         signOut,
       }}

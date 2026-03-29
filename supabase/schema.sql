@@ -85,6 +85,18 @@ create table if not exists public.event_messages (
   created_at      timestamptz not null default now()
 );
 
+-- line_accounts: LINE official account linked to a user
+create table if not exists public.line_accounts (
+  id                    uuid        primary key default gen_random_uuid(),
+  user_id               uuid        not null unique references public.profiles(id) on delete cascade,
+  channel_name          text        not null default '',
+  channel_access_token  text        not null,
+  is_active             boolean     not null default true,
+  notify_on_booking     boolean     not null default true,
+  created_at            timestamptz not null default now(),
+  updated_at            timestamptz not null default now()
+);
+
 -- ─── Indexes ─────────────────────────────────────────────────
 
 create index if not exists idx_events_creator_id    on public.events(creator_id);
@@ -104,6 +116,8 @@ create index if not exists idx_notifications_is_read on public.notifications(is_
 create index if not exists idx_event_messages_event_id  on public.event_messages(event_id);
 create index if not exists idx_event_messages_sender_id on public.event_messages(sender_id);
 
+create index if not exists idx_line_accounts_user_id on public.line_accounts(user_id);
+
 -- ─── updated_at trigger ──────────────────────────────────────
 
 create or replace function public.set_updated_at()
@@ -122,6 +136,10 @@ create trigger trg_events_updated_at
   before update on public.events
   for each row execute function public.set_updated_at();
 
+create trigger trg_line_accounts_updated_at
+  before update on public.line_accounts
+  for each row execute function public.set_updated_at();
+
 -- ─── Auto-create profile on auth.users insert ────────────────
 
 create or replace function public.handle_new_user()
@@ -131,10 +149,11 @@ declare
   final_username text;
   suffix         int := 0;
 begin
-  -- derive a username from email (part before @) or metadata
+  -- derive a username from email (part before @), metadata, or fallback for LINE Login
   base_username := coalesce(
     new.raw_user_meta_data->>'username',
-    split_part(new.email, '@', 1)
+    nullif(split_part(coalesce(new.email, ''), '@', 1), ''),
+    'user_' || right(new.id::text, 8)
   );
   -- sanitise: keep only alphanumeric + underscore
   base_username := regexp_replace(base_username, '[^a-zA-Z0-9_]', '_', 'g');
@@ -150,7 +169,7 @@ begin
   values (
     new.id,
     final_username,
-    coalesce(new.raw_user_meta_data->>'display_name', new.raw_user_meta_data->>'full_name'),
+    coalesce(new.raw_user_meta_data->>'display_name', new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name'),
     new.raw_user_meta_data->>'avatar_url'
   );
   return new;
@@ -303,6 +322,21 @@ create policy "event_messages_select_own"
 
 create policy "event_messages_insert_own"
   on public.event_messages for insert with check (auth.uid() = sender_id);
+
+-- line_accounts: only owner can read/write
+alter table public.line_accounts enable row level security;
+
+create policy "line_accounts_select_own"
+  on public.line_accounts for select using (auth.uid() = user_id);
+
+create policy "line_accounts_insert_own"
+  on public.line_accounts for insert with check (auth.uid() = user_id);
+
+create policy "line_accounts_update_own"
+  on public.line_accounts for update using (auth.uid() = user_id);
+
+create policy "line_accounts_delete_own"
+  on public.line_accounts for delete using (auth.uid() = user_id);
 
 -- notifications: only recipient (matched by user email in auth.users)
 create policy "notifications_select_own"
