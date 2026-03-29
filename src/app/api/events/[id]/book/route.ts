@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { broadcastLineMessage, buildBookingNotifyText } from "@/lib/line";
+import { sendBatchEmails } from "@/lib/email";
+import { wrapInHtml } from "@/lib/email-templates";
 
 // ─── Validation ──────────────────────────────────────────────
 
@@ -231,35 +235,81 @@ ${event.title} へのお申し込みが完了しました。
           if (error) console.error("[book] guest notification insert error:", error);
         });
 
-      // Also notify the creator if they have an email
-      if (event.creator_id) {
-        supabase
-          .auth.admin
-          // Use a simple select from auth.users via profiles (no direct access in RLS mode)
-          // Instead, get creator email via their profile-level email is not stored there.
-          // We'll just skip the creator notification via admin API here;
-          // in a real app this would be done server-side with service_role key.
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .getUserById(event.creator_id)
-          .then(({ data: creatorAuth }) => {
+      // Send confirmation email via Resend (async, non-blocking)
+      if (process.env.RESEND_API_KEY) {
+        sendBatchEmails({
+          to: [data.guest_email],
+          subject: guestSubject,
+          html: wrapInHtml(guestBody, event.title),
+        }).catch((err) => {
+          console.error("[book] Resend confirmation email error:", err);
+        });
+      }
+
+      // Also notify the creator if they have an email (uses admin client to bypass RLS)
+      if (event.creator_id && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        (async () => {
+          try {
+            const admin = createAdminClient();
+            const { data: creatorAuth } = await admin.auth.admin.getUserById(event.creator_id!);
             if (creatorAuth?.user?.email) {
-              supabase
+              const creatorSubject = `【新規申し込み】${event.title}`;
+              const creatorBody = `${event.title} に新しい申し込みがありました。\n申込者：${data.guest_name}（${data.guest_email}）`;
+              await admin
                 .from("notifications")
                 .insert({
                   recipient_email: creatorAuth.user.email,
                   type: "new_booking_alert",
-                  subject: `【新規申し込み】${event.title}`,
-                  body: `${event.title} に新しい申し込みがありました。\n申込者：${data.guest_name}（${data.guest_email}）`,
-                })
-                .then(({ error }) => {
-                  if (error) console.error("[book] creator notification insert error:", error);
+                  subject: creatorSubject,
+                  body: creatorBody,
                 });
+
+              // Send email to creator via Resend
+              if (process.env.RESEND_API_KEY) {
+                await sendBatchEmails({
+                  to: [creatorAuth.user.email],
+                  subject: creatorSubject,
+                  html: wrapInHtml(creatorBody, event.title),
+                });
+              }
             }
-          })
-          .catch(() => {
-            // admin API may not be available in all configurations
-          });
+          } catch (err) {
+            console.error("[book] creator email notification error:", err);
+          }
+        })();
       }
+    }
+
+    // Send LINE notification to creator (async, non-blocking)
+    if (event?.creator_id && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      (async () => {
+        try {
+          const adminClient = createAdminClient();
+          const { data: lineAccount } = await adminClient
+            .from("line_accounts")
+            .select("channel_access_token, is_active, notify_on_booking")
+            .eq("user_id", event.creator_id!)
+            .maybeSingle();
+
+          if (lineAccount?.is_active && lineAccount.notify_on_booking && lineAccount.channel_access_token) {
+            const { count } = await adminClient
+              .from("bookings")
+              .select("*", { count: "exact", head: true })
+              .eq("event_id", eventId)
+              .eq("status", "confirmed");
+
+            const message = buildBookingNotifyText(
+              event.title,
+              data.guest_name,
+              count ?? 1,
+              event.capacity
+            );
+            await broadcastLineMessage(lineAccount.channel_access_token, message);
+          }
+        } catch (err) {
+          console.error("[POST /api/events/[id]/book] LINE notification error:", err);
+        }
+      })();
     }
 
     return NextResponse.json(
