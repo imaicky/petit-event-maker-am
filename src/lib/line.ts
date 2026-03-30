@@ -1,3 +1,5 @@
+import { createHmac } from "crypto";
+
 const LINE_API_BASE = "https://api.line.me/v2";
 
 type LineBotInfo = {
@@ -100,6 +102,89 @@ export async function broadcastFlexMessage(
     return { ok: false, error: "LINE APIへの接続に失敗しました" };
   }
 }
+
+// ─── Webhook Signature Verification ──────────────────────────
+
+export function verifyLineSignature(
+  body: string,
+  signature: string,
+  channelSecret: string
+): boolean {
+  const hash = createHmac("SHA256", channelSecret)
+    .update(body)
+    .digest("base64");
+  return hash === signature;
+}
+
+// ─── Push Message (1:1 DM) ──────────────────────────────────
+
+export async function pushLineMessage(
+  channelAccessToken: string,
+  userId: string,
+  text: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(`${LINE_API_BASE}/bot/message/push`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${channelAccessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        to: userId,
+        messages: [{ type: "text", text }],
+      }),
+    });
+
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as LineApiError;
+      return {
+        ok: false,
+        error: body.message || `LINE API error (${res.status})`,
+      };
+    }
+
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "LINE APIへの接続に失敗しました" };
+  }
+}
+
+// ─── Get User Profile ───────────────────────────────────────
+
+type LineUserProfile = {
+  userId: string;
+  displayName: string;
+  pictureUrl?: string;
+  statusMessage?: string;
+};
+
+export async function getLineUserProfile(
+  channelAccessToken: string,
+  userId: string
+): Promise<{ ok: true; data: LineUserProfile } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(`${LINE_API_BASE}/bot/profile/${userId}`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${channelAccessToken}` },
+    });
+
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as LineApiError;
+      return {
+        ok: false,
+        error: body.message || `LINE API error (${res.status})`,
+      };
+    }
+
+    const data = (await res.json()) as LineUserProfile;
+    return { ok: true, data };
+  } catch {
+    return { ok: false, error: "LINE APIへの接続に失敗しました" };
+  }
+}
+
+// ─── Flex Message Helpers ───────────────────────────────────
 
 type EventForFlex = {
   id: string;

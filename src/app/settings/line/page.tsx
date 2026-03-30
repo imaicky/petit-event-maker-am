@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import {
   ChevronLeft,
   Loader2,
@@ -15,6 +16,10 @@ import {
   Bell,
   BellOff,
   Sparkles,
+  Copy,
+  Check,
+  Users,
+  UserCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,10 +52,21 @@ function SectionCard({
 type LineAccountInfo = {
   id: string;
   channel_name: string;
+  bot_user_id: string | null;
+  owner_line_user_id: string | null;
   is_active: boolean;
   notify_on_booking: boolean;
   created_at: string;
   updated_at: string;
+};
+
+type Follower = {
+  id: string;
+  line_user_id: string;
+  display_name: string | null;
+  picture_url: string | null;
+  is_following: boolean;
+  followed_at: string;
 };
 
 const inputCls =
@@ -65,10 +81,18 @@ export default function LineSettingsPage() {
   const [lineAccount, setLineAccount] = useState<LineAccountInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState("");
+  const [secret, setSecret] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // Followers
+  const [followers, setFollowers] = useState<Follower[]>([]);
+  const [ownerLineUserId, setOwnerLineUserId] = useState<string | null>(null);
+  const [followersLoading, setFollowersLoading] = useState(false);
+  const [settingOwner, setSettingOwner] = useState<string | null>(null);
 
   // Redirect if not logged in
   useEffect(() => {
@@ -92,9 +116,30 @@ export default function LineSettingsPage() {
     }
   }, []);
 
+  // Fetch followers
+  const fetchFollowers = useCallback(async () => {
+    setFollowersLoading(true);
+    try {
+      const res = await fetch("/api/line/followers");
+      if (res.ok) {
+        const json = await res.json();
+        setFollowers(json.followers ?? []);
+        setOwnerLineUserId(json.owner_line_user_id ?? null);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setFollowersLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (user) fetchLineAccount();
   }, [user, fetchLineAccount]);
+
+  useEffect(() => {
+    if (lineAccount) fetchFollowers();
+  }, [lineAccount, fetchFollowers]);
 
   const showSuccess = (msg: string) => {
     setSuccessMsg(msg);
@@ -112,10 +157,17 @@ export default function LineSettingsPage() {
     setSuccessMsg(null);
 
     try {
+      const payload: Record<string, string> = {
+        channel_access_token: token.trim(),
+      };
+      if (secret.trim()) {
+        payload.channel_secret = secret.trim();
+      }
+
       const res = await fetch("/api/line", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channel_access_token: token.trim() }),
+        body: JSON.stringify(payload),
       });
 
       const json = await res.json();
@@ -127,6 +179,7 @@ export default function LineSettingsPage() {
 
       setLineAccount(json.lineAccount);
       setToken("");
+      setSecret("");
       showSuccess("LINE公式アカウントを連携しました");
     } catch {
       setErrorMsg("接続に失敗しました。もう一度お試しください。");
@@ -151,6 +204,8 @@ export default function LineSettingsPage() {
       }
 
       setLineAccount(null);
+      setFollowers([]);
+      setOwnerLineUserId(null);
       showSuccess("LINE連携を解除しました");
     } catch {
       setErrorMsg("解除に失敗しました。もう一度お試しください。");
@@ -177,6 +232,48 @@ export default function LineSettingsPage() {
       showSuccess(checked ? "予約通知をONにしました" : "予約通知をOFFにしました");
     } catch {
       setErrorMsg("設定の更新に失敗しました");
+    }
+  };
+
+  // Copy webhook URL
+  const webhookUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/api/line/webhook`
+    : "";
+
+  const handleCopyWebhook = async () => {
+    try {
+      await navigator.clipboard.writeText(webhookUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback
+    }
+  };
+
+  // Set owner
+  const handleSetOwner = async (lineUserId: string) => {
+    setSettingOwner(lineUserId);
+    setErrorMsg(null);
+    try {
+      const res = await fetch("/api/line/set-owner", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ line_user_id: lineUserId }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setErrorMsg(json.error || "通知先の設定に失敗しました");
+        return;
+      }
+      setOwnerLineUserId(lineUserId);
+      setLineAccount((prev) =>
+        prev ? { ...prev, owner_line_user_id: lineUserId } : prev
+      );
+      showSuccess("通知先を設定しました。予約通知がDMで届きます");
+    } catch {
+      setErrorMsg("通知先の設定に失敗しました");
+    } finally {
+      setSettingOwner(null);
     }
   };
 
@@ -289,6 +386,125 @@ export default function LineSettingsPage() {
                 </div>
               </SectionCard>
 
+              {/* Webhook URL */}
+              <SectionCard title="Webhook URL">
+                <div className="space-y-3">
+                  <p className="text-sm text-[#666666]">
+                    以下のURLをLINE Developersコンソールの「Messaging API設定」→「Webhook URL」に設定してください。
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      readOnly
+                      value={webhookUrl}
+                      className={`${inputCls} flex-1 text-xs font-mono`}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={handleCopyWebhook}
+                      className="h-10 w-10 rounded-xl border-[#E5E5E5] shrink-0"
+                    >
+                      {copied ? (
+                        <Check className="h-4 w-4 text-[#06C755]" />
+                      ) : (
+                        <Copy className="h-4 w-4 text-[#666666]" />
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-[#999999]">
+                    Webhook URLを設定すると、友だち追加・ブロック解除を自動検知できます
+                  </p>
+                </div>
+              </SectionCard>
+
+              {/* Followers list */}
+              <SectionCard title="フォロワー一覧">
+                <div className="space-y-4">
+                  {followersLoading ? (
+                    <div className="flex items-center justify-center py-6">
+                      <Loader2 className="h-5 w-5 animate-spin text-[#999999]" />
+                    </div>
+                  ) : followers.length === 0 ? (
+                    <div className="text-center py-6">
+                      <Users className="h-8 w-8 text-[#E5E5E5] mx-auto mb-2" />
+                      <p className="text-sm text-[#999999]">
+                        まだフォロワーがいません
+                      </p>
+                      <p className="text-xs text-[#999999] mt-1">
+                        Webhook URLを設定後、LINE公式アカウントを友だち追加すると表示されます
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {followers.map((f) => {
+                        const isOwner = ownerLineUserId === f.line_user_id;
+                        return (
+                          <div
+                            key={f.id}
+                            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 border ${
+                              isOwner
+                                ? "border-[#06C755]/30 bg-[#06C755]/5"
+                                : "border-[#F2F2F2] bg-[#FAFAFA]"
+                            }`}
+                          >
+                            {f.picture_url ? (
+                              <Image
+                                src={f.picture_url}
+                                alt={f.display_name ?? ""}
+                                width={36}
+                                height={36}
+                                className="rounded-full shrink-0"
+                              />
+                            ) : (
+                              <div className="h-9 w-9 rounded-full bg-[#E5E5E5] flex items-center justify-center shrink-0">
+                                <Users className="h-4 w-4 text-[#999999]" />
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-[#1A1A1A] truncate">
+                                {f.display_name || "名前なし"}
+                              </p>
+                              <p className="text-xs text-[#999999]">
+                                {new Date(f.followed_at).toLocaleDateString("ja-JP")} フォロー
+                              </p>
+                            </div>
+                            {isOwner ? (
+                              <span className="flex items-center gap-1 text-xs font-medium text-[#06C755] shrink-0">
+                                <UserCheck className="h-3.5 w-3.5" />
+                                通知先
+                              </span>
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleSetOwner(f.line_user_id)}
+                                disabled={settingOwner === f.line_user_id}
+                                className="rounded-full text-xs h-7 px-3 border-[#E5E5E5] shrink-0"
+                              >
+                                {settingOwner === f.line_user_id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  "通知先に設定"
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {ownerLineUserId && (
+                    <div className="rounded-xl bg-[#FAFAFA] border border-[#F2F2F2] px-4 py-3">
+                      <p className="text-xs text-[#666666]">
+                        通知先に設定すると、予約通知がブロードキャストではなく <span className="font-medium text-[#1A1A1A]">1:1のDM</span> で届きます
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </SectionCard>
+
               {/* Notification settings */}
               <SectionCard title="通知設定">
                 <div className="space-y-4">
@@ -305,6 +521,9 @@ export default function LineSettingsPage() {
                         </p>
                         <p className="text-xs text-[#999999] mt-0.5">
                           予約が入ったとき、LINE で通知を受け取ります
+                          {lineAccount.owner_line_user_id
+                            ? "（DMで届きます）"
+                            : "（ブロードキャストで届きます）"}
                         </p>
                       </div>
                     </div>
@@ -364,10 +583,10 @@ export default function LineSettingsPage() {
                     </div>
                     <div>
                       <p className="text-sm font-medium text-[#1A1A1A]">
-                        予約通知をリアルタイムで受信
+                        予約通知をDMで受信
                       </p>
                       <p className="text-xs text-[#999999] mt-0.5">
-                        新しい予約が入ると LINE で通知が届きます（ON/OFF 設定可能）
+                        新しい予約が入ると LINE のDMで通知が届きます（ON/OFF 設定可能）
                       </p>
                     </div>
                   </div>
@@ -381,6 +600,10 @@ export default function LineSettingsPage() {
                       LINE Developersコンソールで発行した
                       <span className="font-medium text-[#1A1A1A]">
                         チャネルアクセストークン（長期）
+                      </span>
+                      と
+                      <span className="font-medium text-[#1A1A1A]">
+                        チャネルシークレット
                       </span>
                       を入力してください。
                     </p>
@@ -398,8 +621,22 @@ export default function LineSettingsPage() {
                       className={inputCls}
                       autoComplete="off"
                     />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-medium text-[#1A1A1A]">
+                      チャネルシークレット
+                    </Label>
+                    <Input
+                      type="password"
+                      placeholder="チャネルシークレットを貼り付け"
+                      value={secret}
+                      onChange={(e) => setSecret(e.target.value)}
+                      className={inputCls}
+                      autoComplete="off"
+                    />
                     <p className="text-xs text-[#999999]">
-                      トークンは暗号化して保存されます
+                      Webhook署名検証に使用します（友だち追加の自動検知に必要）
                     </p>
                   </div>
 
@@ -447,21 +684,29 @@ export default function LineSettingsPage() {
                       2
                     </span>
                     <span>
-                      「Messaging API設定」タブからチャネルアクセストークン（長期）を発行
+                      チャネルアクセストークン（長期）とチャネルシークレットを取得
                     </span>
                   </li>
                   <li className="flex gap-3">
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#F2F2F2] text-xs font-bold text-[#999999]">
                       3
                     </span>
-                    <span>上のフォームにトークンを貼り付けて接続テスト</span>
+                    <span>上のフォームに貼り付けて接続テスト</span>
                   </li>
                   <li className="flex gap-3">
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#F2F2F2] text-xs font-bold text-[#999999]">
                       4
                     </span>
                     <span>
-                      イベントを作成（公開）すると、フォロワーに自動通知されます
+                      接続後に表示されるWebhook URLをLINE Developersに設定
+                    </span>
+                  </li>
+                  <li className="flex gap-3">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#F2F2F2] text-xs font-bold text-[#999999]">
+                      5
+                    </span>
+                    <span>
+                      LINE公式アカウントを友だち追加 → フォロワー一覧から「通知先に設定」
                     </span>
                   </li>
                 </ol>

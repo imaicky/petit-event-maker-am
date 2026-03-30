@@ -16,7 +16,7 @@ export async function GET() {
 
     const { data, error } = await supabase
       .from("line_accounts")
-      .select("id, channel_name, is_active, notify_on_booking, created_at, updated_at")
+      .select("id, channel_name, bot_user_id, owner_line_user_id, is_active, notify_on_booking, created_at, updated_at")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -52,6 +52,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const token = body.channel_access_token;
+    const channelSecret = body.channel_secret;
     if (!token || typeof token !== "string" || token.trim().length === 0) {
       return NextResponse.json(
         { error: "チャネルアクセストークンを入力してください" },
@@ -72,18 +73,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Upsert line_accounts
+    const upsertData = {
+      user_id: user.id,
+      channel_name: botResult.data.displayName,
+      channel_access_token: token.trim(),
+      bot_user_id: botResult.data.userId,
+      is_active: true,
+      channel_secret:
+        channelSecret && typeof channelSecret === "string" && channelSecret.trim().length > 0
+          ? channelSecret.trim()
+          : undefined,
+    };
+
     const { data, error } = await supabase
       .from("line_accounts")
-      .upsert(
-        {
-          user_id: user.id,
-          channel_name: botResult.data.displayName,
-          channel_access_token: token.trim(),
-          is_active: true,
-        },
-        { onConflict: "user_id" }
-      )
-      .select("id, channel_name, is_active, notify_on_booking, created_at, updated_at")
+      .upsert(upsertData, { onConflict: "user_id" })
+      .select("id, channel_name, bot_user_id, owner_line_user_id, is_active, notify_on_booking, created_at, updated_at")
       .single();
 
     if (error) {
@@ -134,7 +139,7 @@ export async function PATCH(request: NextRequest) {
       .from("line_accounts")
       .update(updates)
       .eq("user_id", user.id)
-      .select("id, channel_name, is_active, notify_on_booking, created_at, updated_at")
+      .select("id, channel_name, bot_user_id, owner_line_user_id, is_active, notify_on_booking, created_at, updated_at")
       .single();
 
     if (error) {

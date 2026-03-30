@@ -225,6 +225,9 @@ export type Database = {
           user_id: string
           channel_name: string
           channel_access_token: string
+          channel_secret: string | null
+          bot_user_id: string | null
+          owner_line_user_id: string | null
           is_active: boolean
           notify_on_booking: boolean
           created_at: string
@@ -235,6 +238,9 @@ export type Database = {
           user_id: string
           channel_name?: string
           channel_access_token: string
+          channel_secret?: string | null
+          bot_user_id?: string | null
+          owner_line_user_id?: string | null
           is_active?: boolean
           notify_on_booking?: boolean
           created_at?: string
@@ -245,6 +251,9 @@ export type Database = {
           user_id?: string
           channel_name?: string
           channel_access_token?: string
+          channel_secret?: string | null
+          bot_user_id?: string | null
+          owner_line_user_id?: string | null
           is_active?: boolean
           notify_on_booking?: boolean
           created_at?: string
@@ -256,6 +265,50 @@ export type Database = {
             columns: ['user_id']
             isOneToOne: true
             referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      line_followers: {
+        Row: {
+          id: string
+          line_account_id: string
+          line_user_id: string
+          display_name: string | null
+          picture_url: string | null
+          is_following: boolean
+          followed_at: string
+          unfollowed_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          line_account_id: string
+          line_user_id: string
+          display_name?: string | null
+          picture_url?: string | null
+          is_following?: boolean
+          followed_at?: string
+          unfollowed_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          line_account_id?: string
+          line_user_id?: string
+          display_name?: string | null
+          picture_url?: string | null
+          is_following?: boolean
+          followed_at?: string
+          unfollowed_at?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'line_followers_line_account_id_fkey'
+            columns: ['line_account_id']
+            isOneToOne: false
+            referencedRelation: 'line_accounts'
             referencedColumns: ['id']
           }
         ]
@@ -396,6 +449,10 @@ export type NotificationUpdate = Database['public']['Tables']['notifications']['
 export type LineAccount = Database['public']['Tables']['line_accounts']['Row']
 export type LineAccountInsert = Database['public']['Tables']['line_accounts']['Insert']
 export type LineAccountUpdate = Database['public']['Tables']['line_accounts']['Update']
+
+export type LineFollower = Database['public']['Tables']['line_followers']['Row']
+export type LineFollowerInsert = Database['public']['Tables']['line_followers']['Insert']
+export type LineFollowerUpdate = Database['public']['Tables']['line_followers']['Update']
 
 export type BookingStatus = 'confirmed' | 'cancelled'
 

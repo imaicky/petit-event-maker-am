@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { broadcastLineMessage, buildBookingNotifyText } from "@/lib/line";
+import { broadcastLineMessage, pushLineMessage, buildBookingNotifyText } from "@/lib/line";
 import { sendBatchEmails } from "@/lib/email";
 import { wrapInHtml } from "@/lib/email-templates";
 
@@ -304,7 +304,7 @@ ${event.title} へのお申し込みが完了しました。
           const adminClient = createAdminClient();
           const { data: lineAccount } = await adminClient
             .from("line_accounts")
-            .select("channel_access_token, is_active, notify_on_booking")
+            .select("channel_access_token, is_active, notify_on_booking, owner_line_user_id")
             .eq("user_id", event.creator_id!)
             .maybeSingle();
 
@@ -321,7 +321,17 @@ ${event.title} へのお申し込みが完了しました。
               count ?? 1,
               event.capacity
             );
-            await broadcastLineMessage(lineAccount.channel_access_token, message);
+
+            // Use push DM if owner_line_user_id is set, otherwise broadcast
+            if (lineAccount.owner_line_user_id) {
+              await pushLineMessage(
+                lineAccount.channel_access_token,
+                lineAccount.owner_line_user_id,
+                message
+              );
+            } else {
+              await broadcastLineMessage(lineAccount.channel_access_token, message);
+            }
           }
         } catch (err) {
           console.error("[POST /api/events/[id]/book] LINE notification error:", err);
