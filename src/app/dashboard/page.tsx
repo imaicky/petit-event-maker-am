@@ -404,7 +404,22 @@ function EventCard({
       </div>
 
       {/* Action buttons */}
-      <div className="mt-3 pt-3 border-t border-[#F2F2F2] flex items-center gap-2">
+      <div className="mt-3 pt-3 border-t border-[#F2F2F2] flex items-center gap-2 flex-wrap">
+        <Link href={`/events/${event.id}/attendees`}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 rounded-full border-[#1A1A1A]/20 gap-1.5 text-xs font-medium text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-white transition-colors"
+          >
+            <Users className="h-3 w-3" />
+            参加者一覧
+            {event.booking_count > 0 && (
+              <span className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-[#1A1A1A]/10 px-1 text-[10px] font-bold">
+                {event.booking_count}
+              </span>
+            )}
+          </Button>
+        </Link>
         <Button
           variant="outline"
           size="sm"

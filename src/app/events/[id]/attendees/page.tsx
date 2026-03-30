@@ -220,8 +220,8 @@ export default function AttendeesPage() {
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() => router.push(`/events/${eventId}/edit`)}
-            aria-label="編集ページに戻る"
+            onClick={() => router.push("/dashboard")}
+            aria-label="ダッシュボードに戻る"
             className="h-8 w-8 p-0 rounded-xl text-[#999999] hover:bg-[#F2F2F2] hover:text-[#1A1A1A] shrink-0"
           >
             <ArrowLeft className="h-4 w-4" />
