@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import {
-  broadcastFlexMessage,
-  broadcastLineMessage,
-  buildEventFlexBubble,
-} from "@/lib/line";
 
 export async function POST(
   request: NextRequest,
@@ -13,10 +8,7 @@ export async function POST(
 ) {
   try {
     const { id: eventId } = await params;
-
-    // Parse body first (stream can only be consumed once)
     const body = await request.json().catch(() => ({}));
-    const customMessage = typeof body.message === "string" ? body.message.trim() : "";
 
     const supabase = await createClient();
 
@@ -56,12 +48,12 @@ export async function POST(
     // Must be published
     if (!event.is_published) {
       return NextResponse.json(
-        { error: "公開中のイベントのみ送信できます" },
+        { error: "公開中のイベントのみ予約送信できます" },
         { status: 400 }
       );
     }
 
-    // Duplicate check
+    // Already sent check
     if (event.line_notified_at) {
       return NextResponse.json(
         { error: "このイベントは既にLINE送信済みです" },
@@ -83,63 +75,62 @@ export async function POST(
       );
     }
 
-    // Get booking count for flex card
-    const { count: bookingCount } = await supabase
-      .from("bookings")
-      .select("*", { count: "exact", head: true })
-      .eq("event_id", eventId)
-      .eq("status", "confirmed");
-
-    const baseUrl =
-      process.env.NEXT_PUBLIC_BASE_URL ||
-      "https://petit-event-maker-am.vercel.app";
-
-    // Send custom text message first (if provided)
-    if (customMessage) {
-      const textResult = await broadcastLineMessage(
-        lineAccount.channel_access_token,
-        customMessage
-      );
-      if (!textResult.ok) {
-        return NextResponse.json(
-          { error: `LINE送信に失敗しました: ${textResult.error}` },
-          { status: 502 }
-        );
-      }
-    }
-
-    // Send Flex Message card
-    const bubble = buildEventFlexBubble(
-      { ...event, booking_count: bookingCount ?? 0 },
-      baseUrl
-    );
-    const flexResult = await broadcastFlexMessage(
-      lineAccount.channel_access_token,
-      `🎉 新しいイベント: ${event.title}`,
-      bubble
-    );
-
-    if (!flexResult.ok) {
-      return NextResponse.json(
-        { error: `LINE送信に失敗しました: ${flexResult.error}` },
-        { status: 502 }
-      );
-    }
-
-    // Update line_notified_at and clear any schedule using admin client to bypass RLS
     const admin = createAdminClient();
+
+    // Cancel mode
+    if (body.cancel === true) {
+      await admin
+        .from("events")
+        .update({
+          line_scheduled_at: null,
+          line_schedule_message: null,
+        })
+        .eq("id", eventId);
+
+      return NextResponse.json({ success: true, cancelled: true });
+    }
+
+    // Schedule mode
+    const scheduledAt = body.scheduled_at;
+    if (!scheduledAt || typeof scheduledAt !== "string") {
+      return NextResponse.json(
+        { error: "送信予約日時を指定してください" },
+        { status: 400 }
+      );
+    }
+
+    const scheduledDate = new Date(scheduledAt);
+    if (isNaN(scheduledDate.getTime())) {
+      return NextResponse.json(
+        { error: "無効な日時です" },
+        { status: 400 }
+      );
+    }
+
+    if (scheduledDate <= new Date()) {
+      return NextResponse.json(
+        { error: "予約日時は現在時刻より後を指定してください" },
+        { status: 400 }
+      );
+    }
+
+    const message =
+      typeof body.message === "string" ? body.message.trim() : "";
+
     await admin
       .from("events")
       .update({
-        line_notified_at: new Date().toISOString(),
-        line_scheduled_at: null,
-        line_schedule_message: null,
+        line_scheduled_at: scheduledDate.toISOString(),
+        line_schedule_message: message || null,
       })
       .eq("id", eventId);
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      scheduled_at: scheduledDate.toISOString(),
+    });
   } catch (err) {
-    console.error("[POST /api/events/[id]/line-notify] Error:", err);
+    console.error("[POST /api/events/[id]/line-schedule] Error:", err);
     return NextResponse.json(
       { error: "サーバーエラーが発生しました" },
       { status: 500 }

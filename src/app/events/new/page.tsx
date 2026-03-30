@@ -486,7 +486,7 @@ export default function NewEventPage() {
         return;
       }
 
-      router.push(`/events/${json.event.id}`);
+      router.push(`/events/${json.event.id}?showLineSchedule=true`);
     } catch {
       setServerError(
         "ネットワークエラーが発生しました。もう一度お試しください。"

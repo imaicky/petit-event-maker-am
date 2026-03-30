@@ -10,6 +10,7 @@ import { ReviewCard, type Review } from "@/components/review-card";
 import { ReviewSection } from "@/components/review-section";
 import { ShareButton } from "@/components/share-button";
 import { StoriesDownloadButton } from "@/components/stories-download-button";
+import { LineSchedulePrompt } from "@/components/line-schedule-prompt";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -561,6 +562,9 @@ export default async function EventPage({ params }: EventPageProps) {
 
       {/* Spacer for mobile fixed bottom bar */}
       <div className="h-20 lg:hidden" />
+
+      {/* LINE schedule prompt (shown after event creation) */}
+      <LineSchedulePrompt eventId={id} eventTitle={event.title} />
     </main>
   );
 }

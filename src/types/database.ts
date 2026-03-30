@@ -70,6 +70,8 @@ export type Database = {
           teacher_name: string | null
           teacher_bio: string | null
           line_notified_at: string | null
+          line_scheduled_at: string | null
+          line_schedule_message: string | null
           created_at: string
           updated_at: string
         }
@@ -89,6 +91,8 @@ export type Database = {
           teacher_name?: string | null
           teacher_bio?: string | null
           line_notified_at?: string | null
+          line_scheduled_at?: string | null
+          line_schedule_message?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -108,6 +112,8 @@ export type Database = {
           teacher_name?: string | null
           teacher_bio?: string | null
           line_notified_at?: string | null
+          line_scheduled_at?: string | null
+          line_schedule_message?: string | null
           created_at?: string
           updated_at?: string
         }

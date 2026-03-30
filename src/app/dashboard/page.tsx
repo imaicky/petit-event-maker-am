@@ -424,6 +424,20 @@ function EventCard({
               <Check className="h-3 w-3" />
               LINE送信済み
             </span>
+          ) : event.line_scheduled_at ? (
+            <button
+              onClick={() => onLineNotify(event)}
+              className="inline-flex items-center gap-1.5 text-xs text-[#06C755] px-2 py-1 rounded-full bg-[#06C755]/5 border border-[#06C755]/20 hover:bg-[#06C755]/10 transition-colors"
+            >
+              <Clock className="h-3 w-3" />
+              {new Date(event.line_scheduled_at).toLocaleDateString("ja-JP", {
+                month: "numeric",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+              送信予定
+            </button>
           ) : (
             <Button
               variant="outline"
@@ -771,6 +785,14 @@ export default function DashboardPage() {
           eventId={lineDialogEvent.id}
           eventTitle={lineDialogEvent.title}
           onSuccess={() => fetchEvents(true)}
+          currentSchedule={
+            lineDialogEvent.line_scheduled_at
+              ? {
+                  scheduled_at: lineDialogEvent.line_scheduled_at,
+                  message: lineDialogEvent.line_schedule_message ?? null,
+                }
+              : null
+          }
         />
       )}
 

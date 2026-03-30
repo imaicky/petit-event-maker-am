@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/line-notify",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}
