@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import type { Metadata, ResolvingMetadata } from "next";
-import { Calendar, MapPin, Users, JapaneseYen, ChevronRight } from "lucide-react";
+import { Calendar, MapPin, Users, JapaneseYen, ChevronRight, Shield } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -28,6 +28,9 @@ interface EventData {
   category?: string;
   teacher_name?: string;
   teacher_bio?: string;
+  price_note?: string;
+  is_limited?: boolean;
+  limited_passcode?: string;
   is_published?: boolean;
 }
 
@@ -386,8 +389,22 @@ export default async function EventPage({ params }: EventPageProps) {
                     ¥{event.price.toLocaleString("ja-JP")}
                   </p>
                 )}
+                {event.price_note && (
+                  <p className="mt-0.5 text-xs text-[#999999]">{event.price_note}</p>
+                )}
               </MetaCell>
             </div>
+
+            {/* Limited event badge */}
+            {event.is_limited && (
+              <div className="mb-6 flex items-center gap-2 rounded-xl bg-[#F7F7F7] border border-[#E5E5E5] px-4 py-3 animate-fade-in-up delay-100">
+                <Shield className="h-5 w-5 text-[#1A1A1A]" />
+                <div>
+                  <p className="text-sm font-bold text-[#1A1A1A]">限定公開イベント</p>
+                  <p className="text-xs text-[#999999]">申し込みには主催者から共有された合言葉が必要です</p>
+                </div>
+              </div>
+            )}
 
             {/* Description */}
             <section className="mb-8 animate-fade-in-up delay-200">
@@ -499,7 +516,9 @@ export default async function EventPage({ params }: EventPageProps) {
                   eventId={event.id}
                   eventTitle={event.title}
                   price={event.price}
+                  priceNote={event.price_note}
                   remainingSpots={remaining}
+                  isLimited={event.is_limited}
                 />
               </div>
             </section>
@@ -519,6 +538,9 @@ export default async function EventPage({ params }: EventPageProps) {
                       ¥{event.price.toLocaleString("ja-JP")}
                     </p>
                   )}
+                  {event.price_note && (
+                    <p className="mt-1 text-xs text-[#999999]">{event.price_note}</p>
+                  )}
                 </div>
                 <SpotsBadge remaining={remaining} capacity={event.capacity} />
               </div>
@@ -527,7 +549,9 @@ export default async function EventPage({ params }: EventPageProps) {
                 eventId={event.id}
                 eventTitle={event.title}
                 price={event.price}
+                priceNote={event.price_note}
                 remainingSpots={remaining}
+                isLimited={event.is_limited}
               />
             </div>
           </aside>

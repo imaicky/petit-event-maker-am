@@ -22,6 +22,9 @@ const createEventSchema = z.object({
   teacher_name: z.string().optional().nullable(),
   teacher_bio: z.string().optional().nullable(),
   category: z.string().optional().nullable(),
+  price_note: z.string().max(100).optional().nullable(),
+  is_limited: z.boolean().optional().default(false),
+  limited_passcode: z.string().max(50).optional().nullable(),
   slug: z
     .string()
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "スラッグは小文字英数字とハイフンのみ使用できます")
@@ -99,6 +102,9 @@ export async function POST(request: NextRequest) {
         teacher_name: data.teacher_name || null,
         teacher_bio: data.teacher_bio || null,
         category: data.category || null,
+        price_note: data.price_note || null,
+        is_limited: data.is_limited ?? false,
+        limited_passcode: data.is_limited ? (data.limited_passcode || null) : null,
         slug,
         is_published: data.is_published ?? true,
       })

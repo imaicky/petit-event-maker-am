@@ -25,6 +25,7 @@ const bookingSchema = z.object({
     )
     .optional()
     .or(z.literal("")),
+  passcode: z.string().optional(),
 });
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -84,6 +85,22 @@ export async function POST(
     }
 
     const data = parsed.data;
+
+    // Check limited event passcode
+    const { data: eventCheck } = await supabase
+      .from("events")
+      .select("is_limited, limited_passcode")
+      .eq("id", eventId)
+      .single();
+
+    if (eventCheck?.is_limited && eventCheck.limited_passcode) {
+      if (!data.passcode || data.passcode !== eventCheck.limited_passcode) {
+        return NextResponse.json(
+          { error: "合言葉が正しくありません" },
+          { status: 403 }
+        );
+      }
+    }
 
     // Get optional logged-in user
     const {

@@ -18,6 +18,7 @@ export const CATEGORIES = [
   "ネイル",
   "占い",
   "ヨガ",
+  "ランチ会",
   "Instagram",
   "その他",
 ] as const;
@@ -84,6 +85,16 @@ export const TEMPLATES: EventTemplate[] = [
     defaultCapacity: 8,
     defaultPrice: 1500,
     category: "ヨガ",
+  },
+  {
+    id: "lunch",
+    icon: "🍽️",
+    title: "🍽️ ランチ会・お食事会",
+    description:
+      "気軽に参加できるランチ会です！\n\n美味しいご飯を食べながら、楽しくおしゃべりしましょう。初めての方も大歓迎です。\n\n🍴 お店：当日ご案内します\n💰 参加費：各自のお食事代のみ\n✅ お一人参加も大歓迎です。\n📱 当日の連絡先は申し込み後にお伝えします。",
+    defaultCapacity: 8,
+    defaultPrice: 0,
+    category: "ランチ会",
   },
   {
     id: "instagram",

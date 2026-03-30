@@ -69,6 +69,9 @@ export type Database = {
           category: string | null
           teacher_name: string | null
           teacher_bio: string | null
+          price_note: string | null
+          is_limited: boolean
+          limited_passcode: string | null
           line_notified_at: string | null
           line_scheduled_at: string | null
           line_schedule_message: string | null
@@ -90,6 +93,9 @@ export type Database = {
           category?: string | null
           teacher_name?: string | null
           teacher_bio?: string | null
+          price_note?: string | null
+          is_limited?: boolean
+          limited_passcode?: string | null
           line_notified_at?: string | null
           line_scheduled_at?: string | null
           line_schedule_message?: string | null
@@ -111,6 +117,9 @@ export type Database = {
           category?: string | null
           teacher_name?: string | null
           teacher_bio?: string | null
+          price_note?: string | null
+          is_limited?: boolean
+          limited_passcode?: string | null
           line_notified_at?: string | null
           line_scheduled_at?: string | null
           line_schedule_message?: string | null

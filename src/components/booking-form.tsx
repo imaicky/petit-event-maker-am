@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, User, Mail, Phone, CheckCircle2 } from "lucide-react";
+import { Loader2, User, Mail, Phone, CheckCircle2, Lock } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,7 @@ const bookingSchema = z.object({
     )
     .optional()
     .or(z.literal("")),
+  passcode: z.string().optional(),
 });
 
 type BookingFormValues = z.infer<typeof bookingSchema>;
@@ -37,7 +38,9 @@ interface BookingFormProps {
   eventId: string;
   eventTitle: string;
   price: number;
+  priceNote?: string;
   remainingSpots: number;
+  isLimited?: boolean;
   className?: string;
 }
 
@@ -55,7 +58,9 @@ export function BookingForm({
   eventId,
   eventTitle,
   price,
+  priceNote,
   remainingSpots,
+  isLimited,
   className,
 }: BookingFormProps) {
   const router = useRouter();
@@ -127,6 +132,9 @@ export function BookingForm({
               `¥${price.toLocaleString("ja-JP")}`
             )}
           </p>
+          {priceNote && (
+            <p className="text-xs text-[#999999] mt-1">{priceNote}</p>
+          )}
           {isLow && (
             <span className="flex items-center gap-1 text-xs font-medium text-[#1A1A1A]">
               <span className="relative flex h-2 w-2">
@@ -210,6 +218,31 @@ export function BookingForm({
         </div>
         <FieldError message={errors.guest_phone?.message} />
       </div>
+
+      {/* Passcode field for limited events */}
+      {isLimited && (
+        <div className="space-y-1">
+          <Label htmlFor="passcode" className="text-sm font-medium text-[#1A1A1A]">
+            合言葉 <span className="text-[#1A1A1A]">*</span>
+          </Label>
+          <p className="text-xs text-[#999999]">主催者から共有された合言葉を入力してください</p>
+          <div className="relative">
+            <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#999999]" />
+            <Input
+              id="passcode"
+              type="text"
+              placeholder="合言葉を入力"
+              aria-invalid={!!errors.passcode}
+              {...register("passcode")}
+              className={cn(
+                inputBase,
+                errors.passcode && "border-[#DC2626] focus-visible:border-[#DC2626] focus-visible:ring-[#DC2626]/20"
+              )}
+            />
+          </div>
+          <FieldError message={errors.passcode?.message} />
+        </div>
+      )}
 
       {/* Server error */}
       {serverError && (

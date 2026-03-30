@@ -18,6 +18,8 @@ import {
   Check,
   ChevronRight,
   LogIn,
+  Lock,
+  Shield,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -50,6 +52,9 @@ const createEventSchema = z.object({
     .min(1, "料金を入力してください")
     .refine((v) => !isNaN(Number(v)) && Number(v) >= 0, "0円以上にしてください"),
   image_url: z.union([z.string().url("有効なURLを入力してください"), z.literal("")]).optional(),
+  price_note: z.string().max(100).optional(),
+  is_limited: z.boolean().optional(),
+  limited_passcode: z.string().max(50).optional(),
   teacher_name: z.string().optional(),
   teacher_bio: z.string().optional(),
 });
@@ -65,6 +70,9 @@ interface CreateEventPayload {
   capacity: number;
   price: number;
   image_url?: string;
+  price_note?: string;
+  is_limited?: boolean;
+  limited_passcode?: string;
   teacher_name?: string;
   teacher_bio?: string;
 }
@@ -465,6 +473,9 @@ export default function NewEventPage() {
       capacity: Number(data.capacity),
       price: Number(data.price),
       image_url: data.image_url || undefined,
+      price_note: data.price_note || undefined,
+      is_limited: data.is_limited || false,
+      limited_passcode: data.is_limited ? (data.limited_passcode || undefined) : undefined,
       teacher_name: data.teacher_name,
       teacher_bio: data.teacher_bio,
     };
@@ -682,6 +693,53 @@ export default function NewEventPage() {
                       </div>
                       <FieldError message={errors.price?.message} />
                     </FieldWrapper>
+                  </div>
+
+                  {/* Price note */}
+                  <FieldWrapper
+                    label="参加費についての補足"
+                    optional
+                    hint="例：各自のお茶代のみ、ランチ代は別途、材料費込み"
+                  >
+                    <Input
+                      placeholder="例：各自のお食事代のみ"
+                      {...register("price_note")}
+                      className={inputCls}
+                    />
+                  </FieldWrapper>
+
+                  <Separator />
+
+                  {/* Limited event */}
+                  <div className="rounded-xl border border-[#E5E5E5] p-4">
+                    <label className="flex cursor-pointer items-center gap-3">
+                      <input
+                        type="checkbox"
+                        {...register("is_limited")}
+                        className="h-5 w-5 rounded border-[#E5E5E5] text-[#1A1A1A] focus:ring-[#1A1A1A]/20"
+                      />
+                      <div className="flex items-center gap-2">
+                        <Shield className="h-4 w-4 text-[#1A1A1A]" />
+                        <span className="text-sm font-medium text-[#1A1A1A]">限定公開にする</span>
+                      </div>
+                    </label>
+                    <p className="mt-1.5 ml-8 text-xs text-[#999999]">
+                      イベント内容は誰でも見れますが、申し込みには合言葉が必要になります
+                    </p>
+                    {watchedValues.is_limited && (
+                      <div className="mt-3 ml-8">
+                        <FieldWrapper label="合言葉" hint="参加者に共有する合言葉を設定してください">
+                          <div className="relative">
+                            <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
+                            <Input
+                              placeholder="例：sakura2024"
+                              {...register("limited_passcode")}
+                              className={inputWithIconCls}
+                            />
+                          </div>
+                        </FieldWrapper>
+                      </div>
+                    )}
                   </div>
 
                   <Separator />

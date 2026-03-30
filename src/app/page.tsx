@@ -16,6 +16,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   ネイル: "💅",
   占い: "🔮",
   ヨガ: "🧘",
+  ランチ会: "🍽️",
   その他: "✨",
 };
 
@@ -26,6 +27,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   ネイル: "from-zinc-100 to-zinc-50",
   占い: "from-stone-100 to-stone-50",
   ヨガ: "from-gray-100 to-neutral-50",
+  ランチ会: "from-amber-50 to-orange-50",
   その他: "from-zinc-100 to-gray-50",
 };
 
