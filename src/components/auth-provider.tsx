@@ -136,10 +136,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const signInWithLINE = useCallback(async (): Promise<{
     error: string | null;
   }> => {
+    // Preserve current path so user returns here after LINE OAuth
+    const currentPath = window.location.pathname + window.location.search;
+    const callbackUrl = `${window.location.origin}/api/auth/callback?next=${encodeURIComponent(currentPath)}`;
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "custom:line" as never,
       options: {
-        redirectTo: window.location.origin + "/api/auth/callback",
+        redirectTo: callbackUrl,
       },
     });
     if (error) return { error: error.message };
