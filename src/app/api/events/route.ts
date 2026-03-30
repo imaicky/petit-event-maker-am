@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { generateShortCode } from "@/lib/short-code";
 
 // ─── Validation ──────────────────────────────────────────────
 
@@ -87,6 +88,7 @@ export async function POST(request: NextRequest) {
 
     const data = parsed.data;
     const slug = data.slug ?? generateSlug(data.title);
+    const short_code = generateShortCode();
 
     const { data: event, error } = await supabase
       .from("events")
@@ -106,6 +108,7 @@ export async function POST(request: NextRequest) {
         is_limited: data.is_limited ?? false,
         limited_passcode: data.is_limited ? (data.limited_passcode || null) : null,
         slug,
+        short_code,
         is_published: data.is_published ?? true,
       })
       .select()

@@ -16,6 +16,7 @@ export interface EventCardProps {
   teacher_name?: string;
   averageRating?: number;
   reviewCount?: number;
+  short_code?: string | null;
   className?: string;
 }
 
@@ -51,6 +52,7 @@ export function EventCard({
   teacher_name,
   averageRating,
   reviewCount,
+  short_code,
   className,
 }: EventCardProps) {
   const remaining = capacity - booked_count;
@@ -62,7 +64,7 @@ export function EventCard({
 
   return (
     <Link
-      href={`/events/${id}`}
+      href={short_code ? `/e/${short_code}` : `/events/${id}`}
       className={cn(
         "group block overflow-hidden rounded-2xl bg-white",
         "card-hover-tilt",

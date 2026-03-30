@@ -261,7 +261,9 @@ function EventCard({
 
   const handleCopyUrl = async () => {
     const baseUrl = window.location.origin;
-    const url = `${baseUrl}/events/${event.id}`;
+    const url = event.short_code
+      ? `${baseUrl}/e/${event.short_code}`
+      : `${baseUrl}/events/${event.id}`;
     await navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);

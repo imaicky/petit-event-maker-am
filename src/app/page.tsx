@@ -544,6 +544,7 @@ export default async function Home() {
                   booked_count={event.booking_count}
                   image_url={event.image_url ?? undefined}
                   category={event.category ?? undefined}
+                  short_code={event.short_code}
                 />
               ))}
             </div>

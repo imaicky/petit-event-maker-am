@@ -390,6 +390,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
                   teacher_name={event.teacher_name ?? undefined}
                   averageRating={reviewAggs[event.id]?.averageRating}
                   reviewCount={reviewAggs[event.id]?.reviewCount}
+                  short_code={event.short_code}
                 />
               </div>
             ))}

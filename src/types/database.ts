@@ -74,6 +74,7 @@ export type Database = {
           limited_passcode: string | null
           line_notified_at: string | null
           line_scheduled_at: string | null
+          short_code: string | null
           line_schedule_message: string | null
           created_at: string
           updated_at: string
@@ -98,6 +99,7 @@ export type Database = {
           limited_passcode?: string | null
           line_notified_at?: string | null
           line_scheduled_at?: string | null
+          short_code?: string | null
           line_schedule_message?: string | null
           created_at?: string
           updated_at?: string
@@ -122,6 +124,7 @@ export type Database = {
           limited_passcode?: string | null
           line_notified_at?: string | null
           line_scheduled_at?: string | null
+          short_code?: string | null
           line_schedule_message?: string | null
           created_at?: string
           updated_at?: string

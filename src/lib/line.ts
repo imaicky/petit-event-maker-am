@@ -195,6 +195,7 @@ type EventForFlex = {
   capacity?: number | null;
   image_url?: string | null;
   booking_count?: number;
+  short_code?: string | null;
 };
 
 function formatDateJa(iso: string): string {
@@ -216,6 +217,9 @@ export function buildEventFlexBubble(
   event: EventForFlex,
   baseUrl: string
 ): FlexContainer {
+  const eventUrl = event.short_code
+    ? `${baseUrl}/e/${event.short_code}`
+    : `${baseUrl}/events/${event.id}`;
   const dateStr = formatDateJa(event.datetime);
   const priceStr = event.price === 0 ? "無料" : `¥${event.price.toLocaleString()}`;
   const remaining =
@@ -306,7 +310,7 @@ export function buildEventFlexBubble(
           action: {
             type: "uri",
             label: "詳細・予約はこちら",
-            uri: `${baseUrl}/events/${event.id}`,
+            uri: eventUrl,
           },
         },
       ],

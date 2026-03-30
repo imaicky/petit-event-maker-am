@@ -32,6 +32,7 @@ interface EventData {
   is_limited?: boolean;
   limited_passcode?: string;
   is_published?: boolean;
+  short_code?: string | null;
 }
 
 // ─── Data fetching ────────────────────────────────────────────────────────────
@@ -273,6 +274,9 @@ export default async function EventPage({ params }: EventPageProps) {
   const remaining = event.capacity - event.booking_count;
   const isPast = new Date(event.datetime) < new Date();
   const showReviews = reviews.length > 0 || isPast;
+  const shareUrl = event.short_code
+    ? `${baseUrl}/e/${event.short_code}`
+    : `${baseUrl}/events/${id}`;
 
   return (
     <main className="min-h-dvh bg-[#FAFAFA]" style={{ fontFamily: "var(--font-zen-maru)" }}>
@@ -339,7 +343,7 @@ export default async function EventPage({ params }: EventPageProps) {
 
         {/* Share button overlay */}
         <div className="absolute right-4 top-4 sm:right-6 sm:top-6">
-          <ShareButton url={`${baseUrl}/events/${id}`} title={event.title} variant="overlay" />
+          <ShareButton url={shareUrl} title={event.title} variant="overlay" />
         </div>
       </div>
 
@@ -421,7 +425,7 @@ export default async function EventPage({ params }: EventPageProps) {
 
             {/* Share & Stories actions */}
             <div className="mb-8 flex flex-wrap gap-2 animate-fade-in-up delay-200">
-              <ShareButton url={`${baseUrl}/events/${id}`} title={event.title} variant="inline" />
+              <ShareButton url={shareUrl} title={event.title} variant="inline" />
               <StoriesDownloadButton eventId={id} eventTitle={event.title} />
             </div>
 
