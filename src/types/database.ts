@@ -69,6 +69,7 @@ export type Database = {
           category: string | null
           teacher_name: string | null
           teacher_bio: string | null
+          line_notified_at: string | null
           created_at: string
           updated_at: string
         }
@@ -87,6 +88,7 @@ export type Database = {
           category?: string | null
           teacher_name?: string | null
           teacher_bio?: string | null
+          line_notified_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -105,6 +107,7 @@ export type Database = {
           category?: string | null
           teacher_name?: string | null
           teacher_bio?: string | null
+          line_notified_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -208,6 +211,7 @@ export type Database = {
           channel_name: string
           channel_access_token: string
           is_active: boolean
+          notify_on_booking: boolean
           created_at: string
           updated_at: string
         }
@@ -217,6 +221,7 @@ export type Database = {
           channel_name?: string
           channel_access_token: string
           is_active?: boolean
+          notify_on_booking?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -226,6 +231,7 @@ export type Database = {
           channel_name?: string
           channel_access_token?: string
           is_active?: boolean
+          notify_on_booking?: boolean
           created_at?: string
           updated_at?: string
         }

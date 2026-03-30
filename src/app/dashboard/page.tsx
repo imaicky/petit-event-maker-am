@@ -16,11 +16,15 @@ import {
   Sparkles,
   Settings,
   Loader2,
+  Link2,
+  Check,
+  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/header";
 import { useAuth } from "@/components/auth-provider";
 import { createClient } from "@/lib/supabase/client";
+import { LineNotifyDialog } from "@/components/line-notify-dialog";
 import type { Database } from "@/types/database";
 
 type EventRow = Database["public"]["Tables"]["events"]["Row"];
@@ -240,15 +244,27 @@ function StatCard({
 function EventCard({
   event,
   index = 0,
+  onLineNotify,
 }: {
   event: DashboardEvent;
   index?: number;
+  onLineNotify: (event: DashboardEvent) => void;
 }) {
+  const [copied, setCopied] = useState(false);
+
   const fillRate = event.capacity
     ? Math.round((event.booking_count / event.capacity) * 100)
     : null;
   const relativeDate = formatRelativeDate(event.datetime);
   const isPast = new Date(event.datetime) < new Date();
+
+  const handleCopyUrl = async () => {
+    const baseUrl = window.location.origin;
+    const url = `${baseUrl}/events/${event.id}`;
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const delayClass =
     index === 0
@@ -385,6 +401,42 @@ function EventCard({
           </div>
         )}
       </div>
+
+      {/* Action buttons */}
+      <div className="mt-3 pt-3 border-t border-[#F2F2F2] flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 rounded-full border-[#E5E5E5] gap-1.5 text-xs text-[#666666] hover:text-[#1A1A1A] hover:border-[#1A1A1A]/30"
+          onClick={handleCopyUrl}
+        >
+          {copied ? (
+            <Check className="h-3 w-3 text-green-500" />
+          ) : (
+            <Link2 className="h-3 w-3" />
+          )}
+          {copied ? "コピー済み" : "URLコピー"}
+        </Button>
+
+        {event.is_published && !isPast && (
+          event.line_notified_at ? (
+            <span className="inline-flex items-center gap-1 text-xs text-[#999999] px-2">
+              <Check className="h-3 w-3" />
+              LINE送信済み
+            </span>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 rounded-full border-[#06C755]/30 gap-1.5 text-xs text-[#06C755] hover:bg-[#06C755]/10 hover:border-[#06C755]/50"
+              onClick={() => onLineNotify(event)}
+            >
+              <MessageCircle className="h-3 w-3" />
+              LINE通知
+            </Button>
+          )
+        )}
+      </div>
     </div>
   );
 }
@@ -448,6 +500,8 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("published");
   const [events, setEvents] = useState<DashboardEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
+  const [lineDialogOpen, setLineDialogOpen] = useState(false);
+  const [lineDialogEvent, setLineDialogEvent] = useState<DashboardEvent | null>(null);
 
   // Redirect if not logged in
   useEffect(() => {
@@ -456,9 +510,9 @@ export default function DashboardPage() {
     }
   }, [authLoading, user, router]);
 
-  const fetchEvents = useCallback(async () => {
+  const fetchEvents = useCallback(async (silent = false) => {
     if (!user) return;
-    setEventsLoading(true);
+    if (!silent) setEventsLoading(true);
     try {
       const supabase = createClient();
 
@@ -494,7 +548,7 @@ export default function DashboardPage() {
 
       setEvents(enriched);
     } finally {
-      setEventsLoading(false);
+      if (!silent) setEventsLoading(false);
     }
   }, [user]);
 
@@ -569,8 +623,17 @@ export default function DashboardPage() {
             {/* Avatar with decorative gradient blob */}
             <div className="relative animate-fade-in-up">
               <div className="absolute -inset-2 rounded-3xl bg-gradient-to-br from-[#1A1A1A]/30 via-[#666666]/20 to-[#404040]/20 blur-lg opacity-70" />
-              <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#1A1A1A] text-white text-lg font-bold shadow-md">
-                {initials}
+              <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#1A1A1A] text-white text-lg font-bold shadow-md overflow-hidden">
+                {profile?.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={profile.avatar_url}
+                    alt={displayName}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  initials
+                )}
               </div>
             </div>
             <div>
@@ -682,7 +745,15 @@ export default function DashboardPage() {
                   ) : (
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                       {visibleEvents.map((event, i) => (
-                        <EventCard key={event.id} event={event} index={i} />
+                        <EventCard
+                          key={event.id}
+                          event={event}
+                          index={i}
+                          onLineNotify={(ev) => {
+                            setLineDialogEvent(ev);
+                            setLineDialogOpen(true);
+                          }}
+                        />
                       ))}
                     </div>
                   )}
@@ -692,6 +763,16 @@ export default function DashboardPage() {
           </>
         )}
       </main>
+
+      {lineDialogEvent && (
+        <LineNotifyDialog
+          open={lineDialogOpen}
+          onOpenChange={setLineDialogOpen}
+          eventId={lineDialogEvent.id}
+          eventTitle={lineDialogEvent.title}
+          onSuccess={() => fetchEvents(true)}
+        />
+      )}
 
       <footer className="border-t border-[#E5E5E5] py-6 text-center text-xs text-[#999999]">
         <p>&copy; 2026 プチイベント作成くん</p>

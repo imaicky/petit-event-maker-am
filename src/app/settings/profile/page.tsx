@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
@@ -31,7 +31,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Header } from "@/components/header";
-import { ImageUpload } from "@/components/image-upload";
 import { useAuth } from "@/components/auth-provider";
 import { createClient } from "@/lib/supabase/client";
 import type { SnsLinks } from "@/types/database";
@@ -164,6 +163,8 @@ export default function ProfileSettingsPage() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const {
     register,
@@ -318,38 +319,87 @@ export default function ProfileSettingsPage() {
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
           {/* Avatar section */}
           <SectionCard title="アバター">
-            <div className="flex items-start gap-6">
-              {/* Avatar preview */}
+            <div className="flex items-center gap-6">
+              {/* Clickable avatar */}
               <div className="relative shrink-0">
-                <Avatar className="size-20 ring-4 ring-[#E5E5E5]">
-                  {avatarUrl && (
-                    <AvatarImage
-                      src={avatarUrl}
-                      alt={displayName ?? username ?? ""}
-                    />
-                  )}
-                  <AvatarFallback className="text-3xl font-bold bg-[#F7F7F7] text-[#1A1A1A]">
-                    {initials}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#1A1A1A] text-white shadow-md">
-                  <Camera className="h-3.5 w-3.5" />
-                </div>
+                <button
+                  type="button"
+                  onClick={() => !avatarUploading && avatarInputRef.current?.click()}
+                  className="group relative cursor-pointer"
+                  aria-label="アバター画像を変更"
+                >
+                  <Avatar className="size-20 ring-4 ring-[#E5E5E5] group-hover:ring-[#1A1A1A]/30 transition-all">
+                    {avatarUrl && (
+                      <AvatarImage
+                        src={avatarUrl}
+                        alt={displayName ?? username ?? ""}
+                      />
+                    )}
+                    <AvatarFallback className="text-3xl font-bold bg-[#F7F7F7] text-[#1A1A1A]">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  {/* Hover overlay */}
+                  <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/0 group-hover:bg-black/40 transition-all">
+                    {avatarUploading ? (
+                      <Loader2 className="h-6 w-6 animate-spin text-white" />
+                    ) : (
+                      <Camera className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                    )}
+                  </div>
+                </button>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  aria-label="アバター画像ファイルを選択"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    e.target.value = "";
+                    setAvatarUploading(true);
+                    try {
+                      const formData = new FormData();
+                      formData.append("file", file);
+                      const res = await fetch("/api/upload", {
+                        method: "POST",
+                        body: formData,
+                      });
+                      const json = await res.json();
+                      if (res.ok) {
+                        setValue("avatar_url", json.url, { shouldDirty: true });
+                      } else {
+                        setServerError(json.error ?? "アップロードに失敗しました");
+                      }
+                    } catch {
+                      setServerError("アップロードに失敗しました");
+                    } finally {
+                      setAvatarUploading(false);
+                    }
+                  }}
+                />
               </div>
 
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-[#1A1A1A] mb-1">
+                <p className="text-sm font-medium text-[#1A1A1A]">
                   アバター画像
                   <span className="ml-1.5 text-xs font-normal text-[#999999]">
                     （任意）
                   </span>
                 </p>
-                <ImageUpload
-                  value={avatarUrl ?? ""}
-                  onChange={(url) => {
-                    setValue("avatar_url", url, { shouldDirty: true });
-                  }}
-                />
+                <p className="text-xs text-[#999999] mt-1">
+                  アイコンをクリックして画像をアップロード
+                </p>
+                {avatarUrl && (
+                  <button
+                    type="button"
+                    className="mt-2 text-xs text-red-400 hover:text-red-500 transition-colors"
+                    onClick={() => setValue("avatar_url", "", { shouldDirty: true })}
+                  >
+                    画像を削除
+                  </button>
+                )}
                 <FieldError message={errors.avatar_url?.message} />
               </div>
             </div>

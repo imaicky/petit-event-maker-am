@@ -16,7 +16,7 @@ export async function GET() {
 
     const { data, error } = await supabase
       .from("line_accounts")
-      .select("id, channel_name, is_active, created_at, updated_at")
+      .select("id, channel_name, is_active, notify_on_booking, created_at, updated_at")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
         },
         { onConflict: "user_id" }
       )
-      .select("id, channel_name, is_active, created_at, updated_at")
+      .select("id, channel_name, is_active, notify_on_booking, created_at, updated_at")
       .single();
 
     if (error) {
@@ -97,6 +97,57 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ lineAccount: data }, { status: 201 });
   } catch (err) {
     console.error("[POST /api/line] Unexpected error:", err);
+    return NextResponse.json(
+      { error: "サーバーエラーが発生しました" },
+      { status: 500 }
+    );
+  }
+}
+
+// ─── PATCH /api/line ─ 通知設定を更新 ─────────────────────────
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const updates: Record<string, boolean> = {};
+
+    if (typeof body.notify_on_booking === "boolean") {
+      updates.notify_on_booking = body.notify_on_booking;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json(
+        { error: "更新するフィールドがありません" },
+        { status: 400 }
+      );
+    }
+
+    const { data, error } = await supabase
+      .from("line_accounts")
+      .update(updates)
+      .eq("user_id", user.id)
+      .select("id, channel_name, is_active, notify_on_booking, created_at, updated_at")
+      .single();
+
+    if (error) {
+      console.error("[PATCH /api/line] Supabase error:", error);
+      return NextResponse.json(
+        { error: "設定の更新に失敗しました" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ lineAccount: data });
+  } catch (err) {
+    console.error("[PATCH /api/line] Unexpected error:", err);
     return NextResponse.json(
       { error: "サーバーエラーが発生しました" },
       { status: 500 }

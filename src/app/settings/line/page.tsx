@@ -12,10 +12,14 @@ import {
   Trash2,
   Zap,
   ZapOff,
+  Bell,
+  BellOff,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Header } from "@/components/header";
 import { useAuth } from "@/components/auth-provider";
 
@@ -44,6 +48,7 @@ type LineAccountInfo = {
   id: string;
   channel_name: string;
   is_active: boolean;
+  notify_on_booking: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -154,8 +159,26 @@ export default function LineSettingsPage() {
     }
   };
 
-  // Toggle is_active (re-connect with same token not possible from UI — use PATCH-like approach via POST)
-  // For simplicity, toggle is done by the user disconnecting/reconnecting.
+  // Toggle notify_on_booking
+  const handleToggleBookingNotify = async (checked: boolean) => {
+    setErrorMsg(null);
+    try {
+      const res = await fetch("/api/line", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notify_on_booking: checked }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setErrorMsg(json.error || "設定の更新に失敗しました");
+        return;
+      }
+      setLineAccount(json.lineAccount);
+      showSuccess(checked ? "予約通知をONにしました" : "予約通知をOFFにしました");
+    } catch {
+      setErrorMsg("設定の更新に失敗しました");
+    }
+  };
 
   if (authLoading) {
     return (
@@ -255,10 +278,40 @@ export default function LineSettingsPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-xl bg-[#FAFAFA] border border-[#F2F2F2] px-4 py-3">
-                    <p className="text-xs text-[#999999]">
-                      イベントを公開すると、このLINE公式アカウントのフォロワー全員に通知が送信されます。
-                    </p>
+                  <div className="rounded-xl bg-[#FAFAFA] border border-[#F2F2F2] px-4 py-3 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <Sparkles className="h-4 w-4 text-[#06C755] mt-0.5 shrink-0" />
+                      <p className="text-xs text-[#666666]">
+                        イベント公開時、画像・日時・価格付きの<span className="font-medium text-[#1A1A1A]">リッチカード（Flex Message）</span>がフォロワーに届きます
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </SectionCard>
+
+              {/* Notification settings */}
+              <SectionCard title="通知設定">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      {lineAccount.notify_on_booking ? (
+                        <Bell className="h-5 w-5 text-[#06C755] mt-0.5 shrink-0" />
+                      ) : (
+                        <BellOff className="h-5 w-5 text-[#999999] mt-0.5 shrink-0" />
+                      )}
+                      <div>
+                        <p className="text-sm font-medium text-[#1A1A1A]">
+                          新規予約の LINE 通知
+                        </p>
+                        <p className="text-xs text-[#999999] mt-0.5">
+                          予約が入ったとき、LINE で通知を受け取ります
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={lineAccount.notify_on_booking}
+                      onCheckedChange={handleToggleBookingNotify}
+                    />
                   </div>
                 </div>
               </SectionCard>
@@ -289,6 +342,38 @@ export default function LineSettingsPage() {
           ) : (
             /* ─── Not connected state ─── */
             <>
+              {/* Features preview */}
+              <SectionCard title="連携するとできること">
+                <div className="space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#06C755]/10">
+                      <Sparkles className="h-4 w-4 text-[#06C755]" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-[#1A1A1A]">
+                        リッチカードでイベント告知
+                      </p>
+                      <p className="text-xs text-[#999999] mt-0.5">
+                        画像・日時・価格付きの見やすいカードがフォロワーに届きます
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#06C755]/10">
+                      <Bell className="h-4 w-4 text-[#06C755]" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-[#1A1A1A]">
+                        予約通知をリアルタイムで受信
+                      </p>
+                      <p className="text-xs text-[#999999] mt-0.5">
+                        新しい予約が入ると LINE で通知が届きます（ON/OFF 設定可能）
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </SectionCard>
+
               <SectionCard title="LINE公式アカウントを連携">
                 <form onSubmit={handleConnect} className="space-y-4">
                   <div className="rounded-xl bg-[#FAFAFA] border border-[#F2F2F2] px-4 py-3">

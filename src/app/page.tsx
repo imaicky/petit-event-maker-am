@@ -74,7 +74,11 @@ const FAQ_ITEMS = [
   },
   {
     q: "参加者への通知はどのように送れますか？",
-    a: "申し込み完了メールが自動送信されます。また、ダッシュボードから参加者へ一斉メッセージを送ることもできます。",
+    a: "申し込み完了メールが自動送信されます。さらにLINE公式アカウントを連携すれば、フォロワー全員にイベント告知カード（画像・詳細・予約ボタン付き）をワンタップで配信できます。新しい予約が入った際のLINE通知も届きます。",
+  },
+  {
+    q: "LINE公式アカウントとの連携はどうやりますか？",
+    a: "設定画面からLINE公式アカウントのチャネルアクセストークンを登録するだけで連携完了です。連携後はダッシュボードからワンタップでフォロワーへイベント告知を送信できます。",
   },
   {
     q: "有料イベントの支払いはどうなりますか？",
@@ -446,9 +450,14 @@ export default async function Home() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               {[
                 {
+                  icon: "💬",
+                  title: "LINE公式アカウント連携",
+                  desc: "あなたのLINE公式アカウントと連携して、フォロワー全員にイベント告知をワンタップで配信。画像・詳細・予約ボタン付きのリッチなカードが届きます。",
+                },
+                {
                   icon: "📲",
                   title: "LINE・SNS共有",
-                  desc: "ワンタップでLINE・Twitter・インスタにイベントページを共有。フォロワーへの告知がこれまでにないほどスムーズです。",
+                  desc: "イベントURLをワンタップでコピーしてLINE・Twitter・インスタに共有。フォロワーへの告知がこれまでにないほどスムーズです。",
                 },
                 {
                   icon: "📸",
@@ -475,9 +484,7 @@ export default async function Home() {
                   key={title}
                   className={`animate-fade-in-up ${
                     i < 2 ? "delay-100" : i < 4 ? "delay-200" : "delay-300"
-                  } flex gap-4 rounded-2xl bg-white p-6 ring-1 ring-[#E5E5E5] hover:ring-[#1A1A1A]/30 hover:shadow-md transition-all duration-200 ${
-                    i === 4 ? "sm:col-span-2 sm:max-w-lg sm:mx-auto" : ""
-                  }`}
+                  } flex gap-4 rounded-2xl bg-white p-6 ring-1 ring-[#E5E5E5] hover:ring-[#1A1A1A]/30 hover:shadow-md transition-all duration-200`}
                 >
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#F7F7F7] text-2xl">
                     {icon}
