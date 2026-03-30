@@ -190,22 +190,36 @@ export function LineNotifyDialog({
         ) : currentSchedule ? (
           /* Show current schedule with change/cancel options */
           <div className="space-y-4">
-            <div className="rounded-lg bg-[#06C755]/5 border border-[#06C755]/20 p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Clock className="h-4 w-4 text-[#06C755]" />
-                <p className="text-sm font-medium text-[#1A1A1A]">
-                  予約送信が設定されています
+            {new Date(currentSchedule.scheduled_at) <= new Date() ? (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Clock className="h-4 w-4 text-amber-600" />
+                  <p className="text-sm font-medium text-amber-800">
+                    予約時刻を過ぎています
+                  </p>
+                </div>
+                <p className="text-sm text-amber-700">
+                  {formatScheduleDate(currentSchedule.scheduled_at)}の予約が未送信です。「今すぐ送信」を押してください。
                 </p>
               </div>
-              <p className="text-sm text-[#666666]">
-                {formatScheduleDate(currentSchedule.scheduled_at)}に送信予定
-              </p>
-              {currentSchedule.message && (
-                <p className="mt-2 text-xs text-[#999999] line-clamp-2">
-                  メッセージ: {currentSchedule.message}
+            ) : (
+              <div className="rounded-lg bg-[#06C755]/5 border border-[#06C755]/20 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Clock className="h-4 w-4 text-[#06C755]" />
+                  <p className="text-sm font-medium text-[#1A1A1A]">
+                    予約送信が設定されています
+                  </p>
+                </div>
+                <p className="text-sm text-[#666666]">
+                  {formatScheduleDate(currentSchedule.scheduled_at)}に送信予定
                 </p>
-              )}
-            </div>
+              </div>
+            )}
+            {currentSchedule.message && (
+              <p className="text-xs text-[#999999] line-clamp-2">
+                メッセージ: {currentSchedule.message}
+              </p>
+            )}
 
             {error && <p className="text-xs text-red-500">{error}</p>}
 

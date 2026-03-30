@@ -19,6 +19,7 @@ import {
   Link2,
   Check,
   MessageCircle,
+  Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/header";
@@ -425,19 +426,29 @@ function EventCard({
               LINE送信済み
             </span>
           ) : event.line_scheduled_at ? (
-            <button
-              onClick={() => onLineNotify(event)}
-              className="inline-flex items-center gap-1.5 text-xs text-[#06C755] px-2 py-1 rounded-full bg-[#06C755]/5 border border-[#06C755]/20 hover:bg-[#06C755]/10 transition-colors"
-            >
-              <Clock className="h-3 w-3" />
-              {new Date(event.line_scheduled_at).toLocaleDateString("ja-JP", {
-                month: "numeric",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-              送信予定
-            </button>
+            new Date(event.line_scheduled_at) <= new Date() ? (
+              <button
+                onClick={() => onLineNotify(event)}
+                className="inline-flex items-center gap-1.5 text-xs text-white px-3 py-1.5 rounded-full bg-[#06C755] hover:bg-[#05b34c] transition-colors shadow-sm font-medium"
+              >
+                <Send className="h-3 w-3" />
+                今すぐ送信
+              </button>
+            ) : (
+              <button
+                onClick={() => onLineNotify(event)}
+                className="inline-flex items-center gap-1.5 text-xs text-[#06C755] px-2 py-1 rounded-full bg-[#06C755]/5 border border-[#06C755]/20 hover:bg-[#06C755]/10 transition-colors"
+              >
+                <Clock className="h-3 w-3" />
+                {new Date(event.line_scheduled_at).toLocaleDateString("ja-JP", {
+                  month: "numeric",
+                  day: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+                送信予定
+              </button>
+            )
           ) : (
             <Button
               variant="outline"
