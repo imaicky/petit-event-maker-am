@@ -1,7 +1,7 @@
 import { Resend } from "resend";
 
 const BATCH_SIZE = 50;
-const FROM_ADDRESS = "プチイベント作成くん <onboarding@resend.dev>";
+const FROM_ADDRESS = "プチイベント作成くん <noreply@eizo.info>";
 
 function getResendClient() {
   const key = process.env.RESEND_API_KEY;
