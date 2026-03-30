@@ -17,6 +17,7 @@ import {
   ChevronUp,
   Check,
   ChevronRight,
+  LogIn,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -415,7 +416,7 @@ function EventPreview({ values }: { values: Partial<CreateEventFormValues> }) {
 
 export default function NewEventPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
   const [showPreview, setShowPreview] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<StepId>(1);
@@ -514,16 +515,29 @@ export default function NewEventPage() {
               />
             </div>
           </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowPreview((v) => !v)}
-            className="gap-1.5 text-[#1A1A1A] hover:bg-[#F2F2F2] hover:text-[#1A1A1A] lg:hidden"
-          >
-            <Eye className="h-4 w-4" />
-            {showPreview ? "フォームに戻る" : "プレビュー"}
-          </Button>
+          <div className="flex items-center gap-2">
+            {!isLoading && !user && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setShowLoginDialog(true)}
+                className="gap-1.5 rounded-full bg-[#1A1A1A] text-white hover:bg-[#111111] shadow-sm"
+              >
+                <LogIn className="h-3.5 w-3.5" />
+                ログイン
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowPreview((v) => !v)}
+              className="gap-1.5 text-[#1A1A1A] hover:bg-[#F2F2F2] hover:text-[#1A1A1A] lg:hidden"
+            >
+              <Eye className="h-4 w-4" />
+              {showPreview ? "フォームに戻る" : "プレビュー"}
+            </Button>
+          </div>
         </div>
 
         {/* Mobile step indicator */}
@@ -536,6 +550,28 @@ export default function NewEventPage() {
       </div>
 
       <div className="mx-auto max-w-5xl px-4 py-8">
+        {/* Login prompt banner */}
+        {!isLoading && !user && (
+          <button
+            type="button"
+            onClick={() => setShowLoginDialog(true)}
+            className="mb-6 flex w-full items-center gap-3 rounded-2xl border border-[#E5E5E5] bg-white p-4 text-left shadow-sm transition-all hover:border-[#1A1A1A]/30 hover:shadow-md"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1A1A1A]">
+              <LogIn className="h-5 w-5 text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-[#1A1A1A]">
+                ログインしてイベントを作成
+              </p>
+              <p className="mt-0.5 text-xs text-[#999999]">
+                LINEまたはメールアドレスでログインすると、イベントの作成・管理ができます
+              </p>
+            </div>
+            <ChevronRight className="h-4 w-4 shrink-0 text-[#999999]" />
+          </button>
+        )}
+
         <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
 
           {/* ── Form column ────────────────────────────────── */}
