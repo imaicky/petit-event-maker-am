@@ -62,6 +62,34 @@ export function fillTemplate(
 }
 
 /**
+ * Build a reminder email HTML for attendees
+ */
+export function buildReminderEmailHtml(
+  eventTitle: string,
+  dateStr: string,
+  location: string,
+  timeLabel: string
+): string {
+  const body = `いつもありがとうございます。
+
+${eventTitle}の開催が近づいてまいりました。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+■ ${timeLabel}
+■ イベント：${eventTitle}
+■ 日時：${dateStr}
+■ 場所：${location}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+当日お会いできることを楽しみにしております。
+どうぞお気をつけてお越しください。
+
+プチイベント作成くん`;
+
+  return wrapInHtml(body, eventTitle);
+}
+
+/**
  * Wrap plain text body in a simple HTML email layout
  */
 export function wrapInHtml(body: string, eventTitle: string): string {

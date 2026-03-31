@@ -18,6 +18,7 @@ export type Database = {
           bio: string | null
           sns_links: Json | null
           is_teacher: boolean
+          line_user_id: string | null
           created_at: string
           updated_at: string
         }
@@ -29,6 +30,7 @@ export type Database = {
           bio?: string | null
           sns_links?: Json | null
           is_teacher?: boolean
+          line_user_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -40,6 +42,7 @@ export type Database = {
           bio?: string | null
           sns_links?: Json | null
           is_teacher?: boolean
+          line_user_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -76,6 +79,11 @@ export type Database = {
           line_scheduled_at: string | null
           short_code: string | null
           line_schedule_message: string | null
+          location_type: string | null
+          online_url: string | null
+          location_url: string | null
+          reminder_24h_sent: boolean
+          reminder_2h_sent: boolean
           created_at: string
           updated_at: string
         }
@@ -101,6 +109,11 @@ export type Database = {
           line_scheduled_at?: string | null
           short_code?: string | null
           line_schedule_message?: string | null
+          location_type?: string | null
+          online_url?: string | null
+          location_url?: string | null
+          reminder_24h_sent?: boolean
+          reminder_2h_sent?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -126,6 +139,11 @@ export type Database = {
           line_scheduled_at?: string | null
           short_code?: string | null
           line_schedule_message?: string | null
+          location_type?: string | null
+          online_url?: string | null
+          location_url?: string | null
+          reminder_24h_sent?: boolean
+          reminder_2h_sent?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -282,6 +300,7 @@ export type Database = {
           is_following: boolean
           followed_at: string
           unfollowed_at: string | null
+          tags: string[]
           created_at: string
         }
         Insert: {
@@ -293,6 +312,7 @@ export type Database = {
           is_following?: boolean
           followed_at?: string
           unfollowed_at?: string | null
+          tags?: string[]
           created_at?: string
         }
         Update: {
@@ -304,6 +324,7 @@ export type Database = {
           is_following?: boolean
           followed_at?: string
           unfollowed_at?: string | null
+          tags?: string[]
           created_at?: string
         }
         Relationships: [
@@ -323,6 +344,7 @@ export type Database = {
           sender_id: string
           subject: string
           body: string
+          channel: 'email' | 'line' | 'both'
           recipient_count: number
           created_at: string
         }
@@ -332,6 +354,7 @@ export type Database = {
           sender_id: string
           subject: string
           body: string
+          channel?: 'email' | 'line' | 'both'
           recipient_count?: number
           created_at?: string
         }
@@ -341,6 +364,7 @@ export type Database = {
           sender_id?: string
           subject?: string
           body?: string
+          channel?: 'email' | 'line' | 'both'
           recipient_count?: number
           created_at?: string
         }
@@ -357,6 +381,47 @@ export type Database = {
             columns: ['sender_id']
             isOneToOne: false
             referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      line_messages: {
+        Row: {
+          id: string
+          line_account_id: string
+          line_user_id: string
+          direction: 'incoming' | 'outgoing'
+          message_type: string
+          content: string
+          line_message_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          line_account_id: string
+          line_user_id: string
+          direction: 'incoming' | 'outgoing'
+          message_type?: string
+          content: string
+          line_message_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          line_account_id?: string
+          line_user_id?: string
+          direction?: 'incoming' | 'outgoing'
+          message_type?: string
+          content?: string
+          line_message_id?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'line_messages_line_account_id_fkey'
+            columns: ['line_account_id']
+            isOneToOne: false
+            referencedRelation: 'line_accounts'
             referencedColumns: ['id']
           }
         ]
@@ -456,6 +521,9 @@ export type LineAccountUpdate = Database['public']['Tables']['line_accounts']['U
 export type LineFollower = Database['public']['Tables']['line_followers']['Row']
 export type LineFollowerInsert = Database['public']['Tables']['line_followers']['Insert']
 export type LineFollowerUpdate = Database['public']['Tables']['line_followers']['Update']
+
+export type LineMessage = Database['public']['Tables']['line_messages']['Row']
+export type LineMessageInsert = Database['public']['Tables']['line_messages']['Insert']
 
 export type BookingStatus = 'confirmed' | 'cancelled'
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Send, CheckCircle2, Clock, X } from "lucide-react";
+import { Loader2, Send, CheckCircle2, Clock, X, Users, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,9 +22,12 @@ type LineNotifyDialogProps = {
     scheduled_at: string;
     message: string | null;
   } | null;
+  /** Set to true to show segment options (for events that were already notified) */
+  allowSegment?: boolean;
 };
 
 type Mode = "immediate" | "schedule";
+type Segment = "all" | "attendees";
 
 function formatScheduleDate(iso: string): string {
   try {
@@ -47,6 +50,7 @@ export function LineNotifyDialog({
   eventTitle,
   onSuccess,
   currentSchedule,
+  allowSegment = false,
 }: LineNotifyDialogProps) {
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
@@ -56,6 +60,7 @@ export function LineNotifyDialog({
   const [error, setError] = useState("");
   const [mode, setMode] = useState<Mode>("immediate");
   const [scheduledAt, setScheduledAt] = useState("");
+  const [segment, setSegment] = useState<Segment>("all");
 
   const handleSend = async () => {
     setSending(true);
@@ -64,7 +69,7 @@ export function LineNotifyDialog({
       const res = await fetch(`/api/events/${eventId}/line-notify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message, segment }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -144,6 +149,7 @@ export function LineNotifyDialog({
         setError("");
         setMode("immediate");
         setScheduledAt("");
+        setSegment("all");
       }, 200);
     }
     onOpenChange(nextOpen);
@@ -288,6 +294,41 @@ export function LineNotifyDialog({
                   予約送信
                 </button>
               </div>
+
+              {/* Segment selector */}
+              {(allowSegment || mode === "immediate") && (
+                <div>
+                  <label className="block text-xs font-medium text-[#666666] mb-1.5">
+                    送信先
+                  </label>
+                  <div className="flex gap-1 rounded-xl bg-[#F7F7F7] p-1">
+                    <button
+                      type="button"
+                      onClick={() => setSegment("all")}
+                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                        segment === "all"
+                          ? "bg-white text-[#1A1A1A] shadow-sm"
+                          : "text-[#999999] hover:text-[#1A1A1A]"
+                      }`}
+                    >
+                      <Users className="h-3 w-3" />
+                      全員
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSegment("attendees")}
+                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                        segment === "attendees"
+                          ? "bg-white text-[#1A1A1A] shadow-sm"
+                          : "text-[#999999] hover:text-[#1A1A1A]"
+                      }`}
+                    >
+                      <Tag className="h-3 w-3" />
+                      参加者のみ
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Schedule datetime picker */}
               {mode === "schedule" && (

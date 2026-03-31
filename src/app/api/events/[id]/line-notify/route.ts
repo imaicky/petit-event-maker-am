@@ -4,8 +4,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   broadcastFlexMessage,
   broadcastLineMessage,
+  multicastFlexMessage,
+  multicastLineMessage,
   buildEventFlexBubble,
 } from "@/lib/line";
+
+type SegmentParam =
+  | "all"
+  | "attendees"
+  | { tags: string[] };
 
 export async function POST(
   request: NextRequest,
@@ -17,6 +24,7 @@ export async function POST(
     // Parse body first (stream can only be consumed once)
     const body = await request.json().catch(() => ({}));
     const customMessage = typeof body.message === "string" ? body.message.trim() : "";
+    const segment: SegmentParam = body.segment ?? "all";
 
     const supabase = await createClient();
 
@@ -61,8 +69,8 @@ export async function POST(
       );
     }
 
-    // Duplicate check
-    if (event.line_notified_at) {
+    // Duplicate check (only for "all" segment)
+    if (segment === "all" && event.line_notified_at) {
       return NextResponse.json(
         { error: "このイベントは既にLINE送信済みです" },
         { status: 409 }
@@ -70,9 +78,10 @@ export async function POST(
     }
 
     // LINE account check
-    const { data: lineAccount } = await supabase
+    const admin = createAdminClient();
+    const { data: lineAccount } = await admin
       .from("line_accounts")
-      .select("channel_access_token, is_active")
+      .select("id, channel_access_token, is_active")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -94,48 +103,140 @@ export async function POST(
       process.env.NEXT_PUBLIC_BASE_URL ||
       "https://petit-event-maker-am.vercel.app";
 
-    // Send custom text message first (if provided)
-    if (customMessage) {
-      const textResult = await broadcastLineMessage(
-        lineAccount.channel_access_token,
-        customMessage
-      );
-      if (!textResult.ok) {
-        return NextResponse.json(
-          { error: `LINE送信に失敗しました: ${textResult.error}` },
-          { status: 502 }
-        );
-      }
-    }
-
-    // Send Flex Message card
     const bubble = buildEventFlexBubble(
       { ...event, booking_count: bookingCount ?? 0 },
       baseUrl
     );
-    const flexResult = await broadcastFlexMessage(
-      lineAccount.channel_access_token,
-      `🎉 新しいイベント: ${event.title}`,
-      bubble
-    );
 
-    if (!flexResult.ok) {
-      return NextResponse.json(
-        { error: `LINE送信に失敗しました: ${flexResult.error}` },
-        { status: 502 }
+    // Determine target user IDs for segment delivery
+    if (segment === "all") {
+      // Broadcast to all followers
+      if (customMessage) {
+        const textResult = await broadcastLineMessage(
+          lineAccount.channel_access_token,
+          customMessage
+        );
+        if (!textResult.ok) {
+          return NextResponse.json(
+            { error: `LINE送信に失敗しました: ${textResult.error}` },
+            { status: 502 }
+          );
+        }
+      }
+
+      const flexResult = await broadcastFlexMessage(
+        lineAccount.channel_access_token,
+        `🎉 新しいイベント: ${event.title}`,
+        bubble
       );
-    }
 
-    // Update line_notified_at and clear any schedule using admin client to bypass RLS
-    const admin = createAdminClient();
-    await admin
-      .from("events")
-      .update({
-        line_notified_at: new Date().toISOString(),
-        line_scheduled_at: null,
-        line_schedule_message: null,
-      })
-      .eq("id", eventId);
+      if (!flexResult.ok) {
+        return NextResponse.json(
+          { error: `LINE送信に失敗しました: ${flexResult.error}` },
+          { status: 502 }
+        );
+      }
+
+      // Update line_notified_at
+      await admin
+        .from("events")
+        .update({
+          line_notified_at: new Date().toISOString(),
+          line_scheduled_at: null,
+          line_schedule_message: null,
+        })
+        .eq("id", eventId);
+    } else {
+      // Segment delivery — get target LINE user IDs
+      let targetUserIds: string[] = [];
+
+      if (segment === "attendees") {
+        // Get attendees who are also LINE followers
+        const { data: bookings } = await admin
+          .from("bookings")
+          .select("user_id")
+          .eq("event_id", eventId)
+          .eq("status", "confirmed")
+          .not("user_id", "is", null);
+
+        const userIds = (bookings ?? [])
+          .map((b: { user_id: string | null }) => b.user_id)
+          .filter(Boolean) as string[];
+
+        if (userIds.length > 0) {
+          const { data: profiles } = await admin
+            .from("profiles")
+            .select("line_user_id")
+            .in("id", userIds)
+            .not("line_user_id", "is", null);
+
+          const lineUserIds = (profiles ?? [])
+            .map((p: { line_user_id: string | null }) => p.line_user_id)
+            .filter(Boolean) as string[];
+
+          if (lineUserIds.length > 0) {
+            const { data: followers } = await admin
+              .from("line_followers")
+              .select("line_user_id")
+              .eq("line_account_id", lineAccount.id)
+              .eq("is_following", true)
+              .in("line_user_id", lineUserIds);
+
+            targetUserIds = (followers ?? []).map(
+              (f: { line_user_id: string }) => f.line_user_id
+            );
+          }
+        }
+      } else if (typeof segment === "object" && segment.tags?.length > 0) {
+        // Get followers with matching tags
+        const { data: followers } = await admin
+          .from("line_followers")
+          .select("line_user_id")
+          .eq("line_account_id", lineAccount.id)
+          .eq("is_following", true)
+          .overlaps("tags", segment.tags);
+
+        targetUserIds = (followers ?? []).map(
+          (f: { line_user_id: string }) => f.line_user_id
+        );
+      }
+
+      if (targetUserIds.length === 0) {
+        return NextResponse.json(
+          { error: "対象のLINEフォロワーが見つかりませんでした" },
+          { status: 404 }
+        );
+      }
+
+      // Send via multicast
+      if (customMessage) {
+        const textResult = await multicastLineMessage(
+          lineAccount.channel_access_token,
+          targetUserIds,
+          customMessage
+        );
+        if (!textResult.ok) {
+          return NextResponse.json(
+            { error: `LINE送信に失敗しました: ${textResult.error}` },
+            { status: 502 }
+          );
+        }
+      }
+
+      const flexResult = await multicastFlexMessage(
+        lineAccount.channel_access_token,
+        targetUserIds,
+        `🎉 ${event.title}`,
+        bubble
+      );
+
+      if (!flexResult.ok) {
+        return NextResponse.json(
+          { error: `LINE送信に失敗しました: ${flexResult.error}` },
+          { status: 502 }
+        );
+      }
+    }
 
     return NextResponse.json({ success: true });
   } catch (err) {

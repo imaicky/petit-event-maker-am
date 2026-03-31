@@ -20,6 +20,7 @@ import {
   Check,
   MessageCircle,
   Send,
+  Video,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/header";
@@ -339,12 +340,22 @@ function EventCard({
               <Clock className="h-3 w-3 text-[#1A1A1A] shrink-0" />
               {relativeDate}
             </span>
-            {event.location && (
+            {event.location_type === "online" ? (
+              <span className="flex items-center gap-1">
+                <Video className="h-3 w-3 text-[#1A1A1A] shrink-0" />
+                <span className="truncate max-w-[120px]">オンライン</span>
+              </span>
+            ) : event.location_type === "hybrid" ? (
+              <span className="flex items-center gap-1">
+                <Video className="h-3 w-3 text-[#1A1A1A] shrink-0" />
+                <span className="truncate max-w-[120px]">{event.location ? `${event.location} + オンライン` : "ハイブリッド"}</span>
+              </span>
+            ) : event.location ? (
               <span className="flex items-center gap-1">
                 <MapPin className="h-3 w-3 text-[#1A1A1A] shrink-0" />
                 <span className="truncate max-w-[120px]">{event.location}</span>
               </span>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -694,6 +705,16 @@ export default function DashboardPage() {
 
           {/* Quick actions */}
           <div className="flex gap-2 shrink-0 animate-fade-in-up delay-300">
+            <Link href="/dashboard/messages">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 rounded-full border-[#06C755]/30 gap-1.5 text-[#06C755] hover:bg-[#06C755]/10 hover:border-[#06C755]/50"
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+                メッセージ
+              </Button>
+            </Link>
             <Link href="/settings/profile">
               <Button
                 variant="outline"

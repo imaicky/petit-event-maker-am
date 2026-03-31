@@ -20,6 +20,8 @@ import {
   Check,
   Users,
   UserCheck,
+  Tag,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,6 +69,7 @@ type Follower = {
   picture_url: string | null;
   is_following: boolean;
   followed_at: string;
+  tags: string[];
 };
 
 const inputCls =
@@ -93,6 +96,8 @@ export default function LineSettingsPage() {
   const [ownerLineUserId, setOwnerLineUserId] = useState<string | null>(null);
   const [followersLoading, setFollowersLoading] = useState(false);
   const [settingOwner, setSettingOwner] = useState<string | null>(null);
+  const [editingTags, setEditingTags] = useState<string | null>(null);
+  const [tagInput, setTagInput] = useState("");
 
   // Redirect if not logged in
   useEffect(() => {
@@ -277,6 +282,51 @@ export default function LineSettingsPage() {
     }
   };
 
+  const handleAddTag = async (followerId: string, currentTags: string[]) => {
+    const tag = tagInput.trim();
+    if (!tag) return;
+    const newTags = [...new Set([...currentTags, tag])];
+    setErrorMsg(null);
+    try {
+      const res = await fetch(`/api/line/followers/${followerId}/tags`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tags: newTags }),
+      });
+      if (!res.ok) {
+        setErrorMsg("タグの更新に失敗しました");
+        return;
+      }
+      setFollowers((prev) =>
+        prev.map((f) => (f.id === followerId ? { ...f, tags: newTags } : f))
+      );
+      setTagInput("");
+    } catch {
+      setErrorMsg("タグの更新に失敗しました");
+    }
+  };
+
+  const handleRemoveTag = async (followerId: string, currentTags: string[], tagToRemove: string) => {
+    const newTags = currentTags.filter((t) => t !== tagToRemove);
+    setErrorMsg(null);
+    try {
+      const res = await fetch(`/api/line/followers/${followerId}/tags`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tags: newTags }),
+      });
+      if (!res.ok) {
+        setErrorMsg("タグの削除に失敗しました");
+        return;
+      }
+      setFollowers((prev) =>
+        prev.map((f) => (f.id === followerId ? { ...f, tags: newTags } : f))
+      );
+    } catch {
+      setErrorMsg("タグの削除に失敗しました");
+    }
+  };
+
   if (authLoading) {
     return (
       <div className="flex flex-col min-h-dvh bg-[#FAFAFA]">
@@ -440,56 +490,111 @@ export default function LineSettingsPage() {
                       {followers.map((f) => {
                         const isOwner = ownerLineUserId === f.line_user_id;
                         return (
-                          <div
-                            key={f.id}
-                            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 border ${
-                              isOwner
-                                ? "border-[#06C755]/30 bg-[#06C755]/5"
-                                : "border-[#F2F2F2] bg-[#FAFAFA]"
-                            }`}
-                          >
-                            {f.picture_url ? (
-                              <Image
-                                src={f.picture_url}
-                                alt={f.display_name ?? ""}
-                                width={36}
-                                height={36}
-                                className="rounded-full shrink-0"
-                              />
-                            ) : (
-                              <div className="h-9 w-9 rounded-full bg-[#E5E5E5] flex items-center justify-center shrink-0">
-                                <Users className="h-4 w-4 text-[#999999]" />
+                          <div key={f.id} className="space-y-1">
+                            <div
+                              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 border ${
+                                isOwner
+                                  ? "border-[#06C755]/30 bg-[#06C755]/5"
+                                  : "border-[#F2F2F2] bg-[#FAFAFA]"
+                              }`}
+                            >
+                              {f.picture_url ? (
+                                <Image
+                                  src={f.picture_url}
+                                  alt={f.display_name ?? ""}
+                                  width={36}
+                                  height={36}
+                                  className="rounded-full shrink-0"
+                                />
+                              ) : (
+                                <div className="h-9 w-9 rounded-full bg-[#E5E5E5] flex items-center justify-center shrink-0">
+                                  <Users className="h-4 w-4 text-[#999999]" />
+                                </div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-[#1A1A1A] truncate">
+                                  {f.display_name || "名前なし"}
+                                </p>
+                                <p className="text-xs text-[#999999]">
+                                  {new Date(f.followed_at).toLocaleDateString("ja-JP")} フォロー
+                                </p>
                               </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-[#1A1A1A] truncate">
-                                {f.display_name || "名前なし"}
-                              </p>
-                              <p className="text-xs text-[#999999]">
-                                {new Date(f.followed_at).toLocaleDateString("ja-JP")} フォロー
-                              </p>
+                              {isOwner ? (
+                                <span className="flex items-center gap-1 text-xs font-medium text-[#06C755] shrink-0">
+                                  <UserCheck className="h-3.5 w-3.5" />
+                                  通知先
+                                </span>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleSetOwner(f.line_user_id)}
+                                  disabled={settingOwner === f.line_user_id}
+                                  className="rounded-full text-xs h-7 px-3 border-[#E5E5E5] shrink-0"
+                                >
+                                  {settingOwner === f.line_user_id ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    "通知先に設定"
+                                  )}
+                                </Button>
+                              )}
                             </div>
-                            {isOwner ? (
-                              <span className="flex items-center gap-1 text-xs font-medium text-[#06C755] shrink-0">
-                                <UserCheck className="h-3.5 w-3.5" />
-                                通知先
-                              </span>
-                            ) : (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleSetOwner(f.line_user_id)}
-                                disabled={settingOwner === f.line_user_id}
-                                className="rounded-full text-xs h-7 px-3 border-[#E5E5E5] shrink-0"
+                            {/* Tags */}
+                            <div className="ml-12 flex flex-wrap items-center gap-1">
+                            {(f.tags ?? []).map((tag) => (
+                              <span
+                                key={tag}
+                                className="inline-flex items-center gap-1 rounded-full bg-[#F2F2F2] px-2 py-0.5 text-xs text-[#666666]"
                               >
-                                {settingOwner === f.line_user_id ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  "通知先に設定"
-                                )}
-                              </Button>
+                                <Tag className="h-2.5 w-2.5" />
+                                {tag}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveTag(f.id, f.tags ?? [], tag)}
+                                  className="hover:text-red-500"
+                                >
+                                  <X className="h-2.5 w-2.5" />
+                                </button>
+                              </span>
+                            ))}
+                            {editingTags === f.id ? (
+                              <form
+                                onSubmit={(e) => {
+                                  e.preventDefault();
+                                  handleAddTag(f.id, f.tags ?? []);
+                                }}
+                                className="inline-flex items-center gap-1"
+                              >
+                                <input
+                                  type="text"
+                                  value={tagInput}
+                                  onChange={(e) => setTagInput(e.target.value)}
+                                  placeholder="タグ名"
+                                  className="h-5 w-20 rounded border border-[#E5E5E5] px-1.5 text-xs focus:outline-none focus:border-[#1A1A1A]"
+                                  autoFocus
+                                  onBlur={() => {
+                                    if (!tagInput.trim()) {
+                                      setEditingTags(null);
+                                    }
+                                  }}
+                                />
+                              </form>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingTags(f.id);
+                                  setTagInput("");
+                                }}
+                                className="inline-flex items-center gap-0.5 rounded-full border border-dashed border-[#E5E5E5] px-2 py-0.5 text-xs text-[#999999] hover:text-[#1A1A1A] hover:border-[#1A1A1A]"
+                              >
+                                <Tag className="h-2.5 w-2.5" />
+                                + タグ
+                              </button>
                             )}
+                            </div>
                           </div>
                         );
                       })}

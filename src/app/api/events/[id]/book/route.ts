@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { broadcastLineMessage, pushLineMessage, buildBookingNotifyText } from "@/lib/line";
+import { broadcastLineMessage, pushLineMessage, pushFlexMessage, buildBookingNotifyText, buildBookingConfirmationFlex } from "@/lib/line";
 import { sendBatchEmails } from "@/lib/email";
 import { wrapInHtml } from "@/lib/email-templates";
 
@@ -212,7 +212,7 @@ export async function POST(
     // Fetch event details for notifications
     const { data: event } = await supabase
       .from("events")
-      .select("id, title, datetime, location, capacity, price, creator_id, is_published")
+      .select("id, title, datetime, location, location_type, online_url, location_url, capacity, price, creator_id, is_published")
       .eq("id", eventId)
       .single();
 
@@ -223,6 +223,25 @@ export async function POST(
         event.price === 0 ? "無料" : `¥${event.price.toLocaleString("ja-JP")}`;
 
       const guestSubject = `【申し込み完了】${event.title}`;
+      const locationType = (event as Record<string, unknown>).location_type as string | null;
+      const onlineUrl = (event as Record<string, unknown>).online_url as string | null;
+      const locationUrl = (event as Record<string, unknown>).location_url as string | null;
+
+      let locationLines = `■ 場所：${event.location ?? "未定"}`;
+      if (locationType === "online") {
+        locationLines = onlineUrl
+          ? `■ オンラインURL：${onlineUrl}`
+          : "■ オンライン（URLは後日お知らせします）";
+      } else if (locationType === "hybrid") {
+        locationLines = `■ 場所：${event.location ?? "未定"}`;
+        if (locationUrl) locationLines += `\n■ 地図URL：${locationUrl}`;
+        locationLines += onlineUrl
+          ? `\n■ オンラインURL：${onlineUrl}`
+          : "\n■ オンライン（URLは後日お知らせします）";
+      } else {
+        if (locationUrl) locationLines += `\n■ 地図URL：${locationUrl}`;
+      }
+
       const guestBody = `${data.guest_name} 様
 
 ${event.title} へのお申し込みが完了しました。
@@ -231,7 +250,7 @@ ${event.title} へのお申し込みが完了しました。
 ■ 予約番号：${booking.id}
 ■ イベント：${event.title}
 ■ 日時：${dateStr}
-■ 場所：${event.location ?? "未定"}
+${locationLines}
 ■ 参加費：${priceStr}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -304,33 +323,70 @@ ${event.title} へのお申し込みが完了しました。
           const adminClient = createAdminClient();
           const { data: lineAccount } = await adminClient
             .from("line_accounts")
-            .select("channel_access_token, is_active, notify_on_booking, owner_line_user_id")
+            .select("id, channel_access_token, is_active, notify_on_booking, owner_line_user_id")
             .eq("user_id", event.creator_id!)
             .maybeSingle();
 
-          if (lineAccount?.is_active && lineAccount.notify_on_booking && lineAccount.channel_access_token) {
-            const { count } = await adminClient
-              .from("bookings")
-              .select("*", { count: "exact", head: true })
-              .eq("event_id", eventId)
-              .eq("status", "confirmed");
+          if (lineAccount?.is_active && lineAccount.channel_access_token) {
+            // Notify creator
+            if (lineAccount.notify_on_booking) {
+              const { count } = await adminClient
+                .from("bookings")
+                .select("*", { count: "exact", head: true })
+                .eq("event_id", eventId)
+                .eq("status", "confirmed");
 
-            const message = buildBookingNotifyText(
-              event.title,
-              data.guest_name,
-              count ?? 1,
-              event.capacity
-            );
-
-            // Use push DM if owner_line_user_id is set, otherwise broadcast
-            if (lineAccount.owner_line_user_id) {
-              await pushLineMessage(
-                lineAccount.channel_access_token,
-                lineAccount.owner_line_user_id,
-                message
+              const message = buildBookingNotifyText(
+                event.title,
+                data.guest_name,
+                count ?? 1,
+                event.capacity
               );
-            } else {
-              await broadcastLineMessage(lineAccount.channel_access_token, message);
+
+              // Use push DM if owner_line_user_id is set, otherwise broadcast
+              if (lineAccount.owner_line_user_id) {
+                await pushLineMessage(
+                  lineAccount.channel_access_token,
+                  lineAccount.owner_line_user_id,
+                  message
+                );
+              } else {
+                await broadcastLineMessage(lineAccount.channel_access_token, message);
+              }
+            }
+
+            // Send booking confirmation to attendee via LINE (if they have line_user_id)
+            if (booking.user_id) {
+              const { data: attendeeProfile } = await adminClient
+                .from("profiles")
+                .select("line_user_id")
+                .eq("id", booking.user_id)
+                .maybeSingle();
+
+              if (attendeeProfile?.line_user_id) {
+                // Check the attendee is a follower of this bot
+                const { data: follower } = await adminClient
+                  .from("line_followers")
+                  .select("id")
+                  .eq("line_account_id", lineAccount.id)
+                  .eq("line_user_id", attendeeProfile.line_user_id)
+                  .eq("is_following", true)
+                  .maybeSingle();
+
+                if (follower) {
+                  const confirmFlex = buildBookingConfirmationFlex(
+                    { ...event, booking_count: 0 },
+                    data.guest_name,
+                    process.env.NEXT_PUBLIC_BASE_URL || "https://petit-event-maker-am.vercel.app"
+                  );
+                  await pushFlexMessage(
+                    lineAccount.channel_access_token,
+                    attendeeProfile.line_user_id,
+                    `✅ 予約完了: ${event.title}`,
+                    confirmFlex
+                  );
+                }
+              }
             }
           }
         } catch (err) {

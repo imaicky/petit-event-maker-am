@@ -6,6 +6,11 @@ type LineEvent = {
   type: string;
   source?: { type: string; userId?: string };
   replyToken?: string;
+  message?: {
+    id: string;
+    type: string;
+    text?: string;
+  };
 };
 
 type LineWebhookBody = {
@@ -105,6 +110,19 @@ export async function POST(request: NextRequest) {
           })
           .eq("line_account_id", lineAccount.id)
           .eq("line_user_id", userId);
+      } else if (event.type === "message" && event.message) {
+        // Save incoming message
+        const msg = event.message;
+        const content = msg.type === "text" && msg.text ? msg.text : `[${msg.type}]`;
+
+        await admin.from("line_messages").insert({
+          line_account_id: lineAccount.id,
+          line_user_id: userId,
+          direction: "incoming",
+          message_type: msg.type,
+          content,
+          line_message_id: msg.id,
+        });
       }
     }
 

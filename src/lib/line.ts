@@ -309,7 +309,306 @@ export function buildEventFlexBubble(
           color: "#1A1A1A",
           action: {
             type: "uri",
-            label: "詳細・予約はこちら",
+            label: "予約する",
+            uri: eventUrl,
+          },
+        },
+      ],
+      flex: 0,
+    },
+  };
+
+  return bubble;
+}
+
+// ─── Push Flex Message (1:1) ────────────────────────────────
+
+export async function pushFlexMessage(
+  channelAccessToken: string,
+  userId: string,
+  altText: string,
+  contents: FlexContainer
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(`${LINE_API_BASE}/bot/message/push`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${channelAccessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        to: userId,
+        messages: [{ type: "flex", altText, contents }],
+      }),
+    });
+
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as LineApiError;
+      return {
+        ok: false,
+        error: body.message || `LINE API error (${res.status})`,
+      };
+    }
+
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "LINE APIへの接続に失敗しました" };
+  }
+}
+
+// ─── Multicast (multiple users) ────────────────────────────
+
+export async function multicastLineMessage(
+  channelAccessToken: string,
+  userIds: string[],
+  text: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (userIds.length === 0) return { ok: true };
+  try {
+    const res = await fetch(`${LINE_API_BASE}/bot/message/multicast`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${channelAccessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        to: userIds,
+        messages: [{ type: "text", text }],
+      }),
+    });
+
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as LineApiError;
+      return {
+        ok: false,
+        error: body.message || `LINE API error (${res.status})`,
+      };
+    }
+
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "LINE APIへの接続に失敗しました" };
+  }
+}
+
+export async function multicastFlexMessage(
+  channelAccessToken: string,
+  userIds: string[],
+  altText: string,
+  contents: FlexContainer
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (userIds.length === 0) return { ok: true };
+  try {
+    const res = await fetch(`${LINE_API_BASE}/bot/message/multicast`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${channelAccessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        to: userIds,
+        messages: [{ type: "flex", altText, contents }],
+      }),
+    });
+
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as LineApiError;
+      return {
+        ok: false,
+        error: body.message || `LINE API error (${res.status})`,
+      };
+    }
+
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "LINE APIへの接続に失敗しました" };
+  }
+}
+
+// ─── Reminder Flex Bubble ──────────────────────────────────
+
+export function buildReminderFlexBubble(
+  event: EventForFlex,
+  baseUrl: string,
+  timeLabel: string
+): FlexContainer {
+  const eventUrl = event.short_code
+    ? `${baseUrl}/e/${event.short_code}`
+    : `${baseUrl}/events/${event.id}`;
+  const dateStr = formatDateJa(event.datetime);
+
+  const bubble: Record<string, unknown> = {
+    type: "bubble",
+    body: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "text",
+          text: `🔔 ${timeLabel}`,
+          color: "#06C755",
+          size: "sm",
+          weight: "bold",
+        },
+        {
+          type: "text",
+          text: event.title,
+          weight: "bold",
+          size: "lg",
+          wrap: true,
+          margin: "md",
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          margin: "lg",
+          spacing: "sm",
+          contents: [
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "📅", size: "sm", flex: 0 },
+                { type: "text", text: dateStr, size: "sm", color: "#666666", flex: 5, wrap: true },
+              ],
+            },
+            ...(event.location
+              ? [
+                  {
+                    type: "box",
+                    layout: "baseline",
+                    spacing: "sm",
+                    contents: [
+                      { type: "text", text: "📍", size: "sm", flex: 0 },
+                      { type: "text", text: event.location, size: "sm", color: "#666666", flex: 5, wrap: true },
+                    ],
+                  },
+                ]
+              : []),
+          ],
+        },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#1A1A1A",
+          action: {
+            type: "uri",
+            label: "イベント詳細",
+            uri: eventUrl,
+          },
+        },
+      ],
+      flex: 0,
+    },
+  };
+
+  return bubble;
+}
+
+// ─── Booking Confirmation Flex (for attendees) ─────────────
+
+export function buildBookingConfirmationFlex(
+  event: EventForFlex,
+  guestName: string,
+  baseUrl: string
+): FlexContainer {
+  const eventUrl = event.short_code
+    ? `${baseUrl}/e/${event.short_code}`
+    : `${baseUrl}/events/${event.id}`;
+  const dateStr = formatDateJa(event.datetime);
+  const priceStr = event.price === 0 ? "無料" : `¥${event.price.toLocaleString()}`;
+
+  const bubble: Record<string, unknown> = {
+    type: "bubble",
+    body: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "text",
+          text: "✅ 予約が完了しました",
+          color: "#06C755",
+          size: "sm",
+          weight: "bold",
+        },
+        {
+          type: "text",
+          text: event.title,
+          weight: "bold",
+          size: "lg",
+          wrap: true,
+          margin: "md",
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          margin: "lg",
+          spacing: "sm",
+          contents: [
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "👤", size: "sm", flex: 0 },
+                { type: "text", text: `${guestName} 様`, size: "sm", color: "#666666", flex: 5 },
+              ],
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "📅", size: "sm", flex: 0 },
+                { type: "text", text: dateStr, size: "sm", color: "#666666", flex: 5, wrap: true },
+              ],
+            },
+            ...(event.location
+              ? [
+                  {
+                    type: "box",
+                    layout: "baseline",
+                    spacing: "sm",
+                    contents: [
+                      { type: "text", text: "📍", size: "sm", flex: 0 },
+                      { type: "text", text: event.location, size: "sm", color: "#666666", flex: 5, wrap: true },
+                    ],
+                  },
+                ]
+              : []),
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "💰", size: "sm", flex: 0 },
+                { type: "text", text: priceStr, size: "sm", color: "#1A1A1A", weight: "bold", flex: 5 },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#1A1A1A",
+          action: {
+            type: "uri",
+            label: "イベント詳細",
             uri: eventUrl,
           },
         },
