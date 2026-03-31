@@ -76,11 +76,11 @@ const FAQ_ITEMS = [
   },
   {
     q: "参加者への通知はどのように送れますか？",
-    a: "申し込み完了メールが自動送信されます。さらにLINE公式アカウントを連携すれば、フォロワー全員にイベント告知カード（画像・詳細・予約ボタン付き）をワンタップで配信できます。新しい予約が入った際のLINE通知も届きます。",
+    a: "申し込み完了メールが自動送信されます。さらにLINE公式アカウントを連携すれば、フォロワーへの告知配信、予約確認のLINE通知、イベント前日＆当日の自動リマインダー（LINE+メール）まで全自動。参加者からのLINEメッセージにダッシュボードから直接返信もできます。",
   },
   {
     q: "LINE公式アカウントとの連携はどうやりますか？",
-    a: "設定画面からLINE公式アカウントのチャネルアクセストークンを登録するだけで連携完了です。連携後はダッシュボードからワンタップでフォロワーへイベント告知を送信できます。",
+    a: "設定画面からLINE公式アカウントのチャネルアクセストークンを登録するだけで連携完了です。連携後はダッシュボードからワンタップでフォロワーへイベント告知を送信でき、参加者とのLINEメッセージのやり取りも管理できます。",
   },
   {
     q: "有料イベントの支払いはどうなりますか？",
@@ -454,34 +454,52 @@ export default async function Home() {
                 {
                   icon: "💬",
                   title: "LINE公式アカウント連携",
-                  desc: "あなたのLINE公式アカウントと連携して、フォロワー全員にイベント告知をワンタップで配信。画像・詳細・予約ボタン付きのリッチなカードが届きます。",
+                  desc: "フォロワー全員にイベント告知をワンタップ配信。画像・詳細・予約ボタン付きのリッチカードが届き、そのまま予約完了。もうDMで日程調整する必要はありません。",
+                  badge: null,
                 },
                 {
-                  icon: "📲",
-                  title: "LINE・SNS共有",
-                  desc: "イベントURLをワンタップでコピーしてLINE・Twitter・インスタに共有。フォロワーへの告知がこれまでにないほどスムーズです。",
+                  icon: "🔔",
+                  title: "自動リマインダー通知",
+                  desc: "イベント前日＆当日に、参加者へメール＋LINEで自動リマインダーを送信。ドタキャンを減らし、参加率がグッと上がります。設定不要で全自動。",
+                  badge: "NEW",
+                },
+                {
+                  icon: "💬",
+                  title: "LINE双方向メッセージ",
+                  desc: "参加者からのLINEメッセージをダッシュボードで確認＆返信。LINE・メール両方で返信可能。質問対応も予約管理も、すべて1画面で完結します。",
+                  badge: "NEW",
+                },
+                {
+                  icon: "🎯",
+                  title: "セグメント配信",
+                  desc: "「全員に告知」だけでなく「このイベントの参加者だけ」にも配信可能。リピーター向けの限定イベントや、参加者へのフォローアップに最適です。",
+                  badge: "NEW",
                 },
                 {
                   icon: "📸",
                   title: "ストーリーズ画像生成",
                   desc: "インスタストーリーズ用の縦型告知画像をワンクリックで自動生成。デザインツール不要で、すぐにストーリーズに投稿できます。",
+                  badge: null,
                 },
                 {
                   icon: "⭐",
                   title: "レビュー＆評価",
                   desc: "参加者からのリアルな声と星評価がイベントページに表示されます。口コミが信頼感を生み、次のイベントの集客力を高めます。",
+                  badge: null,
                 },
                 {
                   icon: "👩‍🏫",
                   title: "先生ポートフォリオ",
                   desc: "過去の開催実績・参加者の評価が一目でわかるプロフィールページ。あなたの魅力が伝わり、リピーターが増えます。",
+                  badge: null,
                 },
                 {
                   icon: "🔍",
                   title: "イベント発見マーケット",
                   desc: "カテゴリ・エリア・評価で自分にぴったりのイベントを見つけられる探索ページ。新しい参加者との出会いが広がります。",
+                  badge: null,
                 },
-              ].map(({ icon, title, desc }, i) => (
+              ].map(({ icon, title, desc, badge }, i) => (
                 <div
                   key={title}
                   className={`animate-fade-in-up ${
@@ -492,12 +510,19 @@ export default async function Home() {
                     {icon}
                   </div>
                   <div>
-                    <h3
-                      className="text-base font-bold text-[#1A1A1A] mb-1"
-                      style={{ fontFamily: "var(--font-zen-maru)" }}
-                    >
-                      {title}
-                    </h3>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3
+                        className="text-base font-bold text-[#1A1A1A]"
+                        style={{ fontFamily: "var(--font-zen-maru)" }}
+                      >
+                        {title}
+                      </h3>
+                      {badge && (
+                        <span className="inline-flex items-center rounded-full bg-[#06C755] px-2 py-0.5 text-[10px] font-bold text-white leading-none">
+                          {badge}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm text-[#999999] leading-relaxed">
                       {desc}
                     </p>
@@ -539,6 +564,8 @@ export default async function Home() {
                   title={event.title}
                   datetime={event.datetime}
                   location={event.location ?? ""}
+                  location_type={event.location_type}
+                  is_limited={event.is_limited}
                   price={event.price}
                   capacity={event.capacity ?? 0}
                   booked_count={event.booking_count}
@@ -548,6 +575,79 @@ export default async function Home() {
                 />
               ))}
             </div>
+          </div>
+        </section>
+
+        {/* ── Comparison ────────────────────────────────────────────────────── */}
+        <section className="w-full bg-white py-20 sm:py-24 px-6">
+          <div className="mx-auto max-w-5xl">
+            <div className="text-center mb-14 animate-fade-in-up">
+              <p className="text-xs font-semibold uppercase tracking-widest text-[#1A1A1A] mb-3">
+                なぜプチイベント？
+              </p>
+              <h2
+                className="text-3xl sm:text-4xl font-bold text-[#1A1A1A]"
+                style={{ fontFamily: "var(--font-zen-maru)" }}
+              >
+                他サービスにはない
+                <br className="sm:hidden" />
+                <span className="text-[#06C755]">LINE連携</span>の力
+              </h2>
+              <p className="mt-4 text-sm text-[#999999] max-w-lg mx-auto leading-relaxed">
+                Peatix・こくちーずではできない、LINE公式アカウントとの深い連携。
+                <br />
+                小規模イベントに本当に必要な機能だけを、シンプルに。
+              </p>
+            </div>
+
+            <div className="overflow-x-auto rounded-2xl ring-1 ring-[#E5E5E5]">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-[#FAFAFA]">
+                    <th className="px-5 py-4 text-left font-medium text-[#999999]">機能</th>
+                    <th className="px-5 py-4 text-center font-bold text-[#1A1A1A] bg-[#F7F7F7]" style={{ fontFamily: "var(--font-zen-maru)" }}>
+                      プチイベント
+                    </th>
+                    <th className="px-5 py-4 text-center font-medium text-[#999999]">他サービス</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#F2F2F2]">
+                  {[
+                    ["LINE公式アカウント連携", true, false],
+                    ["LINE予約ボタン付きカード配信", true, false],
+                    ["双方向LINEメッセージ", true, false],
+                    ["自動リマインダー（LINE+メール）", true, false],
+                    ["セグメント配信", true, false],
+                    ["ストーリーズ画像自動生成", true, false],
+                    ["30秒でイベント作成", true, false],
+                    ["参加者はアプリ不要", true, true],
+                    ["無料で利用可能", true, true],
+                  ].map(([feature, us, them], i) => (
+                    <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-[#FAFAFA]/50"}>
+                      <td className="px-5 py-3.5 text-[#1A1A1A] font-medium">{feature as string}</td>
+                      <td className="px-5 py-3.5 text-center bg-[#F7F7F7]/50">
+                        {us ? (
+                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#06C755]/10 text-[#06C755] font-bold text-xs">&#10003;</span>
+                        ) : (
+                          <span className="text-[#E5E5E5]">&#8212;</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5 text-center">
+                        {them ? (
+                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#F2F2F2] text-[#999999] font-bold text-xs">&#10003;</span>
+                        ) : (
+                          <span className="text-[#E5E5E5]">&#8212;</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <p className="mt-4 text-center text-xs text-[#999999]">
+              ※ 2026年3月時点の主要イベントプラットフォーム（Peatix・こくちーず等）との比較
+            </p>
           </div>
         </section>
 
