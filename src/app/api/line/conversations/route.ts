@@ -24,62 +24,64 @@ export async function GET() {
     }
 
     const admin = createAdminClient();
+    const accountId = lineAccount.id;
 
-    // Get all followers with their latest message
-    const { data: followers } = await admin
+    // Get all followers
+    const { data: followers, error: fErr } = await admin
       .from("line_followers")
       .select("id, line_user_id, display_name, picture_url, is_following")
-      .eq("line_account_id", lineAccount.id)
+      .eq("line_account_id", accountId)
       .order("followed_at", { ascending: false });
 
-    if (!followers || followers.length === 0) {
+    if (fErr || !followers || followers.length === 0) {
       return NextResponse.json({ conversations: [] });
     }
 
-    // Get latest message for each follower
+    // Batch: get all messages for this account ordered by created_at desc
+    const followerLineIds = followers.map((f) => f.line_user_id);
+    const { data: allMessages } = await admin
+      .from("line_messages")
+      .select("line_user_id, content, direction, created_at")
+      .eq("line_account_id", accountId)
+      .in("line_user_id", followerLineIds)
+      .order("created_at", { ascending: false });
+
+    const messages = allMessages ?? [];
+
+    // Group messages by line_user_id
+    const msgByUser = new Map<string, typeof messages>();
+    for (const m of messages) {
+      const arr = msgByUser.get(m.line_user_id) ?? [];
+      arr.push(m);
+      msgByUser.set(m.line_user_id, arr);
+    }
+
+    // Build conversations
     const conversations = [];
     for (const f of followers) {
-      const { data: lastMsg } = await admin
-        .from("line_messages")
-        .select("content, direction, created_at")
-        .eq("line_account_id", lineAccount.id)
-        .eq("line_user_id", f.line_user_id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const userMsgs = msgByUser.get(f.line_user_id);
+      if (!userMsgs || userMsgs.length === 0) continue;
 
-      // Get unread count (incoming messages we haven't replied to)
-      const { count: unreadCount } = await admin
-        .from("line_messages")
-        .select("*", { count: "exact", head: true })
-        .eq("line_account_id", lineAccount.id)
-        .eq("line_user_id", f.line_user_id)
-        .eq("direction", "incoming")
-        .gt(
-          "created_at",
-          // Get the latest outgoing message time, or epoch
-          await (async () => {
-            const { data: lastOut } = await admin
-              .from("line_messages")
-              .select("created_at")
-              .eq("line_account_id", lineAccount.id)
-              .eq("line_user_id", f.line_user_id)
-              .eq("direction", "outgoing")
-              .order("created_at", { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            return lastOut?.created_at ?? "1970-01-01T00:00:00Z";
-          })()
-        );
+      const lastMsg = userMsgs[0]; // already sorted desc
 
-      // Only include followers who have at least one message
-      if (lastMsg) {
-        conversations.push({
-          follower: f,
-          last_message: lastMsg,
-          unread_count: unreadCount ?? 0,
-        });
-      }
+      // Find last outgoing message time
+      const lastOutgoing = userMsgs.find((m) => m.direction === "outgoing");
+      const lastOutTime = lastOutgoing?.created_at ?? "1970-01-01T00:00:00Z";
+
+      // Count unread: incoming messages after last outgoing
+      const unreadCount = userMsgs.filter(
+        (m) => m.direction === "incoming" && m.created_at > lastOutTime
+      ).length;
+
+      conversations.push({
+        follower: f,
+        last_message: {
+          content: lastMsg.content,
+          direction: lastMsg.direction,
+          created_at: lastMsg.created_at,
+        },
+        unread_count: unreadCount,
+      });
     }
 
     // Sort by latest message time

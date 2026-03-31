@@ -24,7 +24,18 @@ export async function POST(
     // Parse body first (stream can only be consumed once)
     const body = await request.json().catch(() => ({}));
     const customMessage = typeof body.message === "string" ? body.message.trim() : "";
-    const segment: SegmentParam = body.segment ?? "all";
+    // Validate segment
+    let segment: SegmentParam = "all";
+    if (body.segment === "attendees") {
+      segment = "attendees";
+    } else if (
+      typeof body.segment === "object" &&
+      body.segment !== null &&
+      Array.isArray(body.segment.tags) &&
+      body.segment.tags.every((t: unknown) => typeof t === "string")
+    ) {
+      segment = { tags: body.segment.tags };
+    }
 
     const supabase = await createClient();
 

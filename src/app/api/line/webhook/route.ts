@@ -111,8 +111,18 @@ export async function POST(request: NextRequest) {
           .eq("line_account_id", lineAccount.id)
           .eq("line_user_id", userId);
       } else if (event.type === "message" && event.message) {
-        // Save incoming message
+        // Save incoming message (skip duplicates from LINE retries)
         const msg = event.message;
+        if (msg.id) {
+          const { data: existing } = await admin
+            .from("line_messages")
+            .select("id")
+            .eq("line_message_id", msg.id)
+            .limit(1)
+            .maybeSingle();
+          if (existing) continue;
+        }
+
         const content = msg.type === "text" && msg.text ? msg.text : `[${msg.type}]`;
 
         await admin.from("line_messages").insert({

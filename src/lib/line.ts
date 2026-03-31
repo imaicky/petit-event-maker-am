@@ -1,4 +1,4 @@
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 
 const LINE_API_BASE = "https://api.line.me/v2";
 
@@ -113,7 +113,11 @@ export function verifyLineSignature(
   const hash = createHmac("SHA256", channelSecret)
     .update(body)
     .digest("base64");
-  return hash === signature;
+  try {
+    return timingSafeEqual(Buffer.from(hash), Buffer.from(signature));
+  } catch {
+    return false;
+  }
 }
 
 // ─── Push Message (1:1 DM) ──────────────────────────────────
@@ -201,13 +205,15 @@ type EventForFlex = {
 function formatDateJa(iso: string): string {
   try {
     const d = new Date(iso);
-    const month = d.getMonth() + 1;
-    const day = d.getDate();
-    const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
-    const weekday = weekdays[d.getDay()];
-    const hours = d.getHours().toString().padStart(2, "0");
-    const minutes = d.getMinutes().toString().padStart(2, "0");
-    return `${month}月${day}日(${weekday}) ${hours}:${minutes}`;
+    const fmt = new Intl.DateTimeFormat("ja-JP", {
+      timeZone: "Asia/Tokyo",
+      month: "numeric",
+      day: "numeric",
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return fmt.format(d);
   } catch {
     return iso;
   }
@@ -224,7 +230,7 @@ export function buildEventFlexBubble(
   const priceStr = event.price === 0 ? "無料" : `¥${event.price.toLocaleString()}`;
   const remaining =
     event.capacity != null && event.booking_count != null
-      ? `残${event.capacity - event.booking_count}枠`
+      ? `残${Math.max(0, event.capacity - event.booking_count)}枠`
       : event.capacity != null
         ? `定員${event.capacity}名`
         : "";
@@ -358,37 +364,46 @@ export async function pushFlexMessage(
 
 // ─── Multicast (multiple users) ────────────────────────────
 
+const MULTICAST_CHUNK_SIZE = 500;
+
+async function multicastMessages(
+  channelAccessToken: string,
+  userIds: string[],
+  messages: Record<string, unknown>[]
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (userIds.length === 0) return { ok: true };
+  try {
+    for (let i = 0; i < userIds.length; i += MULTICAST_CHUNK_SIZE) {
+      const chunk = userIds.slice(i, i + MULTICAST_CHUNK_SIZE);
+      const res = await fetch(`${LINE_API_BASE}/bot/message/multicast`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${channelAccessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ to: chunk, messages }),
+      });
+
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as LineApiError;
+        return {
+          ok: false,
+          error: body.message || `LINE API error (${res.status})`,
+        };
+      }
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "LINE APIへの接続に失敗しました" };
+  }
+}
+
 export async function multicastLineMessage(
   channelAccessToken: string,
   userIds: string[],
   text: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (userIds.length === 0) return { ok: true };
-  try {
-    const res = await fetch(`${LINE_API_BASE}/bot/message/multicast`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${channelAccessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        to: userIds,
-        messages: [{ type: "text", text }],
-      }),
-    });
-
-    if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as LineApiError;
-      return {
-        ok: false,
-        error: body.message || `LINE API error (${res.status})`,
-      };
-    }
-
-    return { ok: true };
-  } catch {
-    return { ok: false, error: "LINE APIへの接続に失敗しました" };
-  }
+  return multicastMessages(channelAccessToken, userIds, [{ type: "text", text }]);
 }
 
 export async function multicastFlexMessage(
@@ -397,32 +412,7 @@ export async function multicastFlexMessage(
   altText: string,
   contents: FlexContainer
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (userIds.length === 0) return { ok: true };
-  try {
-    const res = await fetch(`${LINE_API_BASE}/bot/message/multicast`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${channelAccessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        to: userIds,
-        messages: [{ type: "flex", altText, contents }],
-      }),
-    });
-
-    if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as LineApiError;
-      return {
-        ok: false,
-        error: body.message || `LINE API error (${res.status})`,
-      };
-    }
-
-    return { ok: true };
-  } catch {
-    return { ok: false, error: "LINE APIへの接続に失敗しました" };
-  }
+  return multicastMessages(channelAccessToken, userIds, [{ type: "flex", altText, contents }]);
 }
 
 // ─── Reminder Flex Bubble ──────────────────────────────────

@@ -18,8 +18,14 @@ export async function PUT(
       return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
     }
 
-    const body = await request.json();
-    const tags = Array.isArray(body.tags) ? body.tags.filter((t: unknown) => typeof t === "string") : [];
+    const body = await request.json().catch(() => ({}));
+    const rawTags = Array.isArray(body.tags) ? body.tags.filter((t: unknown) => typeof t === "string") : [];
+    // Sanitize: trim, remove empty, deduplicate, limit count and length
+    const tags: string[] = [...new Set(
+      (rawTags as string[])
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0 && t.length <= 50)
+    )].slice(0, 20);
 
     // Verify the follower belongs to this user's LINE account
     const { data: lineAccount } = await supabase

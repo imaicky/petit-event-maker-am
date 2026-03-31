@@ -69,6 +69,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "メッセージを入力してください" }, { status: 400 });
     }
 
+    if (!channel || !["line", "email", "both"].includes(channel)) {
+      return NextResponse.json({ error: "送信チャネルを指定してください" }, { status: 400 });
+    }
+
     const admin = createAdminClient();
 
     const { data: lineAccount } = await admin
@@ -136,6 +140,17 @@ export async function POST(request: NextRequest) {
               html: wrapInHtml(content.trim(), "メッセージ"),
             });
             results.email = true;
+
+            // Save outgoing message record for email too
+            if (channel === "email") {
+              await admin.from("line_messages").insert({
+                line_account_id: lineAccount.id,
+                line_user_id: line_user_id,
+                direction: "outgoing",
+                message_type: "text",
+                content: content.trim(),
+              });
+            }
           }
         }
       }
