@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Calendar, MapPin, User } from "lucide-react";
+import { Calendar, MapPin, User, Video } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AverageRatingBadge } from "@/components/average-rating-badge";
 
@@ -8,6 +8,8 @@ export interface EventCardProps {
   title: string;
   datetime: string;
   location: string;
+  location_type?: string | null;
+  is_limited?: boolean;
   price: number;
   capacity: number;
   booked_count: number;
@@ -44,6 +46,8 @@ export function EventCard({
   title,
   datetime,
   location,
+  location_type,
+  is_limited,
   price,
   capacity,
   booked_count,
@@ -154,8 +158,22 @@ export function EventCard({
             {time && <span className="text-[#999999]">{time}{"\u301C"}</span>}
           </div>
           <div className="flex items-center gap-1.5 text-xs text-[#999999]">
-            <MapPin className="h-3.5 w-3.5 shrink-0 text-[#1A1A1A]" />
-            <span className="truncate">{location}</span>
+            {(location_type === "online") ? (
+              <>
+                <Video className="h-3.5 w-3.5 shrink-0 text-[#1A1A1A]" />
+                <span className="truncate">オンライン</span>
+              </>
+            ) : (location_type === "hybrid") ? (
+              <>
+                <Video className="h-3.5 w-3.5 shrink-0 text-[#1A1A1A]" />
+                <span className="truncate">対面 + オンライン</span>
+              </>
+            ) : (
+              <>
+                <MapPin className="h-3.5 w-3.5 shrink-0 text-[#1A1A1A]" />
+                <span className="truncate">対面</span>
+              </>
+            )}
           </div>
           {teacher_name && (
             <div className="flex items-center gap-1.5 text-xs text-[#999999]">

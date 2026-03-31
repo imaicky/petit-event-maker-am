@@ -18,6 +18,9 @@ import {
   ExternalLink,
   AlertTriangle,
   CheckCircle2,
+  Video,
+  Shield,
+  Lock,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -35,14 +38,17 @@ import { ImageUpload } from "@/components/image-upload";
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
-const editEventSchema = z.object({
+const editEventBaseSchema = z.object({
   title: z
     .string()
     .min(1, "タイトルを入力してください")
     .max(100, "100文字以内で入力してください"),
   description: z.string().min(1, "説明を入力してください"),
   datetime: z.string().min(1, "日時を入力してください"),
-  location: z.string().min(1, "場所を入力してください"),
+  location: z.string().optional(),
+  location_type: z.enum(["physical", "online", "hybrid"]),
+  online_url: z.string().optional(),
+  location_url: z.string().optional(),
   capacity: z
     .string()
     .min(1, "定員を入力してください")
@@ -60,11 +66,34 @@ const editEventSchema = z.object({
   image_url: z
     .union([z.string().url("有効なURLを入力してください"), z.literal("")])
     .optional(),
+  price_note: z.string().max(100).optional(),
+  is_limited: z.boolean().optional(),
+  limited_passcode: z.string().max(50).optional(),
   teacher_name: z.string().optional(),
   teacher_bio: z.string().optional(),
 });
 
-type EditEventFormValues = z.infer<typeof editEventSchema>;
+const editEventSchema = editEventBaseSchema.refine(
+  (data) => {
+    if (data.location_type === "physical" || data.location_type === "hybrid") {
+      return !!data.location;
+    }
+    return true;
+  },
+  { message: "場所を入力してください", path: ["location"] }
+).refine(
+  (data) => {
+    if (data.location_type === "online" || data.location_type === "hybrid") {
+      if (data.online_url && data.online_url.length > 0) {
+        try { new URL(data.online_url); return true; } catch { return false; }
+      }
+    }
+    return true;
+  },
+  { message: "有効なURLを入力してください", path: ["online_url"] }
+);
+
+type EditEventFormValues = z.infer<typeof editEventBaseSchema>;
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -169,7 +198,13 @@ export default function EditEventPage() {
     formState: { errors, isSubmitting, isDirty },
   } = useForm<EditEventFormValues>({
     resolver: zodResolver(editEventSchema),
+    defaultValues: {
+      location_type: "physical",
+    },
   });
+
+  const watchedLocationType = watch("location_type");
+  const watchedIsLimited = watch("is_limited");
 
   // ── Load existing event ───────────────────────────────────────────────────
 
@@ -198,9 +233,15 @@ export default function EditEventPage() {
           description: event.description ?? "",
           datetime: datetimeLocal,
           location: event.location ?? "",
+          location_type: event.location_type ?? "physical",
+          online_url: event.online_url ?? "",
+          location_url: event.location_url ?? "",
           capacity: String(event.capacity ?? 10),
           price: String(event.price ?? 0),
           image_url: event.image_url ?? "",
+          price_note: event.price_note ?? "",
+          is_limited: event.is_limited ?? false,
+          limited_passcode: event.limited_passcode ?? "",
           teacher_name: event.teacher_name ?? "",
           teacher_bio: event.teacher_bio ?? "",
         });
@@ -225,10 +266,16 @@ export default function EditEventPage() {
       title: data.title,
       description: data.description,
       datetime: data.datetime,
-      location: data.location,
+      location: data.location || undefined,
+      location_type: data.location_type ?? "physical",
+      online_url: data.online_url || undefined,
+      location_url: data.location_url || undefined,
       capacity: Number(data.capacity),
       price: Number(data.price),
       image_url: data.image_url || undefined,
+      price_note: data.price_note || undefined,
+      is_limited: data.is_limited || false,
+      limited_passcode: data.is_limited ? (data.limited_passcode || undefined) : undefined,
       teacher_name: data.teacher_name,
       teacher_bio: data.teacher_bio,
       is_published: isPublished,
@@ -426,60 +473,170 @@ export default function EditEventPage() {
                   <FieldError message={errors.datetime?.message} />
                 </FieldWrapper>
 
-                <FieldWrapper
-                  label="場所・会場"
-                  required
-                  hint="オンラインの場合はURLや「Zoom」と入力してください"
-                >
-                  <div className="relative">
-                    <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
-                    <Input
-                      placeholder="例：渋谷区○○スタジオ / Zoom"
-                      aria-invalid={!!errors.location}
-                      {...register("location")}
-                      className={inputWithIconCls}
-                    />
+                <FieldWrapper label="開催形式" required>
+                  <div className="flex gap-2">
+                    {([
+                      { value: "physical", label: "対面", icon: MapPin },
+                      { value: "online", label: "オンライン", icon: Video },
+                      { value: "hybrid", label: "ハイブリッド", icon: Users },
+                    ] as const).map((opt) => {
+                      const isSelected = watchedLocationType === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setValue("location_type", opt.value, { shouldDirty: true })}
+                          className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition-all ${
+                            isSelected
+                              ? "border-[#1A1A1A] bg-[#1A1A1A] text-white"
+                              : "border-[#E5E5E5] bg-white text-[#999999] hover:border-[#1A1A1A]/40 hover:text-[#1A1A1A]"
+                          }`}
+                        >
+                          <opt.icon className="h-3.5 w-3.5" />
+                          {opt.label}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <FieldError message={errors.location?.message} />
                 </FieldWrapper>
+
+                {(watchedLocationType === "physical" || watchedLocationType === "hybrid") && (
+                  <FieldWrapper label="場所・会場" required>
+                    <div className="relative">
+                      <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
+                      <Input
+                        placeholder="例：渋谷区○○スタジオ"
+                        aria-invalid={!!errors.location}
+                        {...register("location")}
+                        className={inputWithIconCls}
+                      />
+                    </div>
+                    <FieldError message={errors.location?.message} />
+                  </FieldWrapper>
+                )}
+
+                {(watchedLocationType === "online" || watchedLocationType === "hybrid") && (
+                  <FieldWrapper
+                    label="オンラインURL"
+                    hint="Zoom, Google Meet, Teams などのURLを入力"
+                  >
+                    <div className="relative">
+                      <Video className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
+                      <Input
+                        placeholder="例：https://zoom.us/j/..."
+                        aria-invalid={!!errors.online_url}
+                        {...register("online_url")}
+                        className={inputWithIconCls}
+                      />
+                    </div>
+                    <FieldError message={errors.online_url?.message} />
+                  </FieldWrapper>
+                )}
+
+                {(watchedLocationType === "physical" || watchedLocationType === "hybrid") && (
+                  <FieldWrapper
+                    label="地図URL"
+                    optional
+                    hint="Google Maps などの地図リンクを入力"
+                  >
+                    <div className="relative">
+                      <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
+                      <Input
+                        placeholder="例：https://maps.google.com/..."
+                        {...register("location_url")}
+                        className={inputWithIconCls}
+                      />
+                    </div>
+                  </FieldWrapper>
+                )}
               </div>
             </FormSection>
 
             {/* Capacity / Price */}
             <FormSection title="定員・料金">
-              <div className="grid gap-5 sm:grid-cols-2">
-                <FieldWrapper label="定員（名）" required>
-                  <div className="relative">
-                    <Users className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
-                    <Input
-                      type="number"
-                      min={1}
-                      max={10000}
-                      aria-invalid={!!errors.capacity}
-                      {...register("capacity")}
-                      className={inputWithIconCls}
-                    />
-                  </div>
-                  <FieldError message={errors.capacity?.message} />
-                </FieldWrapper>
+              <div className="space-y-5">
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <FieldWrapper label="定員（名）" required>
+                    <div className="relative">
+                      <Users className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
+                      <Input
+                        type="number"
+                        min={1}
+                        max={10000}
+                        aria-invalid={!!errors.capacity}
+                        {...register("capacity")}
+                        className={inputWithIconCls}
+                      />
+                    </div>
+                    <FieldError message={errors.capacity?.message} />
+                  </FieldWrapper>
+
+                  <FieldWrapper
+                    label="参加費（円）"
+                    required
+                    hint="無料の場合は 0 と入力"
+                  >
+                    <div className="relative">
+                      <JapaneseYen className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
+                      <Input
+                        type="number"
+                        min={0}
+                        aria-invalid={!!errors.price}
+                        {...register("price")}
+                        className={inputWithIconCls}
+                      />
+                    </div>
+                    <FieldError message={errors.price?.message} />
+                  </FieldWrapper>
+                </div>
 
                 <FieldWrapper
-                  label="参加費（円）"
-                  required
-                  hint="無料の場合は 0 と入力"
+                  label="参加費についての補足"
+                  optional
+                  hint="例：各自のお茶代のみ、ランチ代は別途、材料費込み"
                 >
-                  <div className="relative">
-                    <JapaneseYen className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
-                    <Input
-                      type="number"
-                      min={0}
-                      aria-invalid={!!errors.price}
-                      {...register("price")}
-                      className={inputWithIconCls}
-                    />
-                  </div>
-                  <FieldError message={errors.price?.message} />
+                  <Input
+                    placeholder="例：各自のお食事代のみ"
+                    {...register("price_note")}
+                    className={inputCls}
+                  />
                 </FieldWrapper>
+              </div>
+            </FormSection>
+
+            {/* Limited access */}
+            <FormSection title="限定公開設定">
+              <div className="space-y-4">
+                <div className="rounded-xl border border-[#E5E5E5] p-4">
+                  <label className="flex cursor-pointer items-center gap-3">
+                    <input
+                      type="checkbox"
+                      {...register("is_limited")}
+                      className="h-5 w-5 rounded border-[#E5E5E5] text-[#1A1A1A] focus:ring-[#1A1A1A]/20"
+                    />
+                    <div className="flex items-center gap-2">
+                      <Shield className="h-4 w-4 text-[#1A1A1A]" />
+                      <span className="text-sm font-medium text-[#1A1A1A]">限定公開にする</span>
+                    </div>
+                  </label>
+                  <p className="mt-1.5 ml-8 text-xs text-[#999999]">
+                    イベント内容は誰でも見れますが、申し込みには合言葉が必要になります
+                  </p>
+                </div>
+                {watchedIsLimited && (
+                  <div className="ml-4">
+                    <FieldWrapper label="合言葉" hint="参加者に共有する合言葉を設定してください">
+                      <div className="relative">
+                        <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
+                        <Input
+                          placeholder="例：sakura2024"
+                          {...register("limited_passcode")}
+                          className={inputWithIconCls}
+                        />
+                      </div>
+                    </FieldWrapper>
+                  </div>
+                )}
               </div>
             </FormSection>
 

@@ -4,6 +4,7 @@ import {
   MapPin,
   Users,
   ArrowRight,
+  Video,
 } from "lucide-react";
 import type { Event } from "@/types/database";
 
@@ -88,10 +89,20 @@ export function PublicEventCard({ event, isPast }: { event: EventWithBookings; i
               <Calendar className="h-3 w-3 text-[#1A1A1A] shrink-0" />
               <span>{formatDateShort(event.datetime)}</span>
             </div>
-            {event.location && (
+            {(event.location_type === "online") ? (
+              <div className="flex items-center gap-1.5">
+                <Video className="h-3 w-3 text-[#1A1A1A] shrink-0" />
+                <span className="truncate">オンライン</span>
+              </div>
+            ) : (event.location_type === "hybrid") ? (
+              <div className="flex items-center gap-1.5">
+                <Video className="h-3 w-3 text-[#1A1A1A] shrink-0" />
+                <span className="truncate">対面 + オンライン</span>
+              </div>
+            ) : (
               <div className="flex items-center gap-1.5">
                 <MapPin className="h-3 w-3 text-[#1A1A1A] shrink-0" />
-                <span className="truncate">{event.location}</span>
+                <span className="truncate">対面</span>
               </div>
             )}
           </div>

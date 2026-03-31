@@ -382,6 +382,8 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
                   title={event.title}
                   datetime={event.datetime}
                   location={event.location ?? ""}
+                  location_type={event.location_type}
+                  is_limited={event.is_limited}
                   price={event.price}
                   capacity={event.capacity ?? 0}
                   booked_count={event.booking_count}

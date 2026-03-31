@@ -12,7 +12,10 @@ const createEventSchema = z.object({
     .max(100, "タイトルは100文字以内で入力してください"),
   description: z.string().min(1, "説明を入力してください"),
   datetime: z.string().min(1, "日時を入力してください"),
-  location: z.string().min(1, "場所を入力してください"),
+  location: z.string().optional().nullable(),
+  location_type: z.enum(["physical", "online", "hybrid"]).optional().default("physical"),
+  online_url: z.string().url("有効なURLを入力してください").optional().nullable(),
+  location_url: z.string().url("有効なURLを入力してください").optional().nullable(),
   capacity: z.coerce
     .number()
     .int()
@@ -31,7 +34,15 @@ const createEventSchema = z.object({
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "スラッグは小文字英数字とハイフンのみ使用できます")
     .optional(),
   is_published: z.boolean().optional().default(true),
-});
+}).refine(
+  (data) => {
+    if (data.location_type === "physical" || data.location_type === "hybrid") {
+      return !!data.location;
+    }
+    return true;
+  },
+  { message: "場所を入力してください", path: ["location"] }
+);
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -97,7 +108,10 @@ export async function POST(request: NextRequest) {
         title: data.title,
         description: data.description,
         datetime: data.datetime,
-        location: data.location,
+        location: data.location || null,
+        location_type: data.location_type ?? "physical",
+        online_url: data.online_url || null,
+        location_url: data.location_url || null,
         capacity: data.capacity,
         price: data.price,
         image_url: data.image_url || null,

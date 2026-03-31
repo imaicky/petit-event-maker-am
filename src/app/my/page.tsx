@@ -43,10 +43,10 @@ export default function MyPage() {
       const eventIds = [...new Set(bookingsData.map((b) => b.event_id))];
       const { data: eventsData } = await supabase
         .from("events")
-        .select("id, title, datetime, location, slug")
+        .select("id, title, datetime, location, location_type, online_url, location_url, slug")
         .in("id", eventIds);
 
-      const eventMap: Record<string, { id: string; title: string; datetime: string; location: string | null; slug: string }> = {};
+      const eventMap: Record<string, { id: string; title: string; datetime: string; location: string | null; location_type: string | null; online_url: string | null; location_url: string | null; slug: string }> = {};
       for (const e of eventsData ?? []) {
         eventMap[e.id] = e;
       }
@@ -63,6 +63,9 @@ export default function MyPage() {
             title: eventMap[b.event_id].title,
             datetime: eventMap[b.event_id].datetime,
             location: eventMap[b.event_id].location,
+            location_type: eventMap[b.event_id].location_type,
+            online_url: eventMap[b.event_id].online_url,
+            location_url: eventMap[b.event_id].location_url,
             slug: eventMap[b.event_id].slug,
           },
         }));

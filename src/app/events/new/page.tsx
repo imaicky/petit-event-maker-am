@@ -20,6 +20,7 @@ import {
   LogIn,
   Lock,
   Shield,
+  Video,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -34,15 +35,17 @@ import { ImageUpload } from "@/components/image-upload";
 
 // ─── Schema ────────────────────────────────────────────────────────────────
 
-const createEventSchema = z.object({
+const createEventBaseSchema = z.object({
   title: z
     .string()
     .min(1, "タイトルを入力してください")
     .max(100, "100文字以内で入力してください"),
   description: z.string().min(1, "説明を入力してください"),
   datetime: z.string().min(1, "日時を入力してください"),
-  location: z.string().min(1, "場所を入力してください"),
-  // Use string inputs and validate server-side; react-hook-form keeps them as strings
+  location: z.string().optional(),
+  location_type: z.enum(["physical", "online", "hybrid"]),
+  online_url: z.string().optional(),
+  location_url: z.string().optional(),
   capacity: z
     .string()
     .min(1, "定員を入力してください")
@@ -59,14 +62,36 @@ const createEventSchema = z.object({
   teacher_bio: z.string().optional(),
 });
 
-type CreateEventFormValues = z.infer<typeof createEventSchema>;
+const createEventSchema = createEventBaseSchema.refine(
+  (data) => {
+    if (data.location_type === "physical" || data.location_type === "hybrid") {
+      return !!data.location;
+    }
+    return true;
+  },
+  { message: "場所を入力してください", path: ["location"] }
+).refine(
+  (data) => {
+    if (data.location_type === "online" || data.location_type === "hybrid") {
+      if (data.online_url && data.online_url.length > 0) {
+        try { new URL(data.online_url); return true; } catch { return false; }
+      }
+    }
+    return true;
+  },
+  { message: "有効なURLを入力してください", path: ["online_url"] }
+);
 
-// For the API payload we convert strings to numbers
+type CreateEventFormValues = z.infer<typeof createEventBaseSchema>;
+
 interface CreateEventPayload {
   title: string;
   description: string;
   datetime: string;
-  location: string;
+  location?: string;
+  location_type: string;
+  online_url?: string;
+  location_url?: string;
   capacity: number;
   price: number;
   image_url?: string;
@@ -379,10 +404,18 @@ function EventPreview({ values }: { values: Partial<CreateEventFormValues> }) {
             <Calendar className="h-3.5 w-3.5 shrink-0 text-[#1A1A1A]" />
             <span>{formatDatetime()}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <MapPin className="h-3.5 w-3.5 shrink-0 text-[#1A1A1A]" />
-            <span>{values.location || "場所"}</span>
-          </div>
+          {(values.location_type === "online" || values.location_type === "hybrid") && (
+            <div className="flex items-center gap-2">
+              <Video className="h-3.5 w-3.5 shrink-0 text-[#1A1A1A]" />
+              <span>オンライン</span>
+            </div>
+          )}
+          {(values.location_type !== "online") && (
+            <div className="flex items-center gap-2">
+              <MapPin className="h-3.5 w-3.5 shrink-0 text-[#1A1A1A]" />
+              <span>{values.location || "場所"}</span>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <Users className="h-3.5 w-3.5 shrink-0 text-[#1A1A1A]" />
             <span>定員 {isNaN(capacity) ? "—" : capacity} 名</span>
@@ -442,6 +475,7 @@ export default function NewEventPage() {
     defaultValues: {
       capacity: "10",
       price: "0",
+      location_type: "physical",
     },
   });
 
@@ -469,7 +503,10 @@ export default function NewEventPage() {
       title: data.title,
       description: data.description,
       datetime: data.datetime,
-      location: data.location,
+      location: data.location || undefined,
+      location_type: data.location_type ?? "physical",
+      online_url: data.online_url || undefined,
+      location_url: data.location_url || undefined,
       capacity: Number(data.capacity),
       price: Number(data.price),
       image_url: data.image_url || undefined,
@@ -637,22 +674,85 @@ export default function NewEventPage() {
                     <FieldError message={errors.datetime?.message} />
                   </FieldWrapper>
 
-                  <FieldWrapper
-                    label="場所・会場"
-                    required
-                    hint="オンラインの場合はURLや「Zoom」と入力してください"
-                  >
-                    <div className="relative">
-                      <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
-                      <Input
-                        placeholder="例：渋谷区○○スタジオ / Zoom"
-                        aria-invalid={!!errors.location}
-                        {...register("location")}
-                        className={inputWithIconCls}
-                      />
+                  <FieldWrapper label="開催形式" required>
+                    <div className="flex gap-2">
+                      {([
+                        { value: "physical", label: "対面", icon: MapPin },
+                        { value: "online", label: "オンライン", icon: Video },
+                        { value: "hybrid", label: "ハイブリッド", icon: Users },
+                      ] as const).map((opt) => {
+                        const isSelected = watchedValues.location_type === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setValue("location_type", opt.value, { shouldDirty: true })}
+                            className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition-all ${
+                              isSelected
+                                ? "border-[#1A1A1A] bg-[#1A1A1A] text-white"
+                                : "border-[#E5E5E5] bg-white text-[#999999] hover:border-[#1A1A1A]/40 hover:text-[#1A1A1A]"
+                            }`}
+                          >
+                            <opt.icon className="h-3.5 w-3.5" />
+                            {opt.label}
+                          </button>
+                        );
+                      })}
                     </div>
-                    <FieldError message={errors.location?.message} />
                   </FieldWrapper>
+
+                  {(watchedValues.location_type === "physical" || watchedValues.location_type === "hybrid") && (
+                    <FieldWrapper
+                      label="場所・会場"
+                      required
+                    >
+                      <div className="relative">
+                        <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
+                        <Input
+                          placeholder="例：渋谷区○○スタジオ"
+                          aria-invalid={!!errors.location}
+                          {...register("location")}
+                          className={inputWithIconCls}
+                        />
+                      </div>
+                      <FieldError message={errors.location?.message} />
+                    </FieldWrapper>
+                  )}
+
+                  {(watchedValues.location_type === "online" || watchedValues.location_type === "hybrid") && (
+                    <FieldWrapper
+                      label="オンラインURL"
+                      hint="Zoom, Google Meet, Teams などのURLを入力"
+                    >
+                      <div className="relative">
+                        <Video className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
+                        <Input
+                          placeholder="例：https://zoom.us/j/..."
+                          aria-invalid={!!errors.online_url}
+                          {...register("online_url")}
+                          className={inputWithIconCls}
+                        />
+                      </div>
+                      <FieldError message={errors.online_url?.message} />
+                    </FieldWrapper>
+                  )}
+
+                  {(watchedValues.location_type === "physical" || watchedValues.location_type === "hybrid") && (
+                    <FieldWrapper
+                      label="地図URL"
+                      optional
+                      hint="Google Maps などの地図リンクを入力"
+                    >
+                      <div className="relative">
+                        <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
+                        <Input
+                          placeholder="例：https://maps.google.com/..."
+                          {...register("location_url")}
+                          className={inputWithIconCls}
+                        />
+                      </div>
+                    </FieldWrapper>
+                  )}
                 </div>
               </FormSection>
 

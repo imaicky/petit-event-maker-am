@@ -9,6 +9,7 @@ import {
   Clock,
   Loader2,
   Search,
+  Video,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,6 +31,9 @@ export type BookingItem = {
     title: string;
     datetime: string;
     location: string | null;
+    location_type: string | null;
+    online_url: string | null;
+    location_url: string | null;
     slug: string;
   };
 };
@@ -166,10 +170,39 @@ function BookingCard({
                 <Calendar className="h-3 w-3 shrink-0 text-[#1A1A1A]" />
                 <span>{formatDatetime(booking.event.datetime)}</span>
               </div>
-              {booking.event.location && (
+              {(booking.event.location_type === "physical" || booking.event.location_type === "hybrid" || !booking.event.location_type) && booking.event.location && (
                 <div className="flex items-center gap-1.5">
                   <MapPin className="h-3 w-3 shrink-0 text-[#1A1A1A]" />
                   <span className="truncate">{booking.event.location}</span>
+                  {booking.event.location_url && (
+                    <a
+                      href={booking.event.location_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 underline hover:text-blue-800 shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      地図
+                    </a>
+                  )}
+                </div>
+              )}
+              {(booking.event.location_type === "online" || booking.event.location_type === "hybrid") && (
+                <div className="flex items-center gap-1.5">
+                  <Video className="h-3 w-3 shrink-0 text-[#1A1A1A]" />
+                  {booking.event.online_url ? (
+                    <a
+                      href={booking.event.online_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 underline hover:text-blue-800 truncate"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      参加リンクを開く
+                    </a>
+                  ) : (
+                    <span className="truncate">オンライン</span>
+                  )}
                 </div>
               )}
             </div>

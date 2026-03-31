@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 // ─── Validation ──────────────────────────────────────────────
 
@@ -11,7 +12,10 @@ const updateEventSchema = z.object({
     .max(100, "タイトルは100文字以内で入力してください"),
   description: z.string().min(1, "説明を入力してください"),
   datetime: z.string().min(1, "日時を入力してください"),
-  location: z.string().min(1, "場所を入力してください"),
+  location: z.string().optional().nullable(),
+  location_type: z.enum(["physical", "online", "hybrid"]).optional().default("physical"),
+  online_url: z.string().url("有効なURLを入力してください").optional().nullable(),
+  location_url: z.string().url("有効なURLを入力してください").optional().nullable(),
   capacity: z.coerce
     .number()
     .int()
@@ -22,8 +26,19 @@ const updateEventSchema = z.object({
   teacher_name: z.string().optional().nullable(),
   teacher_bio: z.string().optional().nullable(),
   category: z.string().optional().nullable(),
+  price_note: z.string().max(100).optional().nullable(),
+  is_limited: z.boolean().optional().default(false),
+  limited_passcode: z.string().max(50).optional().nullable(),
   is_published: z.boolean().optional(),
-});
+}).refine(
+  (data) => {
+    if (data.location_type === "physical" || data.location_type === "hybrid") {
+      return !!data.location;
+    }
+    return true;
+  },
+  { message: "場所を入力してください", path: ["location"] }
+);
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -73,7 +88,28 @@ export async function GET(
       ? (event.booking_count[0] as { count: number } | undefined)?.count ?? 0
       : (event.booking_count as unknown as number) ?? 0;
 
-    return NextResponse.json({ event: { ...event, booking_count: Number(count) } });
+    // Fetch creator's LINE friend-add URL (bot_basic_id)
+    let lineFriendUrl: string | null = null;
+    if (event.creator_id && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      try {
+        const admin = createAdminClient();
+        const { data: lineAccount } = await admin
+          .from("line_accounts")
+          .select("bot_basic_id")
+          .eq("user_id", event.creator_id)
+          .eq("is_active", true)
+          .maybeSingle();
+        if (lineAccount?.bot_basic_id) {
+          lineFriendUrl = `https://line.me/R/ti/p/${lineAccount.bot_basic_id}`;
+        }
+      } catch {
+        // non-critical, skip
+      }
+    }
+
+    return NextResponse.json({
+      event: { ...event, booking_count: Number(count), line_friend_url: lineFriendUrl },
+    });
   } catch (err) {
     console.error("[GET /api/events/[id]] Unexpected error:", err);
     return NextResponse.json(
@@ -148,13 +184,19 @@ export async function PUT(
         title: data.title,
         description: data.description,
         datetime: data.datetime,
-        location: data.location,
+        location: data.location || null,
+        location_type: data.location_type ?? "physical",
+        online_url: data.online_url || null,
+        location_url: data.location_url || null,
         capacity: data.capacity,
         price: data.price,
         image_url: data.image_url || null,
         teacher_name: data.teacher_name || null,
         teacher_bio: data.teacher_bio || null,
         category: data.category || null,
+        price_note: data.price_note || null,
+        is_limited: data.is_limited ?? false,
+        limited_passcode: data.is_limited ? (data.limited_passcode || null) : null,
         is_published: data.is_published,
       })
       .eq("id", id)

@@ -248,6 +248,7 @@ export type Database = {
           channel_access_token: string
           channel_secret: string | null
           bot_user_id: string | null
+          bot_basic_id: string | null
           owner_line_user_id: string | null
           is_active: boolean
           notify_on_booking: boolean
@@ -261,6 +262,7 @@ export type Database = {
           channel_access_token: string
           channel_secret?: string | null
           bot_user_id?: string | null
+          bot_basic_id?: string | null
           owner_line_user_id?: string | null
           is_active?: boolean
           notify_on_booking?: boolean
@@ -274,6 +276,7 @@ export type Database = {
           channel_access_token?: string
           channel_secret?: string | null
           bot_user_id?: string | null
+          bot_basic_id?: string | null
           owner_line_user_id?: string | null
           is_active?: boolean
           notify_on_booking?: boolean

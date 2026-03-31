@@ -343,15 +343,13 @@ ${locationLines}
                 event.capacity
               );
 
-              // Use push DM if owner_line_user_id is set, otherwise broadcast
+              // Only send booking notification via DM to the owner (never broadcast)
               if (lineAccount.owner_line_user_id) {
                 await pushLineMessage(
                   lineAccount.channel_access_token,
                   lineAccount.owner_line_user_id,
                   message
                 );
-              } else {
-                await broadcastLineMessage(lineAccount.channel_access_token, message);
               }
             }
 

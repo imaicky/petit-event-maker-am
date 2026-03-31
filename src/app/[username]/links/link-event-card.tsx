@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Calendar, MapPin } from "lucide-react";
+import { Calendar, MapPin, Video } from "lucide-react";
 import type { Event } from "@/types/database";
 
 type EventWithBookings = Event & { booking_count: number };
@@ -59,10 +59,20 @@ export function LinkEventCard({ event }: { event: EventWithBookings }) {
         </div>
 
         <div className="flex items-center gap-2 text-xs">
-          {event.location && (
+          {(event.location_type === "online") ? (
+            <span className="flex items-center gap-1 text-[#999999] truncate">
+              <Video className="h-3 w-3 text-[#1A1A1A] shrink-0" />
+              <span className="truncate">オンライン</span>
+            </span>
+          ) : (event.location_type === "hybrid") ? (
+            <span className="flex items-center gap-1 text-[#999999] truncate">
+              <Video className="h-3 w-3 text-[#1A1A1A] shrink-0" />
+              <span className="truncate">対面 + オンライン</span>
+            </span>
+          ) : (
             <span className="flex items-center gap-1 text-[#999999] truncate">
               <MapPin className="h-3 w-3 text-[#1A1A1A] shrink-0" />
-              <span className="truncate">{event.location}</span>
+              <span className="truncate">対面</span>
             </span>
           )}
         </div>

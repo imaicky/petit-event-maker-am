@@ -19,6 +19,8 @@ interface EventData {
   title: string;
   datetime: string;
   location: string;
+  location_type?: string | null;
+  online_url?: string | null;
   capacity: number;
   price: number;
   booking_count: number;
@@ -60,7 +62,13 @@ export default async function Image({ params }: Props) {
       : `¥${event.price.toLocaleString("ja-JP")}`
     : "";
   const remaining = event ? event.capacity - event.booking_count : 0;
-  const location = event?.location ?? "";
+  const location = event
+    ? event.location_type === "online"
+      ? "オンライン"
+      : event.location_type === "hybrid"
+      ? "対面 + オンライン"
+      : "対面"
+    : "";
 
   return new ImageResponse(
     (

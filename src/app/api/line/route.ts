@@ -78,6 +78,7 @@ export async function POST(request: NextRequest) {
       channel_name: botResult.data.displayName,
       channel_access_token: token.trim(),
       bot_user_id: botResult.data.userId,
+      bot_basic_id: botResult.data.basicId || null,
       is_active: true,
       channel_secret:
         channelSecret && typeof channelSecret === "string" && channelSecret.trim().length > 0
