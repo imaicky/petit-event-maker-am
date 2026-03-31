@@ -8,7 +8,10 @@ import {
 } from "@/lib/line";
 
 // ─── GET /api/cron/reminders ────────────────────────────────
-// Called hourly by Vercel cron. Sends 24h and 2h reminders.
+// Called daily by Vercel cron. Sends 24h and 2h reminders.
+// Since Hobby plan only supports daily crons, we widen windows:
+// - "24h reminder": events happening 24-48h from now
+// - "2h reminder": events happening 0-24h from now
 
 export async function GET(request: Request) {
   // Verify cron secret (Vercel sets this header)
@@ -28,9 +31,9 @@ export async function GET(request: Request) {
   let sent24h = 0;
   let sent2h = 0;
 
-  // ─── 24-hour reminders ──────────────────────────────────
-  const from24h = new Date(now.getTime() + 23 * 60 * 60 * 1000);
-  const to24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  // ─── 24-hour reminders (events in 24-48h) ──────────────
+  const from24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const to24h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
 
   const { data: events24h } = await admin
     .from("events")
@@ -44,9 +47,9 @@ export async function GET(request: Request) {
     sent24h += await sendReminders(admin, event, "明日開催", "24時間前リマインダー", baseUrl, "reminder_24h_sent");
   }
 
-  // ─── 2-hour reminders ───────────────────────────────────
-  const from2h = new Date(now.getTime() + 1 * 60 * 60 * 1000);
-  const to2h = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+  // ─── Day-of reminders (events in 0-24h) ────────────────
+  const from2h = new Date(now.getTime());
+  const to2h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
   const { data: events2h } = await admin
     .from("events")
