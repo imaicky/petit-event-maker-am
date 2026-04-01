@@ -24,22 +24,27 @@ create index if not exists menus_is_published_idx on public.menus(is_published);
 -- RLS
 alter table public.menus enable row level security;
 
+drop policy if exists "Anyone can view published menus" on public.menus;
 create policy "Anyone can view published menus"
   on public.menus for select
   using (is_published = true);
 
+drop policy if exists "Creators can view own menus" on public.menus;
 create policy "Creators can view own menus"
   on public.menus for select
   using (auth.uid() = creator_id);
 
+drop policy if exists "Creators can insert own menus" on public.menus;
 create policy "Creators can insert own menus"
   on public.menus for insert
   with check (auth.uid() = creator_id);
 
+drop policy if exists "Creators can update own menus" on public.menus;
 create policy "Creators can update own menus"
   on public.menus for update
   using (auth.uid() = creator_id);
 
+drop policy if exists "Creators can delete own menus" on public.menus;
 create policy "Creators can delete own menus"
   on public.menus for delete
   using (auth.uid() = creator_id);
@@ -53,6 +58,7 @@ begin
 end;
 $$ language plpgsql;
 
+drop trigger if exists menus_updated_at on public.menus;
 create trigger menus_updated_at
   before update on public.menus
   for each row
@@ -78,10 +84,12 @@ create index if not exists menu_bookings_status_idx on public.menu_bookings(stat
 -- RLS
 alter table public.menu_bookings enable row level security;
 
+drop policy if exists "Anyone can create menu bookings" on public.menu_bookings;
 create policy "Anyone can create menu bookings"
   on public.menu_bookings for insert
   with check (true);
 
+drop policy if exists "Menu creators can view bookings" on public.menu_bookings;
 create policy "Menu creators can view bookings"
   on public.menu_bookings for select
   using (
@@ -92,6 +100,7 @@ create policy "Menu creators can view bookings"
     )
   );
 
+drop policy if exists "Bookers can view own bookings" on public.menu_bookings;
 create policy "Bookers can view own bookings"
   on public.menu_bookings for select
   using (user_id = auth.uid());
