@@ -83,6 +83,10 @@ const FAQ_ITEMS = [
     a: "設定画面からLINE公式アカウントのチャネルアクセストークンを登録するだけで連携完了です。連携後はダッシュボードからワンタップでフォロワーへイベント告知を送信でき、参加者とのLINEメッセージのやり取りも管理できます。",
   },
   {
+    q: "「サービスメニュー」機能とは何ですか？",
+    a: "日付に依存しない定期サービスやメニューを公開できる機能です。たとえばネイルのデザインメニューやヨガの月額コースなど、お客さまが好きなタイミングで申し込めるページを作れます。カスタム申込フォームで必要な情報も自由に収集できます。",
+  },
+  {
     q: "有料イベントの支払いはどうなりますか？",
     a: "現在は無料・有料イベントの作成・管理機能を提供しています。オンライン決済機能は近日公開予定です。",
   },
@@ -231,9 +235,9 @@ export default async function Home() {
             </h1>
 
             <p className="animate-fade-in-up delay-200 max-w-lg text-lg sm:text-xl text-[#999999] leading-relaxed">
-              タイトルと日時を入力するだけ。
-              <strong className="text-[#1A1A1A] font-semibold">30秒でイベントページが完成</strong>
-              して、参加者はワンタップで申し込めます。
+              イベントもサービスメニューも、
+              <strong className="text-[#1A1A1A] font-semibold">30秒でページが完成</strong>。
+              お客さまはワンタップで申し込めます。
             </p>
 
             {/* CTAs */}
@@ -247,11 +251,14 @@ export default async function Home() {
                   無料ではじめる →
                 </Button>
               </Link>
-              <Link
-                href="/explore"
-                className="text-sm text-[#999999] hover:text-[#1A1A1A] transition-colors duration-150 underline underline-offset-4 decoration-[#E5E5E5] hover:decoration-[#1A1A1A]"
-              >
-                イベントを見てみる
+              <Link href="/menus/new">
+                <Button
+                  size="lg"
+                  className="h-13 px-10 text-base rounded-full bg-white text-[#1A1A1A] border border-[#E5E5E5] hover:bg-[#F7F7F7] shadow-sm hover:shadow-md transition-all duration-200 font-semibold"
+                  style={{ height: "52px" }}
+                >
+                  メニューを作る
+                </Button>
               </Link>
             </div>
 
@@ -367,8 +374,8 @@ export default async function Home() {
                   step: "01",
                   icon: "⚡",
                   iconBg: "bg-[#F7F7F7]",
-                  title: "30秒でイベント作成",
-                  desc: "タイトル・日時・場所・定員を入力するだけ。テンプレートを選べばさらに時短。難しい設定は一切ありません。",
+                  title: "30秒でページ作成",
+                  desc: "イベントもサービスメニューも、タイトルと基本情報を入力するだけ。テンプレートを選べばさらに時短。難しい設定は一切ありません。",
                   delay: "delay-100",
                 },
                 {
@@ -488,9 +495,21 @@ export default async function Home() {
                   badge: null,
                 },
                 {
+                  icon: "📋",
+                  title: "サービスメニュー",
+                  desc: "日付に依存しないサービスや定期メニューを公開。お客さまは好きなタイミングで申し込み可能。Google Formsの代わりに、自分専用の申込ページが持てます。",
+                  badge: "NEW",
+                },
+                {
+                  icon: "🛠️",
+                  title: "カスタム申込フォーム",
+                  desc: "テキスト・日付・選択肢、3タイプのフィールドを自由に追加。サービスごとに必要な情報をピンポイントで収集。コード不要のフォームビルダーです。",
+                  badge: "NEW",
+                },
+                {
                   icon: "👩‍🏫",
                   title: "先生ポートフォリオ",
-                  desc: "過去の開催実績・参加者の評価が一目でわかるプロフィールページ。あなたの魅力が伝わり、リピーターが増えます。",
+                  desc: "過去の開催実績・参加者の評価が一目でわかるプロフィールページ。イベントもメニューも一覧で表示。あなたの魅力が伝わり、リピーターが増えます。",
                   badge: null,
                 },
                 {
@@ -619,6 +638,7 @@ export default async function Home() {
                     ["自動リマインダー（LINE+メール）", true, false],
                     ["セグメント配信", true, false],
                     ["ストーリーズ画像自動生成", true, false],
+                    ["サービスメニュー・申込フォーム", true, false],
                     ["30秒でイベント作成", true, false],
                     ["参加者はアプリ不要", true, true],
                     ["無料で利用可能", true, true],
@@ -886,9 +906,9 @@ export default async function Home() {
               className="animate-fade-in-up text-3xl sm:text-5xl font-bold text-white leading-tight"
               style={{ fontFamily: "var(--font-zen-maru)" }}
             >
-              あなたのイベントを
+              イベントもメニューも
               <br />
-              <span className="text-[#1A1A1A]">今すぐ</span>告知しよう
+              <span className="text-[#1A1A1A]">今すぐ</span>始めよう
             </h2>
             <p className="animate-fade-in-up delay-100 text-[#999999] text-base sm:text-lg max-w-md">
               無料で始められます。クレジットカードも不要。

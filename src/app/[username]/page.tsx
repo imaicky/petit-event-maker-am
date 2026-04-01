@@ -9,8 +9,9 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { AverageRatingBadge } from "@/components/average-rating-badge";
-import type { Profile, Event, SnsLinks, Review } from "@/types/database";
+import type { Profile, Event, Menu, SnsLinks, Review } from "@/types/database";
 import { ProfileTabs } from "./profile-tabs";
 
 type EventWithBookings = Event & { booking_count: number };
@@ -166,6 +167,35 @@ export default async function TeacherProfilePage({
       .slice(0, 3);
   }
 
+  // Fetch published menus by this creator (use admin to bypass RLS for booking counts)
+  const admin = createAdminClient();
+  const { data: menusData } = await admin
+    .from("menus")
+    .select("*")
+    .eq("creator_id", profile.id)
+    .eq("is_published", true)
+    .order("created_at", { ascending: false });
+
+  const menusRaw: Menu[] = menusData ?? [];
+  const menuIds = menusRaw.map((m) => m.id);
+  let menuBookingCountMap: Record<string, number> = {};
+  if (menuIds.length > 0) {
+    const { data: menuBookingsData } = await admin
+      .from("menu_bookings")
+      .select("menu_id")
+      .in("menu_id", menuIds)
+      .eq("status", "confirmed");
+
+    for (const b of menuBookingsData ?? []) {
+      menuBookingCountMap[b.menu_id] = (menuBookingCountMap[b.menu_id] ?? 0) + 1;
+    }
+  }
+
+  const menus = menusRaw.map((m) => ({
+    ...m,
+    booking_count: menuBookingCountMap[m.id] ?? 0,
+  }));
+
   const initials = getInitials(profile.display_name ?? profile.username);
   const totalParticipants = [...upcomingEvents, ...pastEvents].reduce(
     (s, e) => s + e.booking_count,
@@ -312,6 +342,7 @@ export default async function TeacherProfilePage({
             pastEvents={pastEvents}
             upcomingCount={upcomingEvents.length}
             pastCount={pastEvents.length}
+            menus={menus}
           />
         </div>
       </div>

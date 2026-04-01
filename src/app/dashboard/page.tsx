@@ -21,6 +21,8 @@ import {
   MessageCircle,
   Send,
   Video,
+  ClipboardList,
+  Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/header";
@@ -555,6 +557,8 @@ export default function DashboardPage() {
   const [eventsLoading, setEventsLoading] = useState(true);
   const [lineDialogOpen, setLineDialogOpen] = useState(false);
   const [lineDialogEvent, setLineDialogEvent] = useState<DashboardEvent | null>(null);
+  const [menus, setMenus] = useState<{ id: string; title: string; is_published: boolean; booking_count: number; price: number; category: string | null; capacity: number | null }[]>([]);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Redirect if not logged in
   useEffect(() => {
@@ -600,6 +604,34 @@ export default function DashboardPage() {
       }));
 
       setEvents(enriched);
+
+      // Also fetch menus
+      const { data: menusData } = await supabase
+        .from("menus")
+        .select("id, title, is_published, price, category, capacity")
+        .eq("creator_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (menusData) {
+        const menuIds = menusData.map((m) => m.id);
+        let menuCountMap: Record<string, number> = {};
+        if (menuIds.length > 0) {
+          const { data: menuBookingsData } = await supabase
+            .from("menu_bookings")
+            .select("menu_id")
+            .in("menu_id", menuIds)
+            .eq("status", "confirmed");
+          for (const b of menuBookingsData ?? []) {
+            menuCountMap[b.menu_id] = (menuCountMap[b.menu_id] ?? 0) + 1;
+          }
+        }
+        setMenus(
+          menusData.map((m) => ({
+            ...m,
+            booking_count: menuCountMap[m.id] ?? 0,
+          }))
+        );
+      }
     } finally {
       if (!silent) setEventsLoading(false);
     }
@@ -725,6 +757,16 @@ export default function DashboardPage() {
                 プロフィール編集
               </Button>
             </Link>
+            <Link href="/menus/new">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 rounded-full border-[#E5E5E5] gap-1.5 text-[#999999] hover:text-[#1A1A1A] hover:border-[#1A1A1A]/30"
+              >
+                <ClipboardList className="h-3.5 w-3.5" />
+                新しいメニュー
+              </Button>
+            </Link>
             <Link href="/events/new">
               <Button
                 size="sm"
@@ -741,34 +783,29 @@ export default function DashboardPage() {
           <LoadingSkeleton />
         ) : (
           <>
-            {/* Stats row */}
+            {/* Compact stats bar */}
             {events.length > 0 && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-                <StatCard
-                  icon={<CalendarDays className="h-5 w-5" />}
-                  value={events.length}
-                  label="イベント総数"
-                  index={0}
-                />
-                <StatCard
-                  icon={<Eye className="h-5 w-5" />}
-                  value={publishedEvents.length}
-                  label="公開中"
-                  accent
-                  index={1}
-                />
-                <StatCard
-                  icon={<Users className="h-5 w-5" />}
-                  value={totalBookings}
-                  label="申込み合計"
-                  index={2}
-                />
-                <StatCard
-                  icon={<TrendingUp className="h-5 w-5" />}
-                  value={thisMonthBookings}
-                  label="今月の申込み"
-                  index={3}
-                />
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-2xl border border-[#E5E5E5] bg-white px-5 py-3 mb-6 animate-fade-in">
+                <span className="flex items-center gap-1.5 text-sm">
+                  <CalendarDays className="h-3.5 w-3.5 text-[#1A1A1A]" />
+                  <span className="font-bold text-[#1A1A1A]">{events.length}</span>
+                  <span className="text-[#999999] text-xs">イベント</span>
+                </span>
+                <span className="flex items-center gap-1.5 text-sm">
+                  <Eye className="h-3.5 w-3.5 text-[#1A1A1A]" />
+                  <span className="font-bold text-[#1A1A1A]">{publishedEvents.length}</span>
+                  <span className="text-[#999999] text-xs">公開中</span>
+                </span>
+                <span className="flex items-center gap-1.5 text-sm">
+                  <Users className="h-3.5 w-3.5 text-[#1A1A1A]" />
+                  <span className="font-bold text-[#1A1A1A]">{totalBookings}</span>
+                  <span className="text-[#999999] text-xs">申込み合計</span>
+                </span>
+                <span className="flex items-center gap-1.5 text-sm">
+                  <TrendingUp className="h-3.5 w-3.5 text-[#1A1A1A]" />
+                  <span className="font-bold text-[#1A1A1A]">{thisMonthBookings}</span>
+                  <span className="text-[#999999] text-xs">今月</span>
+                </span>
               </div>
             )}
 
@@ -821,6 +858,187 @@ export default function DashboardPage() {
                     </div>
                   )}
                 </>
+              )}
+            </section>
+
+            {/* Menus section */}
+            <section className="mt-8">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <h2
+                    className="text-lg font-bold text-[#1A1A1A]"
+                    style={{ fontFamily: "var(--font-zen-maru)" }}
+                  >
+                    サービスメニュー
+                  </h2>
+                  {menus.length > 0 && (
+                    <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-[#1A1A1A] px-1.5 text-[10px] font-bold text-white">
+                      {menus.length}
+                    </span>
+                  )}
+                </div>
+                <Link
+                  href="/menus/new"
+                  className="text-xs text-[#1A1A1A] hover:underline flex items-center gap-0.5"
+                >
+                  <Plus className="h-3 w-3" />
+                  新規作成
+                </Link>
+              </div>
+
+              {menus.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 px-6 text-center rounded-2xl border border-dashed border-[#E5E5E5]">
+                  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F7F7F7] text-2xl">
+                    📋
+                  </div>
+                  <p className="text-sm text-[#999999] mb-4">
+                    サービスメニューを作成して、お客さまからの申し込みを受け付けましょう
+                  </p>
+                  <Link href="/menus/new">
+                    <Button
+                      size="sm"
+                      className="rounded-full bg-[#1A1A1A] text-white hover:bg-[#111111] gap-1.5"
+                    >
+                      <Plus className="h-4 w-4" />
+                      メニューを作る
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {menus.map((menu) => {
+                    const menuFillRate = menu.capacity
+                      ? Math.round((menu.booking_count / menu.capacity) * 100)
+                      : null;
+
+                    return (
+                      <div
+                        key={menu.id}
+                        className="group rounded-2xl border border-[#E5E5E5] bg-white p-4 hover:border-[#1A1A1A]/30 transition-all"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F7F7F7]">
+                            <ClipboardList className="h-5 w-5 text-[#1A1A1A]" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-1">
+                              {menu.is_published ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-[#404040]/10 px-2 py-0.5 text-xs font-medium text-[#404040]">
+                                  <Eye className="h-2.5 w-2.5" />
+                                  公開中
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-[#F2F2F2] px-2 py-0.5 text-xs font-medium text-[#999999]">
+                                  <EyeOff className="h-2.5 w-2.5" />
+                                  下書き
+                                </span>
+                              )}
+                              {menu.category && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-[#F2F2F2] px-2 py-0.5 text-xs text-[#666666]">
+                                  <Tag className="h-2.5 w-2.5" />
+                                  {menu.category}
+                                </span>
+                              )}
+                            </div>
+                            <h3 className="text-sm font-bold text-[#1A1A1A] line-clamp-1">
+                              {menu.title}
+                            </h3>
+                            <div className="flex items-center gap-3 mt-1.5 text-xs text-[#999999]">
+                              <span>
+                                {menu.price === 0 ? "無料" : `¥${menu.price.toLocaleString()}`}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Users className="h-3 w-3" />
+                                {menu.booking_count}件
+                                {menu.capacity != null && (
+                                  <span> / {menu.capacity}名</span>
+                                )}
+                              </span>
+                            </div>
+                          </div>
+                          <Link href={`/menus/${menu.id}/edit`} className="shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 rounded-xl text-[#999999] hover:bg-[#F2F2F2] hover:text-[#1A1A1A]"
+                              aria-label="編集"
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
+                          </Link>
+                        </div>
+
+                        {/* Progress bar */}
+                        {menuFillRate !== null && menu.capacity !== null && (
+                          <div className="mt-3 pt-3 border-t border-[#F2F2F2]">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <div className="h-1.5 flex-1 rounded-full bg-[#F2F2F2] overflow-hidden mr-3">
+                                <div
+                                  className={`h-full rounded-full transition-all ${
+                                    menuFillRate >= 100 ? "bg-red-400" : "bg-[#1A1A1A]"
+                                  }`}
+                                  style={{ width: `${Math.min(menuFillRate, 100)}%` }}
+                                />
+                              </div>
+                              {menuFillRate >= 100 ? (
+                                <span className="text-xs font-medium text-red-500 shrink-0">満員</span>
+                              ) : (
+                                <span className="text-xs text-[#999999] shrink-0">
+                                  残{menu.capacity - menu.booking_count}枠
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[#F2F2F2]">
+                          <Link href={`/menus/${menu.id}/bookings`}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 rounded-lg text-xs gap-1 border-[#1A1A1A]/20 text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-white transition-colors"
+                            >
+                              <Users className="h-3 w-3" />
+                              申込一覧
+                              {menu.booking_count > 0 && (
+                                <span className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-[#1A1A1A]/10 px-1 text-[10px] font-bold">
+                                  {menu.booking_count}
+                                </span>
+                              )}
+                            </Button>
+                          </Link>
+                          <Link href={`/menus/${menu.id}`} className="flex-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full h-7 rounded-lg text-xs"
+                            >
+                              詳細を見る
+                            </Button>
+                          </Link>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 rounded-lg text-xs gap-1"
+                            onClick={() => {
+                              const url = `${window.location.origin}/menus/${menu.id}`;
+                              navigator.clipboard.writeText(url);
+                              setCopiedId(menu.id);
+                              setTimeout(() => setCopiedId(null), 2000);
+                            }}
+                          >
+                            {copiedId === menu.id ? (
+                              <><Check className="h-3 w-3" /> コピー済</>
+                            ) : (
+                              <><Link2 className="h-3 w-3" /> URLコピー</>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </section>
           </>

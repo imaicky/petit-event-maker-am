@@ -429,6 +429,116 @@ export type Database = {
           }
         ]
       }
+      menus: {
+        Row: {
+          id: string
+          creator_id: string
+          title: string
+          description: string | null
+          price: number
+          price_note: string | null
+          image_url: string | null
+          capacity: number | null
+          custom_fields: Json
+          is_published: boolean
+          slug: string
+          category: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          creator_id: string
+          title: string
+          description?: string | null
+          price?: number
+          price_note?: string | null
+          image_url?: string | null
+          capacity?: number | null
+          custom_fields?: Json
+          is_published?: boolean
+          slug: string
+          category?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          creator_id?: string
+          title?: string
+          description?: string | null
+          price?: number
+          price_note?: string | null
+          image_url?: string | null
+          capacity?: number | null
+          custom_fields?: Json
+          is_published?: boolean
+          slug?: string
+          category?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'menus_creator_id_fkey'
+            columns: ['creator_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      menu_bookings: {
+        Row: {
+          id: string
+          menu_id: string
+          user_id: string | null
+          guest_name: string
+          guest_email: string
+          guest_phone: string | null
+          custom_field_values: Json
+          status: 'confirmed' | 'cancelled'
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          menu_id: string
+          user_id?: string | null
+          guest_name: string
+          guest_email: string
+          guest_phone?: string | null
+          custom_field_values?: Json
+          status?: 'confirmed' | 'cancelled'
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          menu_id?: string
+          user_id?: string | null
+          guest_name?: string
+          guest_email?: string
+          guest_phone?: string | null
+          custom_field_values?: Json
+          status?: 'confirmed' | 'cancelled'
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'menu_bookings_menu_id_fkey'
+            columns: ['menu_id']
+            isOneToOne: false
+            referencedRelation: 'menus'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'menu_bookings_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
       notifications: {
         Row: {
           id: string
@@ -528,7 +638,25 @@ export type LineFollowerUpdate = Database['public']['Tables']['line_followers'][
 export type LineMessage = Database['public']['Tables']['line_messages']['Row']
 export type LineMessageInsert = Database['public']['Tables']['line_messages']['Insert']
 
+export type Menu = Database['public']['Tables']['menus']['Row']
+export type MenuInsert = Database['public']['Tables']['menus']['Insert']
+export type MenuUpdate = Database['public']['Tables']['menus']['Update']
+
+export type MenuBooking = Database['public']['Tables']['menu_bookings']['Row']
+export type MenuBookingInsert = Database['public']['Tables']['menu_bookings']['Insert']
+
 export type BookingStatus = 'confirmed' | 'cancelled'
+
+export type CustomField = {
+  id: string
+  type: 'text' | 'date' | 'select'
+  label: string
+  required: boolean
+  options?: string[]
+}
+
+/** Menu row augmented with a live booking count */
+export type MenuWithBookingCount = Menu & { booking_count: number }
 
 export type SnsLinks = {
   twitter?: string

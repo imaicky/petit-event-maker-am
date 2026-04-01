@@ -619,3 +619,13 @@ export function buildBookingNotifyText(
   const capacityStr = capacity != null ? `（現在${currentCount}名／定員${capacity}名）` : `（現在${currentCount}名）`;
   return `📩 新しい予約がありました\n\n${eventTitle}\n${guestName}さんが予約しました${capacityStr}`;
 }
+
+export function buildMenuBookingNotifyText(
+  menuTitle: string,
+  guestName: string,
+  currentCount: number,
+  capacity: number | null
+): string {
+  const capacityStr = capacity != null ? `（現在${currentCount}名／定員${capacity}名）` : `（現在${currentCount}名）`;
+  return `📩 メニューに新しい申し込みがありました\n\n${menuTitle}\n${guestName}さんが申し込みました${capacityStr}`;
+}

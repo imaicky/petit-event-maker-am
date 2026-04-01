@@ -2,27 +2,32 @@
 
 import { useState } from "react";
 import { PublicEventCard } from "./public-event-card";
-import type { Event } from "@/types/database";
+import { MenuCard } from "@/components/menu-card";
+import type { Event, Menu } from "@/types/database";
 
 type EventWithBookings = Event & { booking_count: number };
+type MenuWithBookings = Menu & { booking_count: number };
 
-type TabKey = "upcoming" | "past";
+type TabKey = "upcoming" | "past" | "menus";
 
 export function ProfileTabs({
   upcomingEvents,
   pastEvents,
   upcomingCount,
   pastCount,
+  menus = [],
 }: {
   upcomingEvents: EventWithBookings[];
   pastEvents: EventWithBookings[];
   upcomingCount: number;
   pastCount: number;
+  menus?: MenuWithBookings[];
 }) {
   const [activeTab, setActiveTab] = useState<TabKey>("upcoming");
 
   const tabs: { key: TabKey; label: string; count: number }[] = [
     { key: "upcoming", label: "開催予定", count: upcomingCount },
+    { key: "menus", label: "メニュー", count: menus.length },
     { key: "past", label: "過去のイベント", count: pastCount },
   ];
 
@@ -58,8 +63,22 @@ export function ProfileTabs({
         ))}
       </div>
 
-      {/* Event grid */}
-      {events.length === 0 ? (
+      {/* Content */}
+      {activeTab === "menus" ? (
+        menus.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-[#E5E5E5] py-16 text-center">
+            <p className="text-[#999999] text-sm">
+              公開中のメニューはありません
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {menus.map((menu) => (
+              <MenuCard key={menu.id} menu={menu} />
+            ))}
+          </div>
+        )
+      ) : events.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-[#E5E5E5] py-16 text-center">
           <p className="text-[#999999] text-sm">
             {activeTab === "upcoming"
