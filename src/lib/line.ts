@@ -228,12 +228,10 @@ export function buildEventFlexBubble(
     : `${baseUrl}/events/${event.id}`;
   const dateStr = formatDateJa(event.datetime);
   const priceStr = event.price === 0 ? "無料" : `¥${event.price.toLocaleString()}`;
-  const remaining =
+  const isFull =
     event.capacity != null && event.booking_count != null
-      ? `残${Math.max(0, event.capacity - event.booking_count)}枠`
-      : event.capacity != null
-        ? `定員${event.capacity}名`
-        : "";
+      ? event.capacity - event.booking_count <= 0
+      : false;
 
   const heroSection = event.image_url
     ? {
@@ -287,8 +285,8 @@ export function buildEventFlexBubble(
           spacing: "sm",
           contents: [
             { type: "text", text: priceStr, size: "sm", color: "#1A1A1A", weight: "bold", flex: 0 },
-            ...(remaining
-              ? [{ type: "text", text: remaining, size: "sm", color: "#06C755", align: "end" }]
+            ...(isFull
+              ? [{ type: "text", text: "満員", size: "sm", color: "#999999", align: "end" }]
               : []),
           ],
         },
@@ -639,12 +637,10 @@ export function buildMenuFlexBubble(
 ): FlexContainer {
   const menuUrl = `${baseUrl}/menus/${menu.id}`;
   const priceStr = menu.price === 0 ? "無料" : `¥${menu.price.toLocaleString()}`;
-  const remaining =
+  const isMenuFull =
     menu.capacity != null && menu.booking_count != null
-      ? `残${Math.max(0, menu.capacity - menu.booking_count)}枠`
-      : menu.capacity != null
-        ? `定員${menu.capacity}名`
-        : "";
+      ? menu.capacity - menu.booking_count <= 0
+      : false;
 
   const heroSection = menu.image_url
     ? {
@@ -697,8 +693,8 @@ export function buildMenuFlexBubble(
           spacing: "sm",
           contents: [
             { type: "text", text: priceStr, size: "sm", color: "#1A1A1A", weight: "bold", flex: 0 },
-            ...(remaining
-              ? [{ type: "text", text: remaining, size: "sm", color: "#06C755", align: "end" }]
+            ...(isMenuFull
+              ? [{ type: "text", text: "満員", size: "sm", color: "#999999", align: "end" }]
               : []),
           ],
         },

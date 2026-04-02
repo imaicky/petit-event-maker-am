@@ -86,18 +86,10 @@ export function LinkEventCard({ event }: { event: EventWithBookings }) {
               : `¥${(event.price ?? 0).toLocaleString("ja-JP")}`}
           </span>
 
-          {/* Availability */}
-          {spotsLeft !== null && (
-            <span
-              className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                isFull
-                  ? "bg-[#F2F2F2] text-[#999999]"
-                  : spotsLeft <= 2
-                  ? "bg-red-50 text-red-500"
-                  : "bg-[#F2F2F2] text-[#1A1A1A]"
-              }`}
-            >
-              {isFull ? "満員" : `残${spotsLeft}枠`}
+          {/* Full indicator only */}
+          {isFull && (
+            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold bg-[#F2F2F2] text-[#999999]">
+              満員
             </span>
           )}
         </div>

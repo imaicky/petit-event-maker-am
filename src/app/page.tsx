@@ -318,9 +318,6 @@ export default async function Home() {
                       <span className="rounded-full bg-[#404040]/10 px-2.5 py-0.5 text-xs font-medium text-[#404040]">
                         ヨガ
                       </span>
-                      <span className="rounded-full bg-[#1A1A1A]/10 px-2.5 py-0.5 text-xs font-medium text-[#1A1A1A]">
-                        残り2名
-                      </span>
                     </div>
                     <h3
                       className="text-lg font-bold text-[#1A1A1A] leading-snug"
@@ -390,8 +387,8 @@ export default async function Home() {
                   step: "03",
                   icon: "🔥",
                   iconBg: "bg-[#F7F7F7]",
-                  title: "残枠で自然に埋まる",
-                  desc: '残り枠数がリアルタイム表示されるから、参加者が自然と"早く申し込まなきゃ"と感じます。満員になるほど告知効果抜群。',
+                  title: "申し込みが自然に集まる",
+                  desc: "LINE通知やリマインダーで参加者を逃さず、Googleカレンダー連携で忘れられないイベント体験を。主催者は出欠管理もCSVエクスポートもワンタップです。",
                   delay: "delay-300",
                 },
               ].map(({ step, icon, iconBg, title, desc, delay }) => (

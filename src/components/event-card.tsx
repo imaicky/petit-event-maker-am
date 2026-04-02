@@ -62,9 +62,7 @@ export function EventCard({
   className,
 }: EventCardProps) {
   const remaining = capacity - booked_count;
-  const isAlmostFull = remaining > 0 && remaining <= 3;
   const isFull = remaining <= 0;
-  const fillRate = capacity > 0 ? Math.round((booked_count / capacity) * 100) : 0;
   const { date, time } = formatDateShort(datetime);
   const isFree = price === 0;
 
@@ -127,22 +125,14 @@ export function EventCard({
           </div>
         )}
 
-        {/* Spots badge */}
-        <div className="absolute right-3 top-3">
-          {isFull ? (
+        {/* Spots badge — only show "満員" to prevent wasted clicks */}
+        {isFull && (
+          <div className="absolute right-3 top-3">
             <span className="inline-flex items-center rounded-full bg-[#1A1A1A]/80 px-2.5 py-0.5 text-xs font-medium text-white backdrop-blur-sm">
               {"満員"}
             </span>
-          ) : isAlmostFull ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-[#1A1A1A] px-2.5 py-0.5 text-xs font-medium text-white shadow-sm">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" />
-              </span>
-              {"あと"}{remaining}{"名"}
-            </span>
-          ) : null}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Content */}
@@ -188,38 +178,16 @@ export function EventCard({
           )}
         </div>
 
-        {/* Fill rate bar - animated from 0 to actual width on load */}
-        <div className="mb-3">
-          <div className="mb-1 flex items-center justify-between text-xs text-[#999999]">
-            <span>
-              {isFull ? (
-                <span className="font-medium text-[#1A1A1A]">{"満員"}</span>
-              ) : (
-                <>
-                  {"残り"}<span className="font-medium text-[#1A1A1A]">{remaining}</span>{"名"}
-                </>
-              )}
-            </span>
-            <span>{capacity}{"名定員"}</span>
+        {/* Capacity info — show "満員" or just the capacity */}
+        {isFull ? (
+          <div className="mb-3">
+            <span className="text-xs font-medium text-[#1A1A1A]">{"満員"}</span>
           </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#EEEEEE]">
-            <div
-              className={cn(
-                "h-full w-0 rounded-full",
-                "transition-[width] duration-1000 ease-out",
-                isFull
-                  ? "bg-[#1A1A1A]"
-                  : isAlmostFull
-                  ? "bg-[#1A1A1A]"
-                  : "bg-[#404040]"
-              )}
-              style={{
-                width: `${Math.min(fillRate, 100)}%`,
-                transition: "width 0.8s ease-out",
-              }}
-            />
+        ) : capacity > 0 ? (
+          <div className="mb-3">
+            <span className="text-xs text-[#999999]">{"定員"}{capacity}{"名"}</span>
           </div>
-        </div>
+        ) : null}
 
         {/* Price + CTA */}
         <div className="flex items-center justify-between">

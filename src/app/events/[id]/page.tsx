@@ -125,7 +125,7 @@ export async function generateMetadata(
     `📅 ${dateStr}`,
     `📍 ${locationLabel}`,
     `💴 ${priceStr}`,
-    remaining > 0 ? `残り${remaining}名` : "満員",
+    remaining <= 0 ? "満員" : "",
     event.description.slice(0, 80),
   ]
     .filter(Boolean)
@@ -194,37 +194,10 @@ function SpotsBadge({
     );
   }
 
-  const isLow = remaining <= 3;
-  const isAlmostFull = capacity > 0 && ((capacity - remaining) / capacity) >= 0.8;
-  const fillRate = capacity > 0 ? Math.round(((capacity - remaining) / capacity) * 100) : 0;
-
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-3">
-        <Badge
-          className={`px-3 py-1.5 text-sm ${
-            isLow ? "bg-[#1A1A1A] text-white" : "bg-[#404040] text-white"
-          } ${isAlmostFull ? "animate-pulse-glow" : ""}`}
-        >
-          {isLow && (
-            <span className="relative mr-2 flex h-2.5 w-2.5 items-center">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" />
-              <span className="absolute inline-flex h-3.5 w-3.5 -left-[2px] -top-[2px] animate-ping rounded-full bg-white/30" style={{ animationDelay: "150ms" }} />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-white" />
-            </span>
-          )}
-          あと{remaining}名
-        </Badge>
-        <span className="text-sm text-[#999999]">/ {capacity}名</span>
-      </div>
-      <div className="h-2 w-full max-w-[200px] overflow-hidden rounded-full bg-[#EEEEEE]">
-        <div
-          className={`h-full rounded-full transition-all duration-700 ${isLow ? "bg-[#1A1A1A]" : "bg-[#404040]"}`}
-          style={{ width: `${Math.min(fillRate, 100)}%` }}
-        />
-      </div>
-    </div>
-  );
+  // Show capacity only (no remaining count for guests)
+  return capacity > 0 ? (
+    <span className="text-sm text-[#999999]">定員{capacity}名</span>
+  ) : null;
 }
 
 // ─── Teacher Avatar ──────────────────────────────────────────────────────────
@@ -399,9 +372,9 @@ export default async function EventPage({ params }: EventPageProps) {
                 <p className="mt-0.5 text-sm font-semibold text-[#1A1A1A]">
                   {event.capacity}名
                 </p>
-                {remaining > 0 && (
-                  <p className="text-xs font-medium text-[#404040]">
-                    残り{remaining}名募集中
+                {remaining <= 0 && (
+                  <p className="text-xs font-medium text-[#1A1A1A]">
+                    満員
                   </p>
                 )}
               </MetaCell>

@@ -28,8 +28,6 @@ function formatDateShort(dt: string) {
 export function PublicEventCard({ event, isPast }: { event: EventWithBookings; isPast?: boolean }) {
   const spotsLeft = event.capacity ? event.capacity - event.booking_count : null;
   const isFull = spotsLeft !== null && spotsLeft <= 0;
-  const isAlmostFull = spotsLeft !== null && spotsLeft <= 2 && !isFull;
-
   return (
     <Link href={`/events/${event.id}`} className="block group">
       <div className={`rounded-2xl border border-[#E5E5E5] bg-white overflow-hidden hover:shadow-lg hover:border-[#1A1A1A]/30 transition-all duration-200 ${isPast ? "opacity-75" : ""}`}>
@@ -53,25 +51,17 @@ export function PublicEventCard({ event, isPast }: { event: EventWithBookings; i
                 : `¥${(event.price ?? 0).toLocaleString("ja-JP")}`}
             </span>
           </div>
-          {/* Availability badge or past badge */}
+          {/* Status badge — past or full only */}
           {isPast ? (
             <div className="absolute bottom-3 left-3">
               <span className="inline-block rounded-full bg-[#E5E5E5]/90 px-2.5 py-1 text-xs font-bold text-[#999999] backdrop-blur-sm">
                 終了
               </span>
             </div>
-          ) : spotsLeft !== null ? (
+          ) : isFull ? (
             <div className="absolute bottom-3 left-3">
-              <span
-                className={`inline-block rounded-full px-2.5 py-1 text-xs font-bold backdrop-blur-sm ${
-                  isFull
-                    ? "bg-[#E5E5E5]/90 text-[#999999]"
-                    : isAlmostFull
-                    ? "bg-red-500/90 text-white"
-                    : "bg-[#404040]/90 text-white"
-                }`}
-              >
-                {isFull ? "満員" : `残${spotsLeft}枠`}
+              <span className="inline-block rounded-full bg-[#E5E5E5]/90 px-2.5 py-1 text-xs font-bold text-[#999999] backdrop-blur-sm">
+                満員
               </span>
             </div>
           ) : null}
