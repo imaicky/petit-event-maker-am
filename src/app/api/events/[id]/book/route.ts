@@ -121,96 +121,71 @@ export async function POST(
 
     let booking: BookingRow | null = null;
 
-    const { data: rpcResult, error: rpcError } = await supabase.rpc("book_event", {
-      p_event_id: eventId,
-      p_user_id: user?.id ?? null,
-      p_guest_name: data.guest_name,
-      p_guest_email: data.guest_email,
-      p_guest_phone: data.guest_phone || null,
-    });
-
-    if (rpcError) {
-      const msg = rpcError.message ?? "";
-      // Handle known business errors from the RPC function
-      if (msg.includes("event_not_found")) {
-        return NextResponse.json({ error: "イベントが見つかりません" }, { status: 404 });
-      }
-      if (msg.includes("event_not_published")) {
-        return NextResponse.json({ error: "このイベントは現在受付中ではありません" }, { status: 410 });
-      }
-      if (msg.includes("capacity_exceeded")) {
-        return NextResponse.json({ error: "このイベントは満員です" }, { status: 409 });
-      }
-      if (msg.includes("duplicate_booking")) {
-        return NextResponse.json({ error: "このメールアドレスは既にお申し込み済みです" }, { status: 409 });
-      }
-
-      // RPC function may not exist — fall back to direct queries
-      console.warn("[POST /api/events/[id]/book] RPC failed, using fallback:", rpcError.message);
-
-      // 1. Fetch event
-      const { data: ev, error: evErr } = await supabase
-        .from("events")
-        .select("id, capacity, is_published")
-        .eq("id", eventId)
-        .single();
-      if (evErr || !ev) {
-        return NextResponse.json({ error: "イベントが見つかりません" }, { status: 404 });
-      }
-      if (!ev.is_published) {
-        return NextResponse.json({ error: "このイベントは現在受付中ではありません" }, { status: 410 });
-      }
-
-      // 2. Check capacity
-      const { count } = await supabase
-        .from("bookings")
-        .select("*", { count: "exact", head: true })
-        .eq("event_id", eventId)
-        .eq("status", "confirmed");
-      if (ev.capacity !== null && (count ?? 0) >= ev.capacity) {
-        return NextResponse.json({ error: "このイベントは満員です" }, { status: 409 });
-      }
-
-      // 3. Check duplicate
-      const { count: dupCount } = await supabase
-        .from("bookings")
-        .select("*", { count: "exact", head: true })
-        .eq("event_id", eventId)
-        .eq("guest_email", data.guest_email)
-        .eq("status", "confirmed");
-      if ((dupCount ?? 0) > 0) {
-        return NextResponse.json({ error: "このメールアドレスは既にお申し込み済みです" }, { status: 409 });
-      }
-
-      // 4. Insert booking
-      const { data: inserted, error: insErr } = await supabase
-        .from("bookings")
-        .insert({
-          event_id: eventId,
-          user_id: user?.id ?? null,
-          guest_name: data.guest_name,
-          guest_email: data.guest_email,
-          guest_phone: data.guest_phone || null,
-          status: "confirmed",
-        })
-        .select()
-        .single();
-
-      if (insErr || !inserted) {
-        console.error("[POST /api/events/[id]/book] Fallback insert error:", insErr);
-        return NextResponse.json({ error: "予約の登録に失敗しました" }, { status: 500 });
-      }
-      booking = inserted as BookingRow;
-    } else {
-      booking = rpcResult as unknown as BookingRow;
+    // Use admin client directly for reliable booking (bypasses RLS issues with anonymous users)
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error("[POST /api/events/[id]/book] SUPABASE_SERVICE_ROLE_KEY not set");
+      return NextResponse.json({ error: "サーバー設定エラーです" }, { status: 500 });
     }
 
-    if (!booking) {
+    const admin = createAdminClient();
+
+    // 1. Fetch event
+    const { data: ev, error: evErr } = await admin
+      .from("events")
+      .select("id, capacity, is_published")
+      .eq("id", eventId)
+      .single();
+    if (evErr || !ev) {
+      console.error("[POST /api/events/[id]/book] Event fetch error:", evErr);
+      return NextResponse.json({ error: "イベントが見つかりません" }, { status: 404 });
+    }
+    if (!ev.is_published) {
+      return NextResponse.json({ error: "このイベントは現在受付中ではありません" }, { status: 410 });
+    }
+
+    // 2. Check capacity
+    const { count } = await admin
+      .from("bookings")
+      .select("*", { count: "exact", head: true })
+      .eq("event_id", eventId)
+      .eq("status", "confirmed");
+    if (ev.capacity !== null && (count ?? 0) >= ev.capacity) {
+      return NextResponse.json({ error: "このイベントは満員です" }, { status: 409 });
+    }
+
+    // 3. Check duplicate
+    const { count: dupCount } = await admin
+      .from("bookings")
+      .select("*", { count: "exact", head: true })
+      .eq("event_id", eventId)
+      .eq("guest_email", data.guest_email)
+      .eq("status", "confirmed");
+    if ((dupCount ?? 0) > 0) {
+      return NextResponse.json({ error: "このメールアドレスは既にお申し込み済みです" }, { status: 409 });
+    }
+
+    // 4. Insert booking
+    const { data: inserted, error: insErr } = await admin
+      .from("bookings")
+      .insert({
+        event_id: eventId,
+        user_id: user?.id ?? null,
+        guest_name: data.guest_name,
+        guest_email: data.guest_email,
+        guest_phone: data.guest_phone || null,
+        status: "confirmed",
+      })
+      .select()
+      .single();
+
+    if (insErr || !inserted) {
+      console.error("[POST /api/events/[id]/book] Insert error:", insErr);
       return NextResponse.json({ error: "予約の登録に失敗しました" }, { status: 500 });
     }
+    booking = inserted as BookingRow;
 
-    // Fetch event details for notifications
-    const { data: event } = await supabase
+    // Fetch event details for notifications (use admin client for reliability)
+    const { data: event } = await admin
       .from("events")
       .select("id, title, datetime, location, location_type, online_url, location_url, capacity, price, creator_id, is_published")
       .eq("id", eventId)
