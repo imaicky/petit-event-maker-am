@@ -166,6 +166,7 @@ export type Database = {
           guest_email: string
           guest_phone: string | null
           status: 'confirmed' | 'cancelled'
+          attended: boolean | null
           created_at: string
         }
         Insert: {
@@ -176,6 +177,7 @@ export type Database = {
           guest_email: string
           guest_phone?: string | null
           status?: 'confirmed' | 'cancelled'
+          attended?: boolean | null
           created_at?: string
         }
         Update: {
@@ -186,6 +188,7 @@ export type Database = {
           guest_email?: string
           guest_phone?: string | null
           status?: 'confirmed' | 'cancelled'
+          attended?: boolean | null
           created_at?: string
         }
         Relationships: [
@@ -498,6 +501,7 @@ export type Database = {
           guest_phone: string | null
           custom_field_values: Json
           status: 'confirmed' | 'cancelled'
+          attended: boolean | null
           created_at: string
         }
         Insert: {
@@ -509,6 +513,7 @@ export type Database = {
           guest_phone?: string | null
           custom_field_values?: Json
           status?: 'confirmed' | 'cancelled'
+          attended?: boolean | null
           created_at?: string
         }
         Update: {
@@ -520,6 +525,7 @@ export type Database = {
           guest_phone?: string | null
           custom_field_values?: Json
           status?: 'confirmed' | 'cancelled'
+          attended?: boolean | null
           created_at?: string
         }
         Relationships: [
@@ -533,6 +539,54 @@ export type Database = {
           {
             foreignKeyName: 'menu_bookings_user_id_fkey'
             columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      menu_messages: {
+        Row: {
+          id: string
+          menu_id: string
+          sender_id: string
+          subject: string
+          body: string
+          channel: 'email' | 'line' | 'both'
+          recipient_count: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          menu_id: string
+          sender_id: string
+          subject: string
+          body: string
+          channel?: 'email' | 'line' | 'both'
+          recipient_count?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          menu_id?: string
+          sender_id?: string
+          subject?: string
+          body?: string
+          channel?: 'email' | 'line' | 'both'
+          recipient_count?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'menu_messages_menu_id_fkey'
+            columns: ['menu_id']
+            isOneToOne: false
+            referencedRelation: 'menus'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'menu_messages_sender_id_fkey'
+            columns: ['sender_id']
             isOneToOne: false
             referencedRelation: 'profiles'
             referencedColumns: ['id']
@@ -644,6 +698,9 @@ export type MenuUpdate = Database['public']['Tables']['menus']['Update']
 
 export type MenuBooking = Database['public']['Tables']['menu_bookings']['Row']
 export type MenuBookingInsert = Database['public']['Tables']['menu_bookings']['Insert']
+
+export type MenuMessage = Database['public']['Tables']['menu_messages']['Row']
+export type MenuMessageInsert = Database['public']['Tables']['menu_messages']['Insert']
 
 export type BookingStatus = 'confirmed' | 'cancelled'
 

@@ -39,6 +39,8 @@ type DashboardEvent = EventRow & {
 
 // --- Helpers ----------------------------------------------------------------
 
+const TZ = "Asia/Tokyo";
+
 function formatDatetime(dt: string) {
   try {
     return new Date(dt).toLocaleDateString("ja-JP", {
@@ -48,6 +50,7 @@ function formatDatetime(dt: string) {
       weekday: "short",
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: TZ,
     });
   } catch {
     return dt;
@@ -303,11 +306,15 @@ function EventCard({
           <span className="text-xs font-medium leading-none">
             {new Date(event.datetime).toLocaleDateString("ja-JP", {
               month: "numeric",
+              timeZone: TZ,
             })}
             月
           </span>
           <span className="mt-0.5 text-xl font-bold leading-none">
-            {new Date(event.datetime).getDate()}
+            {new Date(event.datetime).toLocaleDateString("ja-JP", {
+              day: "numeric",
+              timeZone: TZ,
+            })}
           </span>
         </div>
 
@@ -475,6 +482,7 @@ function EventCard({
                   day: "numeric",
                   hour: "2-digit",
                   minute: "2-digit",
+                  timeZone: TZ,
                 })}
                 送信予定
               </button>
@@ -669,11 +677,14 @@ export default function DashboardPage() {
       : pastEvents;
 
   const totalBookings = events.reduce((sum, e) => sum + e.booking_count, 0);
+  const nowMonth = now.toLocaleDateString("ja-JP", { month: "numeric", timeZone: TZ });
+  const nowYear = now.toLocaleDateString("ja-JP", { year: "numeric", timeZone: TZ });
   const thisMonthBookings = events
     .filter((e) => {
       const d = new Date(e.datetime);
       return (
-        d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+        d.toLocaleDateString("ja-JP", { month: "numeric", timeZone: TZ }) === nowMonth &&
+        d.toLocaleDateString("ja-JP", { year: "numeric", timeZone: TZ }) === nowYear
       );
     })
     .reduce((sum, e) => sum + e.booking_count, 0);

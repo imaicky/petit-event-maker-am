@@ -11,6 +11,7 @@ import { ReviewSection } from "@/components/review-section";
 import { ShareButton } from "@/components/share-button";
 import { StoriesDownloadButton } from "@/components/stories-download-button";
 import { LineSchedulePrompt } from "@/components/line-schedule-prompt";
+import { buildGoogleCalendarUrl } from "@/lib/calendar";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -108,6 +109,7 @@ export async function generateMetadata(
     month: "long",
     day: "numeric",
     weekday: "short",
+    timeZone: "Asia/Tokyo",
   });
   const priceStr =
     event.price === 0
@@ -154,6 +156,7 @@ function formatDate(datetimeStr: string): string {
       month: "long",
       day: "numeric",
       weekday: "long",
+      timeZone: "Asia/Tokyo",
     });
   } catch {
     return datetimeStr;
@@ -165,6 +168,7 @@ function formatTime(datetimeStr: string): string {
     return new Date(datetimeStr).toLocaleTimeString("ja-JP", {
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "Asia/Tokyo",
     });
   } catch {
     return "";
@@ -415,6 +419,26 @@ export default async function EventPage({ params }: EventPageProps) {
                 )}
               </MetaCell>
             </div>
+
+            {/* Google Calendar button */}
+            {!isPast && (
+              <div className="mb-6 animate-fade-in-up delay-100">
+                <a
+                  href={buildGoogleCalendarUrl({
+                    title: event.title,
+                    datetime: event.datetime,
+                    location: event.location,
+                    description: event.description,
+                  })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-xl border border-[#E5E5E5] bg-white px-4 py-2.5 text-sm font-medium text-[#1A1A1A] shadow-sm transition-all hover:border-[#1A1A1A]/30 hover:bg-[#F7F7F7] active:scale-95"
+                >
+                  <Calendar className="h-4 w-4" />
+                  Googleカレンダーに追加
+                </a>
+              </div>
+            )}
 
             {/* Limited event badge */}
             {event.is_limited && (

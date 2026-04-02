@@ -25,6 +25,7 @@ export function TrendingEvents({ events, reviewAggs }: TrendingEventsProps) {
                 month: "short",
                 day: "numeric",
                 weekday: "short",
+                timeZone: "Asia/Tokyo",
               });
             } catch {
               return "";

@@ -30,10 +30,12 @@ function formatDateShort(datetimeStr: string): { date: string; time: string } {
         month: "short",
         day: "numeric",
         weekday: "short",
+        timeZone: "Asia/Tokyo",
       }),
       time: d.toLocaleTimeString("ja-JP", {
         hour: "2-digit",
         minute: "2-digit",
+        timeZone: "Asia/Tokyo",
       }),
     };
   } catch {

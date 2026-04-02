@@ -26,6 +26,8 @@ interface MessageDialogProps {
   recipientCount: number;
   open: boolean;
   onClose: () => void;
+  /** "event" (default) or "menu" — determines which API endpoint to call */
+  targetType?: "event" | "menu";
 }
 
 export function MessageDialog({
@@ -36,6 +38,7 @@ export function MessageDialog({
   recipientCount,
   open,
   onClose,
+  targetType = "event",
 }: MessageDialogProps) {
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateId | null>(
     null
@@ -47,15 +50,16 @@ export function MessageDialog({
   const [sentCount, setSentCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
+  const basePath = targetType === "menu" ? "menus" : "events";
   const eventUrl =
     typeof window !== "undefined"
-      ? `${window.location.origin}/events/${eventId}`
-      : `/events/${eventId}`;
+      ? `${window.location.origin}/${basePath}/${eventId}`
+      : `/${basePath}/${eventId}`;
 
   const templateVars = {
     eventTitle,
-    eventDate,
-    eventLocation: eventLocation || "未定",
+    eventDate: eventDate || (targetType === "menu" ? "（メニューのため日時なし）" : "未定"),
+    eventLocation: eventLocation || (targetType === "menu" ? "（メニューのため場所なし）" : "未定"),
     eventUrl,
   };
 
@@ -79,7 +83,7 @@ export function MessageDialog({
     setError(null);
 
     try {
-      const res = await fetch(`/api/events/${eventId}/message`, {
+      const res = await fetch(`/api/${basePath}/${eventId}/message`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subject, message }),

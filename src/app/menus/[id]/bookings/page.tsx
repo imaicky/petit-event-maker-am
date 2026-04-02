@@ -5,17 +5,22 @@ import { useRouter, useParams } from "next/navigation";
 import {
   ArrowLeft,
   Users,
-  Loader2,
   Mail,
   Phone,
   Clock,
   UserX,
   Tag,
   JapaneseYen,
+  Download,
+  CheckSquare,
+  UserCheck,
+  Send,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/header";
+import { MessageDialog } from "@/components/message-dialog";
+import { LineNotifyDialog } from "@/components/line-notify-dialog";
 import { useAuth } from "@/components/auth-provider";
 import { createClient } from "@/lib/supabase/client";
 import type { Database, CustomField } from "@/types/database";
@@ -34,6 +39,7 @@ function formatBookingDate(iso: string): string {
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "Asia/Tokyo",
     });
   } catch {
     return iso;
@@ -44,7 +50,7 @@ function formatCustomValue(value: string, type: string): string {
   if (!value) return "--";
   if (type === "date") {
     try {
-      return new Date(value).toLocaleDateString("ja-JP");
+      return new Date(value).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo" });
     } catch {
       return value;
     }
@@ -89,6 +95,10 @@ export default function MenuBookingsPage() {
   const [bookings, setBookings] = useState<MenuBooking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [messageOpen, setMessageOpen] = useState(false);
+  const [lineNotifyOpen, setLineNotifyOpen] = useState(false);
+  const [hasLineAccount, setHasLineAccount] = useState(false);
+  const [updatingAttendance, setUpdatingAttendance] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!menuId || !user) return;
@@ -131,6 +141,14 @@ export default function MenuBookingsPage() {
       }
 
       setBookings(bookingsData ?? []);
+
+      // Check if creator has an active LINE account
+      const { data: lineAcc } = await supabase
+        .from("line_accounts")
+        .select("is_active")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      setHasLineAccount(!!lineAcc?.is_active);
     } catch {
       setError("データの読み込みに失敗しました");
     } finally {
@@ -148,6 +166,54 @@ export default function MenuBookingsPage() {
 
     fetchData();
   }, [authLoading, user, router, fetchData]);
+
+  // --- Attendance toggle -----------------------------------------------------
+
+  async function toggleAttendance(bookingId: string, current: boolean | null) {
+    const next = current === true ? null : true;
+    setUpdatingAttendance(bookingId);
+
+    try {
+      const res = await fetch(`/api/menus/${menuId}/attendance`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ booking_id: bookingId, attended: next }),
+      });
+
+      if (res.ok) {
+        setBookings((prev) =>
+          prev.map((b) => (b.id === bookingId ? { ...b, attended: next } : b))
+        );
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setUpdatingAttendance(null);
+    }
+  }
+
+  async function markAllAttended() {
+    const ids = bookings.filter((b) => b.attended !== true).map((b) => b.id);
+    if (ids.length === 0) return;
+
+    setUpdatingAttendance("all");
+
+    try {
+      const res = await fetch(`/api/menus/${menuId}/attendance`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ booking_ids: ids, attended: true }),
+      });
+
+      if (res.ok) {
+        setBookings((prev) => prev.map((b) => ({ ...b, attended: true })));
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setUpdatingAttendance(null);
+    }
+  }
 
   // --- Loading ---------------------------------------------------------------
 
@@ -191,6 +257,7 @@ export default function MenuBookingsPage() {
       : 0;
   const priceStr = menu.price === 0 ? "無料" : `¥${menu.price.toLocaleString()}`;
   const customFields = (menu.custom_fields ?? []) as unknown as CustomField[];
+  const attendedCount = bookings.filter((b) => b.attended === true).length;
 
   return (
     <main className="min-h-dvh bg-[#FAFAFA]">
@@ -215,6 +282,40 @@ export default function MenuBookingsPage() {
           >
             申込一覧
           </h1>
+          <div className="flex items-center gap-2 shrink-0">
+            {bookings.length > 0 && (
+              <>
+                <a
+                  href={`/api/menus/${menuId}/export`}
+                  download
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[#E5E5E5] bg-white px-3 text-xs font-medium text-[#1A1A1A] hover:border-[#1A1A1A]/30 hover:bg-[#F7F7F7] transition-colors"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  CSV
+                </a>
+                {hasLineAccount && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="rounded-full bg-[#06C755] text-white hover:bg-[#05b34c] gap-1.5"
+                    onClick={() => setLineNotifyOpen(true)}
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    LINE通知
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  className="rounded-full bg-[#1A1A1A] text-white hover:bg-[#111111] gap-1.5"
+                  onClick={() => setMessageOpen(true)}
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  メッセージ送信
+                </Button>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Menu summary card */}
@@ -292,6 +393,28 @@ export default function MenuBookingsPage() {
           </div>
         ) : (
           <div className="space-y-2">
+            {/* Attendance stats + bulk action */}
+            <div className="flex items-center justify-between px-2 py-2">
+              <span className="flex items-center gap-1.5 text-sm text-[#999999]">
+                <UserCheck className="h-4 w-4" />
+                出席:
+                <span className="font-bold text-[#1A1A1A] tabular-nums">
+                  {attendedCount}/{confirmedCount}名
+                </span>
+              </span>
+              {attendedCount < confirmedCount && (
+                <button
+                  type="button"
+                  onClick={markAllAttended}
+                  disabled={updatingAttendance === "all"}
+                  className="flex items-center gap-1.5 rounded-full border border-[#E5E5E5] bg-white px-3 py-1.5 text-xs font-medium text-[#1A1A1A] hover:border-[#1A1A1A]/30 hover:bg-[#F7F7F7] transition-colors disabled:opacity-50"
+                >
+                  <CheckSquare className="h-3.5 w-3.5" />
+                  全員出席
+                </button>
+              )}
+            </div>
+
             {/* Attendee rows */}
             {bookings.map((booking, index) => {
               const cfValues = (booking.custom_field_values ?? {}) as Record<string, string>;
@@ -299,15 +422,33 @@ export default function MenuBookingsPage() {
               return (
                 <div
                   key={booking.id}
-                  className="rounded-2xl bg-white border border-[#E5E5E5] px-5 py-4 transition-colors hover:border-[#1A1A1A]/20"
+                  className={`rounded-2xl bg-white border px-5 py-4 transition-colors hover:border-[#1A1A1A]/20 ${
+                    booking.attended === true
+                      ? "border-green-200 bg-green-50/30"
+                      : "border-[#E5E5E5]"
+                  }`}
                 >
                   {/* Mobile layout */}
                   <div className="sm:hidden space-y-2.5">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2.5">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F2F2F2] text-xs font-bold text-[#1A1A1A] shrink-0">
-                          {index + 1}
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => toggleAttendance(booking.id, booking.attended)}
+                          disabled={updatingAttendance !== null}
+                          className={`flex h-8 w-8 items-center justify-center rounded-full shrink-0 transition-colors ${
+                            booking.attended === true
+                              ? "bg-green-600 text-white"
+                              : "bg-[#F2F2F2] text-[#1A1A1A] hover:bg-[#E5E5E5]"
+                          } ${updatingAttendance !== null ? "opacity-50" : ""}`}
+                          aria-label={booking.attended === true ? "出席取消" : "出席にする"}
+                        >
+                          {booking.attended === true ? (
+                            <UserCheck className="h-4 w-4" />
+                          ) : (
+                            <span className="text-xs font-bold">{index + 1}</span>
+                          )}
+                        </button>
                         <span className="text-sm font-bold text-[#1A1A1A]">
                           {booking.guest_name}
                         </span>
@@ -346,15 +487,27 @@ export default function MenuBookingsPage() {
 
                   {/* Desktop layout */}
                   <div className="hidden sm:block">
-                    <div className="grid grid-cols-[1fr_1fr_auto_auto] gap-4 items-center">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F2F2F2] text-xs font-bold text-[#1A1A1A] shrink-0">
-                          {index + 1}
-                        </div>
-                        <span className="text-sm font-medium text-[#1A1A1A] truncate">
-                          {booking.guest_name}
-                        </span>
-                      </div>
+                    <div className="grid grid-cols-[auto_1fr_1fr_auto_auto] gap-4 items-center">
+                      <button
+                        type="button"
+                        onClick={() => toggleAttendance(booking.id, booking.attended)}
+                        disabled={updatingAttendance !== null}
+                        className={`flex h-7 w-7 items-center justify-center rounded-full shrink-0 transition-colors ${
+                          booking.attended === true
+                            ? "bg-green-600 text-white"
+                            : "bg-[#F2F2F2] text-[#1A1A1A] hover:bg-[#E5E5E5]"
+                        } ${updatingAttendance !== null ? "opacity-50" : ""}`}
+                        aria-label={booking.attended === true ? "出席取消" : "出席にする"}
+                      >
+                        {booking.attended === true ? (
+                          <UserCheck className="h-3.5 w-3.5" />
+                        ) : (
+                          <span className="text-xs font-bold">{index + 1}</span>
+                        )}
+                      </button>
+                      <span className="text-sm font-medium text-[#1A1A1A] truncate min-w-0">
+                        {booking.guest_name}
+                      </span>
                       <span className="flex items-center gap-1.5 text-sm text-[#999999] min-w-0 truncate">
                         <Mail className="h-3.5 w-3.5 shrink-0" />
                         {booking.guest_email}
@@ -399,6 +552,33 @@ export default function MenuBookingsPage() {
               </span>
             </div>
           </div>
+        )}
+
+        {/* Message dialog */}
+        {menu && (
+          <MessageDialog
+            eventId={menuId}
+            eventTitle={menu.title}
+            eventDate=""
+            eventLocation=""
+            recipientCount={bookings.length}
+            open={messageOpen}
+            onClose={() => setMessageOpen(false)}
+            targetType="menu"
+          />
+        )}
+
+        {/* LINE notify dialog */}
+        {menu && hasLineAccount && (
+          <LineNotifyDialog
+            open={lineNotifyOpen}
+            onOpenChange={setLineNotifyOpen}
+            eventId={menuId}
+            eventTitle={menu.title}
+            onSuccess={() => {}}
+            allowSegment
+            targetType="menu"
+          />
         )}
       </div>
     </main>

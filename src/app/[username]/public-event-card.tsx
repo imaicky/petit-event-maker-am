@@ -18,6 +18,7 @@ function formatDateShort(dt: string) {
       weekday: "short",
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "Asia/Tokyo",
     });
   } catch {
     return dt;

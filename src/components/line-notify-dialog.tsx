@@ -24,6 +24,8 @@ type LineNotifyDialogProps = {
   } | null;
   /** Set to true to show segment options (for events that were already notified) */
   allowSegment?: boolean;
+  /** Target type — "event" (default) or "menu" */
+  targetType?: "event" | "menu";
 };
 
 type Mode = "immediate" | "schedule";
@@ -51,7 +53,9 @@ export function LineNotifyDialog({
   onSuccess,
   currentSchedule,
   allowSegment = false,
+  targetType = "event",
 }: LineNotifyDialogProps) {
+  const isMenu = targetType === "menu";
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
@@ -66,10 +70,13 @@ export function LineNotifyDialog({
     setSending(true);
     setError("");
     try {
-      const res = await fetch(`/api/events/${eventId}/line-notify`, {
+      const apiPath = isMenu
+        ? `/api/menus/${eventId}/line-notify`
+        : `/api/events/${eventId}/line-notify`;
+      const res = await fetch(apiPath, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, segment }),
+        body: JSON.stringify({ message, segment: isMenu && segment === "attendees" ? "applicants" : segment }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -168,7 +175,9 @@ export function LineNotifyDialog({
         <DialogHeader>
           <DialogTitle>LINE通知を送信</DialogTitle>
           <DialogDescription>
-            LINE公式アカウントのフォロワー全員に通知します
+            {isMenu
+              ? "LINE公式アカウントのフォロワーにメニューを案内します"
+              : "LINE公式アカウントのフォロワー全員に通知します"}
           </DialogDescription>
         </DialogHeader>
 
@@ -261,39 +270,41 @@ export function LineNotifyDialog({
           <>
             <div className="space-y-3">
               <div className="rounded-lg bg-[#F7F7F7] p-3">
-                <p className="text-xs text-[#999999] mb-1">送信イベント</p>
+                <p className="text-xs text-[#999999] mb-1">{isMenu ? "送信メニュー" : "送信イベント"}</p>
                 <p className="text-sm font-medium text-[#1A1A1A]">
                   {eventTitle}
                 </p>
               </div>
 
-              {/* Mode toggle */}
-              <div className="flex gap-1 rounded-xl bg-[#F2F2F2] p-1">
-                <button
-                  type="button"
-                  onClick={() => setMode("immediate")}
-                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
-                    mode === "immediate"
-                      ? "bg-white text-[#1A1A1A] shadow-sm"
-                      : "text-[#999999] hover:text-[#1A1A1A]"
-                  }`}
-                >
-                  <Send className="h-3.5 w-3.5" />
-                  今すぐ送信
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode("schedule")}
-                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
-                    mode === "schedule"
-                      ? "bg-white text-[#1A1A1A] shadow-sm"
-                      : "text-[#999999] hover:text-[#1A1A1A]"
-                  }`}
-                >
-                  <Clock className="h-3.5 w-3.5" />
-                  予約送信
-                </button>
-              </div>
+              {/* Mode toggle (events only — menus don't support scheduled send) */}
+              {!isMenu && (
+                <div className="flex gap-1 rounded-xl bg-[#F2F2F2] p-1">
+                  <button
+                    type="button"
+                    onClick={() => setMode("immediate")}
+                    className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                      mode === "immediate"
+                        ? "bg-white text-[#1A1A1A] shadow-sm"
+                        : "text-[#999999] hover:text-[#1A1A1A]"
+                    }`}
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    今すぐ送信
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode("schedule")}
+                    className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                      mode === "schedule"
+                        ? "bg-white text-[#1A1A1A] shadow-sm"
+                        : "text-[#999999] hover:text-[#1A1A1A]"
+                    }`}
+                  >
+                    <Clock className="h-3.5 w-3.5" />
+                    予約送信
+                  </button>
+                </div>
+              )}
 
               {/* Segment selector */}
               {(allowSegment || mode === "immediate") && (
@@ -324,7 +335,7 @@ export function LineNotifyDialog({
                       }`}
                     >
                       <Tag className="h-3 w-3" />
-                      参加者のみ
+                      {isMenu ? "申込者のみ" : "参加者のみ"}
                     </button>
                   </div>
                 </div>
@@ -372,7 +383,9 @@ export function LineNotifyDialog({
               </div>
 
               <p className="text-xs text-[#999999] leading-relaxed">
-                メッセージの後にイベントカード（画像・詳細・予約ボタン付き）が自動で送信されます。
+                {isMenu
+                  ? "メッセージの後にメニューカード（画像・詳細・申込ボタン付き）が自動で送信されます。"
+                  : "メッセージの後にイベントカード（画像・詳細・予約ボタン付き）が自動で送信されます。"}
               </p>
 
               {error && (

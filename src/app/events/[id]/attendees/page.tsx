@@ -7,12 +7,14 @@ import {
   Calendar,
   MapPin,
   Users,
-  Loader2,
   Mail,
   Phone,
   Clock,
   UserX,
   Send,
+  Download,
+  CheckSquare,
+  UserCheck,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -29,6 +31,8 @@ type Booking = Database["public"]["Tables"]["bookings"]["Row"];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+const TZ = "Asia/Tokyo";
+
 function formatDate(iso: string): string {
   try {
     const d = new Date(iso);
@@ -37,6 +41,7 @@ function formatDate(iso: string): string {
       month: "long",
       day: "numeric",
       weekday: "short",
+      timeZone: TZ,
     });
   } catch {
     return iso;
@@ -49,6 +54,7 @@ function formatTime(iso: string): string {
     return d.toLocaleTimeString("ja-JP", {
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: TZ,
     });
   } catch {
     return "";
@@ -63,6 +69,7 @@ function formatBookingDate(iso: string): string {
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: TZ,
     });
   } catch {
     return iso;
@@ -107,6 +114,7 @@ export default function AttendeesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [messageOpen, setMessageOpen] = useState(false);
+  const [updatingAttendance, setUpdatingAttendance] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!eventId || !user) return;
@@ -168,6 +176,54 @@ export default function AttendeesPage() {
     fetchData();
   }, [authLoading, user, router, fetchData]);
 
+  // ── Attendance toggle ──────────────────────────────────────────────────
+
+  async function toggleAttendance(bookingId: string, current: boolean | null) {
+    const next = current === true ? null : true;
+    setUpdatingAttendance(bookingId);
+
+    try {
+      const res = await fetch(`/api/events/${eventId}/attendance`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ booking_id: bookingId, attended: next }),
+      });
+
+      if (res.ok) {
+        setBookings((prev) =>
+          prev.map((b) => (b.id === bookingId ? { ...b, attended: next } : b))
+        );
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setUpdatingAttendance(null);
+    }
+  }
+
+  async function markAllAttended() {
+    const ids = bookings.filter((b) => b.attended !== true).map((b) => b.id);
+    if (ids.length === 0) return;
+
+    setUpdatingAttendance("all");
+
+    try {
+      const res = await fetch(`/api/events/${eventId}/attendance`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ booking_ids: ids, attended: true }),
+      });
+
+      if (res.ok) {
+        setBookings((prev) => prev.map((b) => ({ ...b, attended: true })));
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setUpdatingAttendance(null);
+    }
+  }
+
   // ── Loading ─────────────────────────────────────────────────────────────
 
   if (authLoading || loading) {
@@ -208,6 +264,7 @@ export default function AttendeesPage() {
     capacity && capacity > 0
       ? Math.min((confirmedCount / capacity) * 100, 100)
       : 0;
+  const attendedCount = bookings.filter((b) => b.attended === true).length;
 
   return (
     <main className="min-h-dvh bg-[#FAFAFA]">
@@ -232,17 +289,29 @@ export default function AttendeesPage() {
           >
             参加者一覧
           </h1>
-          {bookings.length > 0 && (
-            <Button
-              type="button"
-              size="sm"
-              className="rounded-full bg-[#1A1A1A] text-white hover:bg-[#111111] gap-1.5 shrink-0"
-              onClick={() => setMessageOpen(true)}
-            >
-              <Send className="h-3.5 w-3.5" />
-              メッセージ送信
-            </Button>
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            {bookings.length > 0 && (
+              <>
+                <a
+                  href={`/api/events/${eventId}/export`}
+                  download
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[#E5E5E5] bg-white px-3 text-xs font-medium text-[#1A1A1A] hover:border-[#1A1A1A]/30 hover:bg-[#F7F7F7] transition-colors"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  CSV
+                </a>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="rounded-full bg-[#1A1A1A] text-white hover:bg-[#111111] gap-1.5"
+                  onClick={() => setMessageOpen(true)}
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  メッセージ送信
+                </Button>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Event summary card */}
@@ -325,8 +394,33 @@ export default function AttendeesPage() {
           </div>
         ) : (
           <div className="space-y-2">
+            {/* Attendance stats + bulk action */}
+            <div className="flex items-center justify-between px-2 py-2">
+              <span className="flex items-center gap-1.5 text-sm text-[#999999]">
+                <UserCheck className="h-4 w-4" />
+                出席:
+                <span className="font-bold text-[#1A1A1A] tabular-nums">
+                  {attendedCount}/{confirmedCount}名
+                </span>
+              </span>
+              {attendedCount < confirmedCount && (
+                <button
+                  type="button"
+                  onClick={markAllAttended}
+                  disabled={updatingAttendance === "all"}
+                  className="flex items-center gap-1.5 rounded-full border border-[#E5E5E5] bg-white px-3 py-1.5 text-xs font-medium text-[#1A1A1A] hover:border-[#1A1A1A]/30 hover:bg-[#F7F7F7] transition-colors disabled:opacity-50"
+                >
+                  <CheckSquare className="h-3.5 w-3.5" />
+                  全員出席
+                </button>
+              )}
+            </div>
+
             {/* Column header (desktop) */}
-            <div className="hidden sm:grid grid-cols-[1fr_1fr_auto_auto] gap-4 px-5 py-2">
+            <div className="hidden sm:grid grid-cols-[auto_1fr_1fr_auto_auto] gap-4 px-5 py-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#999999] w-8">
+                出欠
+              </span>
               <span className="text-xs font-bold uppercase tracking-wider text-[#999999]">
                 名前
               </span>
@@ -345,15 +439,33 @@ export default function AttendeesPage() {
             {bookings.map((booking, index) => (
               <div
                 key={booking.id}
-                className="rounded-2xl bg-white border border-[#E5E5E5] px-5 py-4 transition-colors hover:border-[#1A1A1A]/20"
+                className={`rounded-2xl bg-white border px-5 py-4 transition-colors hover:border-[#1A1A1A]/20 ${
+                  booking.attended === true
+                    ? "border-green-200 bg-green-50/30"
+                    : "border-[#E5E5E5]"
+                }`}
               >
                 {/* Mobile layout */}
                 <div className="sm:hidden space-y-2.5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F2F2F2] text-xs font-bold text-[#1A1A1A] shrink-0">
-                        {index + 1}
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleAttendance(booking.id, booking.attended)}
+                        disabled={updatingAttendance !== null}
+                        className={`flex h-8 w-8 items-center justify-center rounded-full shrink-0 transition-colors ${
+                          booking.attended === true
+                            ? "bg-green-600 text-white"
+                            : "bg-[#F2F2F2] text-[#1A1A1A] hover:bg-[#E5E5E5]"
+                        } ${updatingAttendance !== null ? "opacity-50" : ""}`}
+                        aria-label={booking.attended === true ? "出席取消" : "出席にする"}
+                      >
+                        {booking.attended === true ? (
+                          <UserCheck className="h-4 w-4" />
+                        ) : (
+                          <span className="text-xs font-bold">{index + 1}</span>
+                        )}
+                      </button>
                       <span className="text-sm font-bold text-[#1A1A1A]">
                         {booking.guest_name}
                       </span>
@@ -378,15 +490,27 @@ export default function AttendeesPage() {
                 </div>
 
                 {/* Desktop layout */}
-                <div className="hidden sm:grid grid-cols-[1fr_1fr_auto_auto] gap-4 items-center">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F2F2F2] text-xs font-bold text-[#1A1A1A] shrink-0">
-                      {index + 1}
-                    </div>
-                    <span className="text-sm font-medium text-[#1A1A1A] truncate">
-                      {booking.guest_name}
-                    </span>
-                  </div>
+                <div className="hidden sm:grid grid-cols-[auto_1fr_1fr_auto_auto] gap-4 items-center">
+                  <button
+                    type="button"
+                    onClick={() => toggleAttendance(booking.id, booking.attended)}
+                    disabled={updatingAttendance !== null}
+                    className={`flex h-7 w-7 items-center justify-center rounded-full shrink-0 transition-colors ${
+                      booking.attended === true
+                        ? "bg-green-600 text-white"
+                        : "bg-[#F2F2F2] text-[#1A1A1A] hover:bg-[#E5E5E5]"
+                    } ${updatingAttendance !== null ? "opacity-50" : ""}`}
+                    aria-label={booking.attended === true ? "出席取消" : "出席にする"}
+                  >
+                    {booking.attended === true ? (
+                      <UserCheck className="h-3.5 w-3.5" />
+                    ) : (
+                      <span className="text-xs font-bold">{index + 1}</span>
+                    )}
+                  </button>
+                  <span className="text-sm font-medium text-[#1A1A1A] truncate min-w-0">
+                    {booking.guest_name}
+                  </span>
                   <span className="flex items-center gap-1.5 text-sm text-[#999999] min-w-0 truncate">
                     <Mail className="h-3.5 w-3.5 shrink-0" />
                     {booking.guest_email}

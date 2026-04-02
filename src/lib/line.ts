@@ -620,6 +620,232 @@ export function buildBookingNotifyText(
   return `📩 新しい予約がありました\n\n${eventTitle}\n${guestName}さんが予約しました${capacityStr}`;
 }
 
+// ─── Menu Flex Bubble (for LINE broadcast) ─────────────────
+
+type MenuForFlex = {
+  id: string;
+  title: string;
+  description?: string | null;
+  price: number;
+  capacity?: number | null;
+  image_url?: string | null;
+  booking_count?: number;
+  slug?: string;
+};
+
+export function buildMenuFlexBubble(
+  menu: MenuForFlex,
+  baseUrl: string
+): FlexContainer {
+  const menuUrl = `${baseUrl}/menus/${menu.id}`;
+  const priceStr = menu.price === 0 ? "無料" : `¥${menu.price.toLocaleString()}`;
+  const remaining =
+    menu.capacity != null && menu.booking_count != null
+      ? `残${Math.max(0, menu.capacity - menu.booking_count)}枠`
+      : menu.capacity != null
+        ? `定員${menu.capacity}名`
+        : "";
+
+  const heroSection = menu.image_url
+    ? {
+        type: "image",
+        url: menu.image_url,
+        size: "full",
+        aspectRatio: "20:13",
+        aspectMode: "cover",
+      }
+    : null;
+
+  const bodyContents: Record<string, unknown>[] = [
+    {
+      type: "text",
+      text: menu.title,
+      weight: "bold",
+      size: "lg",
+      wrap: true,
+    },
+    ...(menu.description
+      ? [
+          {
+            type: "text",
+            text: menu.description.length > 60 ? menu.description.slice(0, 60) + "…" : menu.description,
+            size: "sm",
+            color: "#666666",
+            wrap: true,
+            margin: "sm",
+          },
+        ]
+      : []),
+    {
+      type: "box",
+      layout: "vertical",
+      margin: "lg",
+      spacing: "sm",
+      contents: [
+        {
+          type: "box",
+          layout: "baseline",
+          spacing: "sm",
+          contents: [
+            { type: "text", text: "🏷️", size: "sm", flex: 0 },
+            { type: "text", text: "サービスメニュー", size: "sm", color: "#666666", flex: 5 },
+          ],
+        },
+        {
+          type: "box",
+          layout: "baseline",
+          spacing: "sm",
+          contents: [
+            { type: "text", text: priceStr, size: "sm", color: "#1A1A1A", weight: "bold", flex: 0 },
+            ...(remaining
+              ? [{ type: "text", text: remaining, size: "sm", color: "#06C755", align: "end" }]
+              : []),
+          ],
+        },
+      ],
+    },
+  ];
+
+  const bubble: Record<string, unknown> = {
+    type: "bubble",
+    ...(heroSection ? { hero: heroSection } : {}),
+    body: {
+      type: "box",
+      layout: "vertical",
+      contents: bodyContents,
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#1A1A1A",
+          action: {
+            type: "uri",
+            label: "申し込む",
+            uri: menuUrl,
+          },
+        },
+      ],
+      flex: 0,
+    },
+  };
+
+  return bubble;
+}
+
+// ─── Menu Booking Confirmation Flex (for attendees) ──────
+
+export function buildMenuBookingConfirmationFlex(
+  menu: MenuForFlex,
+  guestName: string,
+  customFieldSummary: string | null,
+  baseUrl: string
+): FlexContainer {
+  const menuUrl = `${baseUrl}/menus/${menu.id}`;
+  const priceStr = menu.price === 0 ? "無料" : `¥${menu.price.toLocaleString()}`;
+
+  const detailRows: Record<string, unknown>[] = [
+    {
+      type: "box",
+      layout: "baseline",
+      spacing: "sm",
+      contents: [
+        { type: "text", text: "👤", size: "sm", flex: 0 },
+        { type: "text", text: `${guestName} 様`, size: "sm", color: "#666666", flex: 5 },
+      ],
+    },
+    {
+      type: "box",
+      layout: "baseline",
+      spacing: "sm",
+      contents: [
+        { type: "text", text: "🏷️", size: "sm", flex: 0 },
+        { type: "text", text: menu.title, size: "sm", color: "#666666", flex: 5, wrap: true },
+      ],
+    },
+    {
+      type: "box",
+      layout: "baseline",
+      spacing: "sm",
+      contents: [
+        { type: "text", text: "💰", size: "sm", flex: 0 },
+        { type: "text", text: priceStr, size: "sm", color: "#1A1A1A", weight: "bold", flex: 5 },
+      ],
+    },
+  ];
+
+  // Add custom field summary if present
+  if (customFieldSummary) {
+    detailRows.push({
+      type: "box",
+      layout: "baseline",
+      spacing: "sm",
+      contents: [
+        { type: "text", text: "📋", size: "sm", flex: 0 },
+        { type: "text", text: customFieldSummary, size: "sm", color: "#666666", flex: 5, wrap: true },
+      ],
+    });
+  }
+
+  const bubble: Record<string, unknown> = {
+    type: "bubble",
+    body: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "text",
+          text: "✅ お申し込みが完了しました",
+          color: "#06C755",
+          size: "sm",
+          weight: "bold",
+        },
+        {
+          type: "text",
+          text: menu.title,
+          weight: "bold",
+          size: "lg",
+          wrap: true,
+          margin: "md",
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          margin: "lg",
+          spacing: "sm",
+          contents: detailRows,
+        },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#1A1A1A",
+          action: {
+            type: "uri",
+            label: "メニュー詳細",
+            uri: menuUrl,
+          },
+        },
+      ],
+      flex: 0,
+    },
+  };
+
+  return bubble;
+}
+
+// ─── Booking Notification Text Helpers ──────────────────
+
 export function buildMenuBookingNotifyText(
   menuTitle: string,
   guestName: string,

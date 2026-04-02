@@ -140,11 +140,15 @@ function BookingCard({
             <span className="text-xs font-medium leading-none">
               {new Date(booking.event.datetime).toLocaleDateString("ja-JP", {
                 month: "numeric",
+                timeZone: "Asia/Tokyo",
               })}
               月
             </span>
             <span className="mt-0.5 text-xl font-bold leading-none">
-              {new Date(booking.event.datetime).getDate()}
+              {new Date(booking.event.datetime).toLocaleDateString("ja-JP", {
+                day: "numeric",
+                timeZone: "Asia/Tokyo",
+              })}
             </span>
           </div>
 

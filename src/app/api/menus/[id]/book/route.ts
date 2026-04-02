@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { pushLineMessage, buildMenuBookingNotifyText } from "@/lib/line";
+import { pushLineMessage, pushFlexMessage, buildMenuBookingNotifyText, buildMenuBookingConfirmationFlex } from "@/lib/line";
 import { sendBatchEmails } from "@/lib/email";
 import { wrapInHtml } from "@/lib/email-templates";
 import type { CustomField } from "@/types/database";
@@ -215,30 +215,84 @@ ${menu.title} へのお申し込みが完了しました。
           const adminClient = createAdminClient();
           const { data: lineAccount } = await adminClient
             .from("line_accounts")
-            .select("channel_access_token, is_active, notify_on_booking, owner_line_user_id")
+            .select("id, channel_access_token, is_active, notify_on_booking, owner_line_user_id")
             .eq("user_id", menu.creator_id)
             .maybeSingle();
 
-          if (lineAccount?.is_active && lineAccount.channel_access_token && lineAccount.notify_on_booking) {
-            const { count } = await adminClient
-              .from("menu_bookings")
-              .select("*", { count: "exact", head: true })
-              .eq("menu_id", menuId)
-              .eq("status", "confirmed");
+          if (lineAccount?.is_active && lineAccount.channel_access_token) {
+            // Notify creator
+            if (lineAccount.notify_on_booking) {
+              const { count } = await adminClient
+                .from("menu_bookings")
+                .select("*", { count: "exact", head: true })
+                .eq("menu_id", menuId)
+                .eq("status", "confirmed");
 
-            const message = buildMenuBookingNotifyText(
-              menu.title,
-              data.guest_name,
-              count ?? 1,
-              menu.capacity
-            );
-
-            if (lineAccount.owner_line_user_id) {
-              await pushLineMessage(
-                lineAccount.channel_access_token,
-                lineAccount.owner_line_user_id,
-                message
+              const message = buildMenuBookingNotifyText(
+                menu.title,
+                data.guest_name,
+                count ?? 1,
+                menu.capacity
               );
+
+              if (lineAccount.owner_line_user_id) {
+                await pushLineMessage(
+                  lineAccount.channel_access_token,
+                  lineAccount.owner_line_user_id,
+                  message
+                );
+              }
+            }
+
+            // Send booking confirmation to attendee via LINE (if they have line_user_id)
+            if (booking.user_id) {
+              const { data: attendeeProfile } = await adminClient
+                .from("profiles")
+                .select("line_user_id")
+                .eq("id", booking.user_id)
+                .maybeSingle();
+
+              if (attendeeProfile?.line_user_id) {
+                const { data: follower } = await adminClient
+                  .from("line_followers")
+                  .select("id")
+                  .eq("line_account_id", lineAccount.id)
+                  .eq("line_user_id", attendeeProfile.line_user_id)
+                  .eq("is_following", true)
+                  .maybeSingle();
+
+                if (follower) {
+                  // Build custom field summary for the flex message
+                  const customFields = (menu.custom_fields ?? []) as unknown as CustomField[];
+                  const cfValues = data.custom_field_values;
+                  let cfSummary: string | null = null;
+                  if (customFields.length > 0 && Object.keys(cfValues).length > 0) {
+                    const parts = customFields
+                      .map((f) => {
+                        const v = cfValues[f.id];
+                        return v ? `${f.label}: ${v}` : null;
+                      })
+                      .filter(Boolean);
+                    if (parts.length > 0) {
+                      cfSummary = parts.join(" / ");
+                      if (cfSummary.length > 100) cfSummary = cfSummary.slice(0, 97) + "…";
+                    }
+                  }
+
+                  const confirmFlex = buildMenuBookingConfirmationFlex(
+                    { ...menu, booking_count: 0 },
+                    data.guest_name,
+                    cfSummary,
+                    process.env.NEXT_PUBLIC_BASE_URL || "https://petit-event-maker-am.vercel.app"
+                  );
+                  await pushFlexMessage(
+                    lineAccount.channel_access_token,
+                    attendeeProfile.line_user_id,
+                    `✅ お申し込み完了: ${menu.title}`,
+                    confirmFlex
+                  );
+                }
+              }
             }
           }
         } catch (err) {

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { buildGoogleCalendarUrl } from "@/lib/calendar";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,33 +44,11 @@ function formatDatetime(datetimeStr: string): string {
       weekday: "short",
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "Asia/Tokyo",
     });
   } catch {
     return datetimeStr;
   }
-}
-
-function buildGoogleCalendarUrl(event: {
-  title: string;
-  datetime: string;
-  location: string;
-  description: string;
-}): string {
-  const start = new Date(event.datetime);
-  const end = new Date(start.getTime() + 60 * 60 * 1000);
-
-  const fmt = (d: Date) =>
-    d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
-
-  const params = new URLSearchParams({
-    action: "TEMPLATE",
-    text: event.title,
-    dates: `${fmt(start)}/${fmt(end)}`,
-    location: event.location,
-    details: event.description.slice(0, 200),
-  });
-
-  return `https://www.google.com/calendar/render?${params.toString()}`;
 }
 
 // ─── Share buttons (client component workaround with data attrs) ─────────────
@@ -174,6 +153,7 @@ function SuggestedEventCard({ event }: { event: EventData }) {
                 month: "long",
                 day: "numeric",
                 weekday: "short",
+                timeZone: "Asia/Tokyo",
               })}
             </span>
           </div>
