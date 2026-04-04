@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import type { Metadata, ResolvingMetadata } from "next";
 import { Calendar, MapPin, Users, JapaneseYen, ChevronRight, Shield, Video } from "lucide-react";
 
@@ -11,7 +11,9 @@ import { ReviewSection } from "@/components/review-section";
 import { ShareButton } from "@/components/share-button";
 import { StoriesDownloadButton } from "@/components/stories-download-button";
 import { LineSchedulePrompt } from "@/components/line-schedule-prompt";
+import { PasscodeGate, PasscodeAutoUnlock } from "@/components/passcode-gate";
 import { buildGoogleCalendarUrl } from "@/lib/calendar";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,7 +35,6 @@ interface EventData {
   teacher_bio?: string;
   price_note?: string;
   is_limited?: boolean;
-  limited_passcode?: string;
   is_published?: boolean;
   short_code?: string | null;
   line_friend_url?: string | null;
@@ -58,6 +59,21 @@ async function getEvent(id: string): Promise<EventData | null> {
     if (!res.ok) return null;
     const json = await res.json();
     return json.event ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function getPasscodeForEvent(id: string): Promise<{ is_limited: boolean; limited_passcode: string | null } | null> {
+  try {
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return null;
+    const admin = createAdminClient();
+    const { data } = await admin
+      .from("events")
+      .select("is_limited, limited_passcode")
+      .eq("id", id)
+      .single();
+    return data ? { is_limited: !!data.is_limited, limited_passcode: data.limited_passcode ?? null } : null;
   } catch {
     return null;
   }
@@ -91,6 +107,7 @@ async function getReviews(
 
 interface EventPageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
 export async function generateMetadata(
@@ -102,6 +119,25 @@ export async function generateMetadata(
 
   if (!event) {
     return { title: "イベントが見つかりません | プチイベント作成くん" };
+  }
+
+  // For limited events, show a generic description (don't leak details)
+  if (event.is_limited) {
+    const description = "限定公開イベントです。合言葉を入力して詳細をご覧ください。";
+    return {
+      title: `${event.title} | プチイベント作成くん`,
+      description,
+      openGraph: {
+        title: event.title,
+        description,
+        type: "website",
+      },
+      twitter: {
+        card: "summary_large_image",
+        title: event.title,
+        description,
+      },
+    };
   }
 
   const dateStr = new Date(event.datetime).toLocaleDateString("ja-JP", {
@@ -175,8 +211,6 @@ function formatTime(datetimeStr: string): string {
   }
 }
 
-// (ShareButtonInline removed — now using shared ShareButton client component)
-
 // ─── Spots Badge ─────────────────────────────────────────────────────────────
 
 function SpotsBadge({
@@ -244,11 +278,15 @@ function MetaCell({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default async function EventPage({ params }: EventPageProps) {
+export default async function EventPage({ params, searchParams }: EventPageProps) {
   const { id } = await params;
+  const sp = await searchParams;
+  const passFromUrl = typeof sp.pass === "string" ? sp.pass : undefined;
+
   const baseUrl = await getBaseUrl();
-  const [event, { reviews, averageRating }] = await Promise.all([
+  const [event, passcodeData, { reviews, averageRating }] = await Promise.all([
     getEvent(id),
+    getPasscodeForEvent(id),
     getReviews(id, baseUrl),
   ]);
 
@@ -256,6 +294,39 @@ export default async function EventPage({ params }: EventPageProps) {
     notFound();
   }
 
+  // ─── Passcode gate logic ────────────────────────────────────────────────────
+  const isLimited = !!passcodeData?.is_limited && !!passcodeData.limited_passcode;
+  let unlocked = !isLimited; // non-limited events are always unlocked
+
+  if (isLimited) {
+    // Check ?pass= query parameter
+    if (passFromUrl && passFromUrl === passcodeData!.limited_passcode) {
+      unlocked = true;
+    }
+
+    // Check cookie
+    if (!unlocked) {
+      const cookieStore = await cookies();
+      const cookieVal = cookieStore.get(`event-pass-${id}`)?.value;
+      if (cookieVal && cookieVal === passcodeData!.limited_passcode) {
+        unlocked = true;
+      }
+    }
+  }
+
+  // If still locked, show the gate
+  if (!unlocked) {
+    return (
+      <PasscodeGate
+        eventId={id}
+        eventTitle={event.title}
+        imageUrl={event.image_url}
+        category={event.category}
+      />
+    );
+  }
+
+  // ─── Full event view (unlocked or non-limited) ─────────────────────────────
   const remaining = event.capacity - event.booking_count;
   const isPast = new Date(event.datetime) < new Date();
   const showReviews = reviews.length > 0 || isPast;
@@ -266,6 +337,11 @@ export default async function EventPage({ params }: EventPageProps) {
 
   return (
     <main className="min-h-dvh bg-[#FAFAFA]" style={{ fontFamily: "var(--font-zen-maru)" }}>
+
+      {/* Auto-unlock: set cookie when ?pass= matched (client-side) */}
+      {isLimited && passFromUrl && (
+        <PasscodeAutoUnlock eventId={id} passcode={passFromUrl} />
+      )}
 
       {/* Breadcrumb */}
       <div className="sticky top-0 z-20 border-b border-[#E5E5E5]/60 glass">
@@ -413,13 +489,13 @@ export default async function EventPage({ params }: EventPageProps) {
               </div>
             )}
 
-            {/* Limited event badge */}
-            {event.is_limited && (
+            {/* Limited event badge (shown even after unlock) */}
+            {isLimited && (
               <div className="mb-6 flex items-center gap-2 rounded-xl bg-[#F7F7F7] border border-[#E5E5E5] px-4 py-3 animate-fade-in-up delay-100">
                 <Shield className="h-5 w-5 text-[#1A1A1A]" />
                 <div>
                   <p className="text-sm font-bold text-[#1A1A1A]">限定公開イベント</p>
-                  <p className="text-xs text-[#999999]">申し込みには主催者から共有された合言葉が必要です</p>
+                  <p className="text-xs text-[#999999]">合言葉で解錠済み</p>
                 </div>
               </div>
             )}
@@ -566,6 +642,7 @@ export default async function EventPage({ params }: EventPageProps) {
                   priceNote={event.price_note}
                   remainingSpots={remaining}
                   isLimited={event.is_limited}
+                  passcodeVerified={isLimited}
                 />
               </div>
             </section>
@@ -599,6 +676,7 @@ export default async function EventPage({ params }: EventPageProps) {
                 priceNote={event.price_note}
                 remainingSpots={remaining}
                 isLimited={event.is_limited}
+                passcodeVerified={isLimited}
               />
             </div>
           </aside>
@@ -639,4 +717,3 @@ export default async function EventPage({ params }: EventPageProps) {
     </main>
   );
 }
-

@@ -41,6 +41,7 @@ interface BookingFormProps {
   priceNote?: string;
   remainingSpots: number;
   isLimited?: boolean;
+  passcodeVerified?: boolean;
   className?: string;
 }
 
@@ -61,6 +62,7 @@ export function BookingForm({
   priceNote,
   remainingSpots,
   isLimited,
+  passcodeVerified,
   className,
 }: BookingFormProps) {
   const router = useRouter();
@@ -219,8 +221,8 @@ export function BookingForm({
         <FieldError message={errors.guest_phone?.message} />
       </div>
 
-      {/* Passcode field for limited events */}
-      {isLimited && (
+      {/* Passcode field for limited events (hidden when already verified via gate) */}
+      {isLimited && !passcodeVerified && (
         <div className="space-y-1">
           <Label htmlFor="passcode" className="text-sm font-medium text-[#1A1A1A]">
             合言葉 <span className="text-[#1A1A1A]">*</span>

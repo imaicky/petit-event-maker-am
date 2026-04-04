@@ -50,10 +50,12 @@ export async function GET(
     month: "long",
     day: "numeric",
     weekday: "short",
+    timeZone: "Asia/Tokyo",
   });
   const timeStr = new Date(event.datetime).toLocaleTimeString("ja-JP", {
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Asia/Tokyo",
   });
   const priceStr =
     event.price === 0

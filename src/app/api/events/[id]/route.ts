@@ -107,8 +107,11 @@ export async function GET(
       }
     }
 
+    // Exclude limited_passcode from public response
+    const { limited_passcode: _excluded, ...safeEvent } = event as Record<string, unknown>;
+
     return NextResponse.json({
-      event: { ...event, booking_count: Number(count), line_friend_url: lineFriendUrl },
+      event: { ...safeEvent, booking_count: Number(count), line_friend_url: lineFriendUrl },
     });
   } catch (err) {
     console.error("[GET /api/events/[id]] Unexpected error:", err);

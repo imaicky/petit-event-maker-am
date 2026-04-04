@@ -52,6 +52,7 @@ function formatDatetime(iso: string): string {
       weekday: "short",
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "Asia/Tokyo",
     });
   } catch {
     return iso;
@@ -86,7 +87,7 @@ export async function POST(
 
     const data = parsed.data;
 
-    // Check limited event passcode
+    // Check limited event passcode (body, then cookie)
     const { data: eventCheck } = await supabase
       .from("events")
       .select("is_limited, limited_passcode")
@@ -94,7 +95,11 @@ export async function POST(
       .single();
 
     if (eventCheck?.is_limited && eventCheck.limited_passcode) {
-      if (!data.passcode || data.passcode !== eventCheck.limited_passcode) {
+      const bodyPasscode = data.passcode;
+      const cookiePasscode = request.cookies.get(`event-pass-${eventId}`)?.value;
+      const passcodeToCheck = bodyPasscode || cookiePasscode;
+
+      if (!passcodeToCheck || passcodeToCheck !== eventCheck.limited_passcode) {
         return NextResponse.json(
           { error: "合言葉が正しくありません" },
           { status: 403 }

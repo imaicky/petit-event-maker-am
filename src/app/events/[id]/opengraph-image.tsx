@@ -48,12 +48,14 @@ export default async function Image({ params }: Props) {
         month: "long",
         day: "numeric",
         weekday: "short",
+        timeZone: "Asia/Tokyo",
       })
     : "";
   const timeStr = event?.datetime
     ? new Date(event.datetime).toLocaleTimeString("ja-JP", {
         hour: "2-digit",
         minute: "2-digit",
+        timeZone: "Asia/Tokyo",
       })
     : "";
   const priceStr = event
