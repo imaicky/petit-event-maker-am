@@ -373,9 +373,9 @@ export default function LineSettingsPage() {
 
         {/* Success toast */}
         {successMsg && (
-          <div className="mb-6 flex items-center gap-3 rounded-2xl bg-[#404040]/10 border border-[#404040]/20 px-4 py-3 animate-in fade-in-0 slide-in-from-top-2">
-            <CheckCircle2 className="h-5 w-5 text-[#404040] shrink-0" />
-            <p className="text-sm font-medium text-[#404040]">{successMsg}</p>
+          <div className="mb-6 flex items-center gap-3 rounded-2xl bg-[#06C755]/10 border border-[#06C755]/30 px-4 py-3 animate-in fade-in-0 slide-in-from-top-2">
+            <CheckCircle2 className="h-5 w-5 text-[#06C755] shrink-0" />
+            <p className="text-sm font-medium text-[#06C755]">{successMsg}</p>
           </div>
         )}
 
@@ -395,7 +395,19 @@ export default function LineSettingsPage() {
           ) : lineAccount ? (
             /* ─── Connected state ─── */
             <>
-              <SectionCard title="連携中のLINE公式アカウント">
+              <section className="rounded-2xl bg-white border-2 border-[#06C755]/40 overflow-hidden">
+                <div className="px-6 py-4 border-b border-[#06C755]/10 bg-[#06C755]/5">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-[#06C755]">
+                      連携中のLINE公式アカウント
+                    </h2>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#06C755] px-2.5 py-0.5 text-xs font-medium text-white">
+                      <CheckCircle2 className="h-3 w-3" />
+                      接続済み
+                    </span>
+                  </div>
+                </div>
+                <div className="p-6">
                 <div className="space-y-4">
                   <div className="flex items-center gap-4">
                     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#06C755]/10">
@@ -434,7 +446,8 @@ export default function LineSettingsPage() {
                     </div>
                   </div>
                 </div>
-              </SectionCard>
+                </div>
+              </section>
 
               {/* Webhook URL */}
               <SectionCard title="Webhook URL">
