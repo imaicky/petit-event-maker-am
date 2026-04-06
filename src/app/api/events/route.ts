@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { pushLineMessage } from "@/lib/line";
 import { generateShortCode } from "@/lib/short-code";
 
 // ─── Validation ──────────────────────────────────────────────
@@ -59,6 +61,22 @@ function checkEnvVars(): NextResponse | null {
     );
   }
   return null;
+}
+
+function formatDatetime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString("ja-JP", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Asia/Tokyo",
+    });
+  } catch {
+    return iso;
+  }
 }
 
 function generateSlug(title: string): string {
@@ -144,6 +162,34 @@ export async function POST(request: NextRequest) {
         { error: "イベントの作成に失敗しました" },
         { status: 500 }
       );
+    }
+
+    // Notify creator via LINE (async, non-blocking)
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      (async () => {
+        try {
+          const admin = createAdminClient();
+          const { data: lineAccount } = await admin
+            .from("line_accounts")
+            .select("channel_access_token, is_active, owner_line_user_id")
+            .eq("user_id", user.id)
+            .maybeSingle();
+
+          if (lineAccount?.is_active && lineAccount.channel_access_token && lineAccount.owner_line_user_id) {
+            const dateStr = formatDatetime(data.datetime);
+            const priceStr = data.price === 0 ? "無料" : `¥${data.price.toLocaleString("ja-JP")}`;
+            const message = `✅ イベントが作成されました\n\n📌 ${data.title}\n📅 ${dateStr}\n💰 ${priceStr}\n👥 定員${data.capacity}名`;
+
+            await pushLineMessage(
+              lineAccount.channel_access_token,
+              lineAccount.owner_line_user_id,
+              message
+            );
+          }
+        } catch (err) {
+          console.error("[POST /api/events] LINE notify to creator error:", err);
+        }
+      })();
     }
 
     // Augment with booking count (always 0 for new events)

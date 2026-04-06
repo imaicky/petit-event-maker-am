@@ -229,12 +229,29 @@ export default async function ThanksPage({
   }
 
   const calendarUrl = event
-    ? buildGoogleCalendarUrl({
-        title: event.title,
-        datetime: event.datetime,
-        location: event.location,
-        description: event.description,
-      })
+    ? (() => {
+        // Build description with online meeting info
+        const parts: string[] = [];
+        if (event.description) parts.push(event.description);
+        if (event.online_url) parts.push(`\n参加URL: ${event.online_url}`);
+        if (event.zoom_meeting_id) parts.push(`ミーティングID: ${event.zoom_meeting_id}`);
+        if (event.zoom_passcode) parts.push(`パスコード: ${event.zoom_passcode}`);
+
+        // For online events, set location to the online URL
+        let calLocation = event.location;
+        if ((event.location_type === "online" || event.location_type === "hybrid") && event.online_url) {
+          calLocation = event.location_type === "hybrid" && event.location
+            ? `${event.location} / ${event.online_url}`
+            : event.online_url;
+        }
+
+        return buildGoogleCalendarUrl({
+          title: event.title,
+          datetime: event.datetime,
+          location: calLocation,
+          description: parts.join("\n"),
+        });
+      })()
     : null;
 
   const eventPageUrl = `${baseUrl}/events/${id}`;

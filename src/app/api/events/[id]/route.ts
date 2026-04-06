@@ -110,6 +110,19 @@ export async function GET(
       }
     }
 
+    // Check if current user is the creator (to include limited_passcode)
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const isCreator = user && (event as Record<string, unknown>).creator_id === user.id;
+
+    if (isCreator) {
+      // Creator sees everything including limited_passcode
+      return NextResponse.json({
+        event: { ...event, booking_count: Number(count), line_friend_url: lineFriendUrl },
+      });
+    }
+
     // Exclude limited_passcode from public response
     const { limited_passcode: _excluded, ...safeEvent } = event as Record<string, unknown>;
 
@@ -172,7 +185,13 @@ export async function PUT(
 
     const data = parsed.data;
 
-    const { data: event, error } = await supabase
+    // Use admin client to bypass RLS (access already verified via canManageEvent)
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return NextResponse.json({ error: "サーバー設定エラーです" }, { status: 500 });
+    }
+    const admin = createAdminClient();
+
+    const { data: event, error } = await admin
       .from("events")
       .update({
         title: data.title,
@@ -202,7 +221,7 @@ export async function PUT(
     if (error || !event) {
       console.error("[PUT /api/events/[id]] Supabase error:", error);
       return NextResponse.json(
-        { error: "イベントの更新に失敗しました" },
+        { error: `イベントの更新に失敗しました: ${error?.message ?? "unknown"}` },
         { status: 500 }
       );
     }

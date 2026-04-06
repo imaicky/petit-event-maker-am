@@ -26,7 +26,7 @@ export function buildGoogleCalendarUrl(event: CalendarEvent): string {
     text: event.title,
     dates: `${fmt(start)}/${fmt(end)}`,
     location: event.location ?? "",
-    details: (event.description ?? "").slice(0, 200),
+    details: (event.description ?? "").slice(0, 1000),
   });
 
   return `https://www.google.com/calendar/render?${params.toString()}`;
