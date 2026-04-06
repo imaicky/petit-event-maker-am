@@ -699,10 +699,10 @@ export default async function EventPage({ params, searchParams }: EventPageProps
           </div>
           <a
             href="#booking-form"
-            className={`shine-on-hover shrink-0 rounded-xl px-5 py-2.5 text-sm font-bold text-white transition-all duration-200 ${
+            className={`shine-on-hover shrink-0 rounded-xl px-6 py-3 text-sm font-bold text-white transition-all duration-200 ${
               remaining <= 0
                 ? "pointer-events-none bg-[#999999]"
-                : "bg-[#1A1A1A] hover:bg-[#111111] hover:shadow-md active:scale-95"
+                : "bg-gradient-to-r from-[#E8590C] to-[#D9480F] shadow-lg shadow-[#E8590C]/30 hover:from-[#D9480F] hover:to-[#C92A2A] hover:shadow-xl active:scale-95"
             }`}
           >
             {remaining <= 0 ? "満員" : "申し込む"}

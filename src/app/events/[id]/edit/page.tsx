@@ -541,7 +541,7 @@ export default function EditEventPage() {
     const payload = {
       title: data.title,
       description: data.description,
-      datetime: data.datetime,
+      datetime: new Date(data.datetime).toISOString(),
       location: data.location || undefined,
       location_type: data.location_type ?? "physical",
       online_url: data.online_url || undefined,

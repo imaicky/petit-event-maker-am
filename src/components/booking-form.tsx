@@ -258,7 +258,12 @@ export function BookingForm({
       <Button
         type="submit"
         disabled={isSubmitting || isFull}
-        className="relative h-12 w-full overflow-hidden rounded-xl bg-[#1A1A1A] text-base font-bold text-white transition-colors hover:bg-[#111111] disabled:opacity-60"
+        className={cn(
+          "relative h-14 w-full overflow-hidden rounded-xl text-lg font-bold text-white transition-all duration-200 disabled:opacity-60",
+          isFull
+            ? "bg-[#999999]"
+            : "bg-gradient-to-r from-[#E8590C] to-[#D9480F] shadow-lg shadow-[#E8590C]/30 hover:from-[#D9480F] hover:to-[#C92A2A] hover:shadow-xl hover:shadow-[#E8590C]/40 hover:-translate-y-0.5 active:translate-y-0 active:shadow-md"
+        )}
       >
         {isSubmitting ? (
           <span className="flex items-center justify-center gap-2">
