@@ -24,6 +24,7 @@ import {
   ClipboardList,
   Tag,
   UserPlus,
+  Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/header";
@@ -73,6 +74,8 @@ function formatRelativeDate(dt: string) {
 }
 
 type TabKey = "published" | "draft" | "past";
+
+const SUPER_ADMIN_EMAILS = ["imatoru@gmail.com"];
 
 // --- Skeleton loader --------------------------------------------------------
 
@@ -575,6 +578,11 @@ export default function DashboardPage() {
   const [lineDialogEvent, setLineDialogEvent] = useState<DashboardEvent | null>(null);
   const [menus, setMenus] = useState<{ id: string; title: string; is_published: boolean; booking_count: number; price: number; category: string | null; capacity: number | null }[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [allEvents, setAllEvents] = useState<(DashboardEvent & { creator_email?: string })[]>([]);
+  const [allEventsLoading, setAllEventsLoading] = useState(false);
+  const [showAllEvents, setShowAllEvents] = useState(false);
+
+  const isSuperAdmin = SUPER_ADMIN_EMAILS.includes(user?.email ?? "");
 
   // Redirect if not logged in
   useEffect(() => {
@@ -692,6 +700,65 @@ export default function DashboardPage() {
       if (!silent) setEventsLoading(false);
     }
   }, [user]);
+
+  const fetchAllEvents = useCallback(async () => {
+    if (!user || !isSuperAdmin) return;
+    setAllEventsLoading(true);
+    try {
+      const supabase = createClient();
+
+      // Fetch ALL events (not just user's)
+      const { data: allEventsData } = await supabase
+        .from("events")
+        .select("*, profiles:creator_id(display_name, email:id)")
+        .order("created_at", { ascending: false });
+
+      if (!allEventsData) {
+        setAllEvents([]);
+        return;
+      }
+
+      // Exclude own events
+      const otherEvents = allEventsData.filter((e) => e.creator_id !== user.id);
+
+      // Fetch booking counts
+      const otherIds = otherEvents.map((e) => e.id);
+      let countMap: Record<string, number> = {};
+      if (otherIds.length > 0) {
+        const { data: bookingsData } = await supabase
+          .from("bookings")
+          .select("event_id")
+          .in("event_id", otherIds)
+          .eq("status", "confirmed");
+        for (const b of bookingsData ?? []) {
+          countMap[b.event_id] = (countMap[b.event_id] ?? 0) + 1;
+        }
+      }
+
+      // Get creator emails via auth admin or profiles
+      const creatorIds = [...new Set(otherEvents.map((e) => e.creator_id).filter((id): id is string => id !== null))];
+      let emailMap: Record<string, string> = {};
+      if (creatorIds.length > 0) {
+        const { data: profilesData } = await supabase
+          .from("profiles")
+          .select("id, display_name")
+          .in("id", creatorIds);
+        for (const p of profilesData ?? []) {
+          emailMap[p.id] = p.display_name ?? p.id.slice(0, 8);
+        }
+      }
+
+      setAllEvents(
+        otherEvents.map((e) => ({
+          ...e,
+          booking_count: countMap[e.id] ?? 0,
+          creator_email: e.creator_id ? (emailMap[e.creator_id] ?? e.creator_id.slice(0, 8)) : "不明",
+        }))
+      );
+    } finally {
+      setAllEventsLoading(false);
+    }
+  }, [user, isSuperAdmin]);
 
   useEffect(() => {
     if (user) {
@@ -919,6 +986,167 @@ export default function DashboardPage() {
                 </>
               )}
             </section>
+
+            {/* Super-admin: all events section */}
+            {isSuperAdmin && (
+              <section className="mt-8">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <h2
+                      className="text-lg font-bold text-[#1A1A1A]"
+                      style={{ fontFamily: "var(--font-zen-maru)" }}
+                    >
+                      全イベント管理
+                    </h2>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-xs font-medium text-amber-700">
+                      <Shield className="h-3 w-3" />
+                      Admin
+                    </span>
+                  </div>
+                  {!showAllEvents ? (
+                    <button
+                      onClick={() => {
+                        setShowAllEvents(true);
+                        fetchAllEvents();
+                      }}
+                      className="text-xs text-[#1A1A1A] hover:underline flex items-center gap-0.5"
+                    >
+                      <Eye className="h-3 w-3" />
+                      他のユーザーのイベントを表示
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setShowAllEvents(false)}
+                      className="text-xs text-[#999999] hover:underline flex items-center gap-0.5"
+                    >
+                      <EyeOff className="h-3 w-3" />
+                      閉じる
+                    </button>
+                  )}
+                </div>
+
+                {showAllEvents && (
+                  <>
+                    {allEventsLoading ? (
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {[0, 1, 2].map((i) => (
+                          <SkeletonCard key={i} />
+                        ))}
+                      </div>
+                    ) : allEvents.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-12 px-6 text-center rounded-2xl border border-dashed border-[#E5E5E5]">
+                        <p className="text-sm text-[#999999]">
+                          他のユーザーのイベントはありません
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {allEvents.map((event, i) => (
+                          <div
+                            key={event.id}
+                            className="group rounded-2xl border border-[#E5E5E5] bg-white p-4 hover:border-[#1A1A1A]/30 transition-all"
+                          >
+                            <div className="flex items-start gap-3">
+                              {/* Date block */}
+                              <div
+                                className={`flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl text-center ${
+                                  new Date(event.datetime) < new Date()
+                                    ? "bg-[#F2F2F2] text-[#999999]"
+                                    : "bg-[#F7F7F7] text-[#1A1A1A]"
+                                }`}
+                              >
+                                <span className="text-xs font-medium leading-none">
+                                  {new Date(event.datetime).toLocaleDateString("ja-JP", {
+                                    month: "numeric",
+                                    timeZone: TZ,
+                                  })}
+                                  月
+                                </span>
+                                <span className="mt-0.5 text-xl font-bold leading-none">
+                                  {new Date(event.datetime).toLocaleDateString("ja-JP", {
+                                    day: "numeric",
+                                    timeZone: TZ,
+                                  })}
+                                </span>
+                              </div>
+
+                              <div className="flex-1 min-w-0">
+                                {/* Owner badge */}
+                                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600 max-w-[150px] truncate">
+                                    <Users className="h-2.5 w-2.5 shrink-0" />
+                                    {event.creator_email}
+                                  </span>
+                                  {event.is_published ? (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-[#404040]/10 px-2 py-0.5 text-xs font-medium text-[#404040]">
+                                      <Eye className="h-2.5 w-2.5" />
+                                      公開中
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-[#F2F2F2] px-2 py-0.5 text-xs font-medium text-[#999999]">
+                                      <EyeOff className="h-2.5 w-2.5" />
+                                      下書き
+                                    </span>
+                                  )}
+                                </div>
+                                <h3 className="text-sm font-bold text-[#1A1A1A] leading-snug line-clamp-2">
+                                  {event.title}
+                                </h3>
+                                <div className="flex items-center gap-1.5 mt-1 text-xs text-[#999999]">
+                                  <Users className="h-3 w-3 text-[#1A1A1A]" />
+                                  <span className="font-medium text-[#1A1A1A]">{event.booking_count}</span>
+                                  {event.capacity && <span>/ {event.capacity}名</span>}
+                                </div>
+                              </div>
+
+                              <Link href={`/events/${event.id}/edit`} className="shrink-0">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0 rounded-xl text-[#999999] hover:bg-[#F2F2F2] hover:text-[#1A1A1A]"
+                                  aria-label="編集"
+                                >
+                                  <ChevronRight className="h-4 w-4" />
+                                </Button>
+                              </Link>
+                            </div>
+
+                            {/* Quick actions */}
+                            <div className="mt-3 pt-3 border-t border-[#F2F2F2] flex items-center gap-2">
+                              <Link href={`/events/${event.id}/attendees`}>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 rounded-full border-[#1A1A1A]/20 gap-1 text-xs font-medium text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-white transition-colors"
+                                >
+                                  <Users className="h-3 w-3" />
+                                  参加者
+                                  {event.booking_count > 0 && (
+                                    <span className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-[#1A1A1A]/10 px-1 text-[10px] font-bold">
+                                      {event.booking_count}
+                                    </span>
+                                  )}
+                                </Button>
+                              </Link>
+                              <Link href={`/events/${event.id}`}>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 rounded-full text-xs gap-1"
+                                >
+                                  <Eye className="h-3 w-3" />
+                                  詳細
+                                </Button>
+                              </Link>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </section>
+            )}
 
             {/* Menus section */}
             <section className="mt-8">
