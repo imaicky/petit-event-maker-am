@@ -857,7 +857,7 @@ export default function NewEventPage() {
                       </div>
                     </label>
                     <p className="mt-1.5 ml-8 text-xs text-[#999999]">
-                      イベント内容は誰でも見れますが、申し込みには合言葉が必要になります
+                      イベント内容の閲覧に合言葉が必要になります
                     </p>
                     {watchedValues.is_limited && (
                       <div className="mt-3 ml-8">

@@ -261,7 +261,7 @@ export function BookingForm({
         className={cn(
           "relative h-14 w-full overflow-hidden rounded-xl text-lg font-bold text-white transition-all duration-200 disabled:opacity-60",
           isFull
-            ? "bg-[#999999]"
+            ? "bg-[#DC2626] disabled:opacity-100"
             : "bg-gradient-to-r from-[#E8590C] to-[#D9480F] shadow-lg shadow-[#E8590C]/30 hover:from-[#D9480F] hover:to-[#C92A2A] hover:shadow-xl hover:shadow-[#E8590C]/40 hover:-translate-y-0.5 active:translate-y-0 active:shadow-md"
         )}
       >
@@ -271,7 +271,7 @@ export function BookingForm({
             <span>送信中...</span>
           </span>
         ) : isFull ? (
-          "満員です"
+          "満員御礼"
         ) : (
           "参加を申し込む"
         )}

@@ -225,8 +225,8 @@ function SpotsBadge({
 }) {
   if (remaining <= 0) {
     return (
-      <Badge className="bg-[#1A1A1A] px-3 py-1 text-sm text-white">
-        満員
+      <Badge className="bg-[#DC2626] px-3 py-1 text-sm text-white">
+        満員御礼
       </Badge>
     );
   }
@@ -469,8 +469,8 @@ export default async function EventPage({ params, searchParams }: EventPageProps
                   {event.capacity}名
                 </p>
                 {remaining <= 0 && (
-                  <p className="text-xs font-medium text-[#1A1A1A]">
-                    満員
+                  <p className="text-xs font-medium text-[#DC2626]">
+                    満員御礼
                   </p>
                 )}
               </MetaCell>
@@ -720,11 +720,11 @@ export default async function EventPage({ params, searchParams }: EventPageProps
             href="#booking-form"
             className={`shine-on-hover shrink-0 rounded-xl px-6 py-3 text-sm font-bold text-white transition-all duration-200 ${
               remaining <= 0
-                ? "pointer-events-none bg-[#999999]"
+                ? "pointer-events-none bg-[#DC2626]"
                 : "bg-gradient-to-r from-[#E8590C] to-[#D9480F] shadow-lg shadow-[#E8590C]/30 hover:from-[#D9480F] hover:to-[#C92A2A] hover:shadow-xl active:scale-95"
             }`}
           >
-            {remaining <= 0 ? "満員" : "申し込む"}
+            {remaining <= 0 ? "満員御礼" : "申し込む"}
           </a>
         </div>
       </div>
