@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/dialog";
 import { ImageUpload } from "@/components/image-upload";
 import { useAuth } from "@/components/auth-provider";
+import { createClient } from "@/lib/supabase/client";
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -463,6 +464,7 @@ export default function EditEventPage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCreator, setIsCreator] = useState(false);
+  const [canEdit, setCanEdit] = useState(false);
 
   const {
     register,
@@ -525,6 +527,26 @@ export default function EditEventPage() {
         setIsPublished(event.is_published ?? true);
         if (user && event.creator_id === user.id) {
           setIsCreator(true);
+          setCanEdit(true);
+        } else if (user) {
+          // Check co-admin or super-admin access
+          const supabase = createClient();
+          const { data: adminRecord } = await supabase
+            .from("event_admins")
+            .select("id")
+            .eq("event_id", eventId)
+            .eq("user_id", user.id)
+            .eq("status", "accepted")
+            .maybeSingle();
+          if (adminRecord) {
+            setCanEdit(true);
+          } else {
+            // Check super-admin by email
+            const SUPER_ADMIN_EMAILS = ["imatoru@gmail.com"];
+            if (SUPER_ADMIN_EMAILS.includes(user.email ?? "")) {
+              setCanEdit(true);
+            }
+          }
         }
       } catch {
         setServerError("イベントの読み込みに失敗しました");
@@ -611,6 +633,27 @@ export default function EditEventPage() {
   };
 
   if (loading) return <LoadingSkeleton />;
+
+  if (!loading && user && !canEdit && !notFound) {
+    return (
+      <main className="flex min-h-dvh flex-col items-center justify-center bg-[#FAFAFA] px-4">
+        <div className="text-5xl mb-4">🔒</div>
+        <p className="text-lg font-bold text-[#1A1A1A] mb-2">
+          このイベントの編集権限がありません
+        </p>
+        <p className="text-sm text-[#999999] mb-6">
+          イベントの作成者または共同管理者のみ編集できます。
+        </p>
+        <Button
+          variant="outline"
+          className="rounded-full border-[#E5E5E5] hover:border-[#1A1A1A]/30"
+          onClick={() => router.push("/dashboard")}
+        >
+          ダッシュボードに戻る
+        </Button>
+      </main>
+    );
+  }
 
   if (notFound) {
     return (
@@ -929,7 +972,7 @@ export default function EditEventPage() {
                     </div>
                   </label>
                   <p className="mt-1.5 ml-8 text-xs text-[#999999]">
-                    イベント内容は誰でも見れますが、申し込みには合言葉が必要になります
+                    イベント内容の閲覧に合言葉が必要になります
                   </p>
                 </div>
                 {watchedIsLimited && (
@@ -1022,8 +1065,8 @@ export default function EditEventPage() {
               公開ページをプレビュー
             </a>
 
-            {/* Danger zone */}
-            <div className="rounded-2xl border border-red-100 bg-red-50/50 overflow-hidden">
+            {/* Danger zone (creator only) */}
+            {isCreator && <div className="rounded-2xl border border-red-100 bg-red-50/50 overflow-hidden">
               <div className="px-5 py-3.5 border-b border-red-100 flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 text-red-400" />
                 <h3 className="text-sm font-bold text-red-500">
@@ -1045,7 +1088,7 @@ export default function EditEventPage() {
                   このイベントを削除する
                 </Button>
               </div>
-            </div>
+            </div>}
           </form>
         </div>
       </main>

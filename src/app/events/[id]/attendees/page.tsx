@@ -15,11 +15,17 @@ import {
   Download,
   CheckSquare,
   UserCheck,
+  Pencil,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/header";
 import { MessageDialog } from "@/components/message-dialog";
+import { BookingEditDialog } from "@/components/booking-edit-dialog";
+import { BookingCancelDialog } from "@/components/booking-cancel-dialog";
 import { useAuth } from "@/components/auth-provider";
 import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database";
@@ -115,6 +121,10 @@ export default function AttendeesPage() {
   const [error, setError] = useState<string | null>(null);
   const [messageOpen, setMessageOpen] = useState(false);
   const [updatingAttendance, setUpdatingAttendance] = useState<string | null>(null);
+  const [cancelledBookings, setCancelledBookings] = useState<Booking[]>([]);
+  const [showCancelled, setShowCancelled] = useState(false);
+  const [editBooking, setEditBooking] = useState<Booking | null>(null);
+  const [cancelBooking, setCancelBooking] = useState<Booking | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!eventId || !user) return;
@@ -135,8 +145,11 @@ export default function AttendeesPage() {
         return;
       }
 
-      // Check if current user is the creator or co-admin
-      if (eventData.creator_id !== user.id) {
+      // Check if current user is the creator, co-admin, or super-admin
+      const SUPER_ADMIN_EMAILS = ["imatoru@gmail.com"];
+      const isSuperAdmin = SUPER_ADMIN_EMAILS.includes(user.email ?? "");
+
+      if (eventData.creator_id !== user.id && !isSuperAdmin) {
         // Check co-admin status
         const { data: adminRecord } = await supabase
           .from("event_admins")
@@ -169,6 +182,16 @@ export default function AttendeesPage() {
       }
 
       setBookings(bookingsData ?? []);
+
+      // Fetch cancelled bookings
+      const { data: cancelledData } = await supabase
+        .from("bookings")
+        .select("*")
+        .eq("event_id", eventId)
+        .eq("status", "cancelled")
+        .order("created_at", { ascending: true });
+
+      setCancelledBookings(cancelledData ?? []);
     } catch {
       setError("データの読み込みに失敗しました");
     } finally {
@@ -301,6 +324,13 @@ export default function AttendeesPage() {
             参加者一覧
           </h1>
           <div className="flex items-center gap-2 shrink-0">
+            <a
+              href={`/events/${eventId}/edit`}
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[#E5E5E5] bg-white px-3 text-xs font-medium text-[#1A1A1A] hover:border-[#1A1A1A]/30 hover:bg-[#F7F7F7] transition-colors"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">イベント編集</span>
+            </a>
             {bookings.length > 0 && (
               <>
                 <a
@@ -428,7 +458,7 @@ export default function AttendeesPage() {
             </div>
 
             {/* Column header (desktop) */}
-            <div className="hidden sm:grid grid-cols-[auto_1fr_1fr_auto_auto] gap-4 px-5 py-2">
+            <div className="hidden sm:grid grid-cols-[auto_1fr_1fr_auto_auto_auto] gap-4 px-5 py-2">
               <span className="text-xs font-bold uppercase tracking-wider text-[#999999] w-8">
                 出欠
               </span>
@@ -443,6 +473,9 @@ export default function AttendeesPage() {
               </span>
               <span className="text-xs font-bold uppercase tracking-wider text-[#999999]">
                 予約日
+              </span>
+              <span className="text-xs font-bold uppercase tracking-wider text-[#999999] w-20">
+                操作
               </span>
             </div>
 
@@ -498,10 +531,28 @@ export default function AttendeesPage() {
                       </span>
                     )}
                   </div>
+                  <div className="flex gap-2 pl-[42px]">
+                    <button
+                      type="button"
+                      onClick={() => setEditBooking(booking)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-[#E5E5E5] px-2 py-1 text-xs text-[#999999] hover:text-[#1A1A1A] hover:border-[#1A1A1A]/30 transition-colors"
+                    >
+                      <Pencil className="h-3 w-3" />
+                      編集
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCancelBooking(booking)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-red-100 px-2 py-1 text-xs text-red-400 hover:text-red-500 hover:border-red-200 transition-colors"
+                    >
+                      <UserX className="h-3 w-3" />
+                      キャンセル
+                    </button>
+                  </div>
                 </div>
 
                 {/* Desktop layout */}
-                <div className="hidden sm:grid grid-cols-[auto_1fr_1fr_auto_auto] gap-4 items-center">
+                <div className="hidden sm:grid grid-cols-[auto_1fr_1fr_auto_auto_auto] gap-4 items-center">
                   <button
                     type="button"
                     onClick={() => toggleAttendance(booking.id, booking.attended)}
@@ -540,6 +591,24 @@ export default function AttendeesPage() {
                     <Clock className="h-3 w-3" />
                     {formatBookingDate(booking.created_at)}
                   </span>
+                  <div className="flex items-center gap-1 w-20 justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setEditBooking(booking)}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg text-[#999999] hover:bg-[#F2F2F2] hover:text-[#1A1A1A] transition-colors"
+                      aria-label="編集"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCancelBooking(booking)}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg text-[#999999] hover:bg-red-50 hover:text-red-500 transition-colors"
+                      aria-label="キャンセル"
+                    >
+                      <UserX className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -553,6 +622,46 @@ export default function AttendeesPage() {
           </div>
         )}
 
+        {/* Cancelled bookings section */}
+        {cancelledBookings.length > 0 && (
+          <div className="mt-6">
+            <button
+              type="button"
+              onClick={() => setShowCancelled((v) => !v)}
+              className="flex items-center gap-2 text-sm text-[#999999] hover:text-[#1A1A1A] transition-colors mb-2"
+            >
+              {showCancelled ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+              キャンセル済み ({cancelledBookings.length}件)
+            </button>
+            {showCancelled && (
+              <div className="space-y-2">
+                {cancelledBookings.map((booking) => (
+                  <div
+                    key={booking.id}
+                    className="rounded-2xl border border-[#E5E5E5] bg-[#FAFAFA] px-5 py-3 opacity-60"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-red-100 text-red-400 shrink-0">
+                        <UserX className="h-3.5 w-3.5" />
+                      </div>
+                      <span className="text-sm text-[#999999] line-through">
+                        {booking.guest_name}
+                      </span>
+                      <span className="text-xs text-[#999999]">
+                        {booking.guest_email}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Message dialog */}
         {event && (
           <MessageDialog
@@ -563,6 +672,48 @@ export default function AttendeesPage() {
             recipientCount={bookings.length}
             open={messageOpen}
             onClose={() => setMessageOpen(false)}
+          />
+        )}
+
+        {/* Booking edit dialog */}
+        {editBooking && (
+          <BookingEditDialog
+            eventId={eventId}
+            booking={editBooking}
+            open={!!editBooking}
+            onClose={() => setEditBooking(null)}
+            onSaved={(updated) => {
+              setBookings((prev) =>
+                prev.map((b) =>
+                  b.id === editBooking.id
+                    ? { ...b, ...updated }
+                    : b
+                )
+              );
+            }}
+          />
+        )}
+
+        {/* Booking cancel dialog */}
+        {cancelBooking && (
+          <BookingCancelDialog
+            eventId={eventId}
+            booking={cancelBooking}
+            open={!!cancelBooking}
+            onClose={() => setCancelBooking(null)}
+            onCancelled={() => {
+              // Move from confirmed to cancelled
+              const cancelled = bookings.find((b) => b.id === cancelBooking.id);
+              if (cancelled) {
+                setCancelledBookings((prev) => [
+                  ...prev,
+                  { ...cancelled, status: "cancelled" },
+                ]);
+              }
+              setBookings((prev) =>
+                prev.filter((b) => b.id !== cancelBooking.id)
+              );
+            }}
           />
         )}
       </div>

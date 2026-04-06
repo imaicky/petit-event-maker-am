@@ -11,6 +11,7 @@ import { ReviewSection } from "@/components/review-section";
 import { ShareButton } from "@/components/share-button";
 import { StoriesDownloadButton } from "@/components/stories-download-button";
 import { LineSchedulePrompt } from "@/components/line-schedule-prompt";
+import { EventAdminBar } from "@/components/event-admin-bar";
 import { PasscodeGate, PasscodeAutoUnlock } from "@/components/passcode-gate";
 import { buildGoogleCalendarUrl } from "@/lib/calendar";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -361,6 +362,9 @@ export default async function EventPage({ params, searchParams }: EventPageProps
           </nav>
         </div>
       </div>
+
+      {/* Admin bar (only visible to creator / co-admin / super-admin) */}
+      <EventAdminBar eventId={id} bookingCount={event.booking_count} />
 
       {/* Hero Image — full width */}
       <div className="relative w-full overflow-hidden bg-gradient-to-br from-[#F2F2F2] via-[#EDEDED] to-[#E0E0E0]">
