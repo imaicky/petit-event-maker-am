@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { canManageEvent } from "@/lib/check-event-access";
 
 // ─── Validation ──────────────────────────────────────────────
 
@@ -146,21 +147,9 @@ export async function PUT(
       );
     }
 
-    // Fetch existing event to verify ownership
-    const { data: existing, error: fetchError } = await supabase
-      .from("events")
-      .select("id, creator_id")
-      .eq("id", id)
-      .single();
-
-    if (fetchError || !existing) {
-      return NextResponse.json(
-        { error: "イベントが見つかりません" },
-        { status: 404 }
-      );
-    }
-
-    if (existing.creator_id !== user.id) {
+    // Check manage permission (creator or co-admin)
+    const hasAccess = await canManageEvent(supabase, id, user.id);
+    if (!hasAccess) {
       return NextResponse.json(
         { error: "このイベントを編集する権限がありません" },
         { status: 403 }

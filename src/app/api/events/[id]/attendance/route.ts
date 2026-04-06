@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { canManageEvent } from "@/lib/check-event-access";
 
 export async function PATCH(
   request: NextRequest,
@@ -18,14 +19,9 @@ export async function PATCH(
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
 
-  // Event ownership check
-  const { data: event } = await supabase
-    .from("events")
-    .select("id, creator_id")
-    .eq("id", eventId)
-    .single();
-
-  if (!event || event.creator_id !== user.id) {
+  // Event access check (creator or co-admin)
+  const hasAccess = await canManageEvent(supabase, eventId, user.id);
+  if (!hasAccess) {
     return NextResponse.json(
       { error: "このイベントへのアクセス権がありません" },
       { status: 403 }

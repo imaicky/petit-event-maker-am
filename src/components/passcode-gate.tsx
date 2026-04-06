@@ -61,16 +61,17 @@ export function PasscodeGate({
   return (
     <div className="flex min-h-dvh flex-col bg-[#FAFAFA]" style={{ fontFamily: "var(--font-zen-maru)" }}>
       {/* Hero image */}
-      <div className="relative w-full overflow-hidden" style={{ maxHeight: "480px", minHeight: "240px" }}>
+      <div className="relative w-full overflow-hidden bg-gradient-to-br from-[#F2F2F2] via-[#EDEDED] to-[#E0E0E0]">
         {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={imageUrl}
             alt={eventTitle}
-            className="h-[320px] w-full object-cover sm:h-[420px] md:h-[480px]"
+            className="w-full object-contain"
+            style={{ maxHeight: "520px", minHeight: "240px" }}
           />
         ) : (
-          <div className="flex h-[320px] w-full items-center justify-center bg-gradient-to-br from-[#F2F2F2] via-[#EDEDED] to-[#E0E0E0] sm:h-[420px]">
+          <div className="flex h-[320px] w-full items-center justify-center sm:h-[420px]">
             <span className="animate-float text-8xl opacity-60">🎉</span>
           </div>
         )}

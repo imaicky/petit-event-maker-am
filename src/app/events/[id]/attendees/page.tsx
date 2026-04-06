@@ -135,10 +135,21 @@ export default function AttendeesPage() {
         return;
       }
 
-      // Check if current user is the creator
+      // Check if current user is the creator or co-admin
       if (eventData.creator_id !== user.id) {
-        router.replace("/");
-        return;
+        // Check co-admin status
+        const { data: adminRecord } = await supabase
+          .from("event_admins")
+          .select("id")
+          .eq("event_id", eventId)
+          .eq("user_id", user.id)
+          .eq("status", "accepted")
+          .maybeSingle();
+
+        if (!adminRecord) {
+          router.replace("/");
+          return;
+        }
       }
 
       setEvent(eventData);

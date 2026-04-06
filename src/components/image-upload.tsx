@@ -80,7 +80,8 @@ export function ImageUpload({ value, onChange }: ImageUploadProps) {
           <img
             src={value}
             alt="アップロード済み"
-            className="h-40 w-full object-cover"
+            className="w-full object-contain"
+            style={{ maxHeight: "320px", minHeight: "80px" }}
           />
           <button
             type="button"

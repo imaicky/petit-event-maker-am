@@ -23,6 +23,7 @@ import {
   Video,
   ClipboardList,
   Tag,
+  UserPlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/header";
@@ -35,6 +36,7 @@ type EventRow = Database["public"]["Tables"]["events"]["Row"];
 
 type DashboardEvent = EventRow & {
   booking_count: number;
+  is_shared?: boolean;
 };
 
 // --- Helpers ----------------------------------------------------------------
@@ -332,6 +334,12 @@ function EventCard({
                 下書き
               </span>
             )}
+            {event.is_shared && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
+                <UserPlus className="h-2.5 w-2.5" />
+                共同管理
+              </span>
+            )}
             {isPast && (
               <span className="inline-flex items-center rounded-full bg-[#E5E5E5] px-2 py-0.5 text-xs font-medium text-[#999999]">
                 終了
@@ -609,9 +617,49 @@ export default function DashboardPage() {
       const enriched: DashboardEvent[] = eventsData.map((e) => ({
         ...e,
         booking_count: countMap[e.id] ?? 0,
+        is_shared: false,
       }));
 
-      setEvents(enriched);
+      // Fetch events where user is a co-admin
+      const { data: adminRecords } = await supabase
+        .from("event_admins")
+        .select("event_id")
+        .eq("user_id", user.id)
+        .eq("status", "accepted");
+
+      const sharedEventIds = (adminRecords ?? [])
+        .map((r) => r.event_id)
+        .filter((id) => !eventIds.includes(id));
+
+      let sharedEnriched: DashboardEvent[] = [];
+      if (sharedEventIds.length > 0) {
+        const { data: sharedEventsData } = await supabase
+          .from("events")
+          .select("*")
+          .in("id", sharedEventIds)
+          .order("created_at", { ascending: false });
+
+        if (sharedEventsData) {
+          const { data: sharedBookingsData } = await supabase
+            .from("bookings")
+            .select("event_id")
+            .in("event_id", sharedEventIds)
+            .eq("status", "confirmed");
+
+          const sharedCountMap: Record<string, number> = {};
+          for (const b of sharedBookingsData ?? []) {
+            sharedCountMap[b.event_id] = (sharedCountMap[b.event_id] ?? 0) + 1;
+          }
+
+          sharedEnriched = sharedEventsData.map((e) => ({
+            ...e,
+            booking_count: sharedCountMap[e.id] ?? 0,
+            is_shared: true,
+          }));
+        }
+      }
+
+      setEvents([...enriched, ...sharedEnriched]);
 
       // Also fetch menus
       const { data: menusData } = await supabase

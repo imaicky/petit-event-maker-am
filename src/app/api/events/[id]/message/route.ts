@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendBatchEmails } from "@/lib/email";
 import { wrapInHtml } from "@/lib/email-templates";
+import { canManageEvent } from "@/lib/check-event-access";
 
 const DAILY_LIMIT = 3;
 
@@ -22,17 +23,25 @@ export async function POST(
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
 
-  // 2. Event ownership check
-  const { data: event } = await supabase
-    .from("events")
-    .select("id, title, creator_id")
-    .eq("id", eventId)
-    .single();
-
-  if (!event || event.creator_id !== user.id) {
+  // 2. Event access check (creator or co-admin)
+  const hasAccess = await canManageEvent(supabase, eventId, user.id);
+  if (!hasAccess) {
     return NextResponse.json(
       { error: "このイベントへのアクセス権がありません" },
       { status: 403 }
+    );
+  }
+
+  const { data: event } = await supabase
+    .from("events")
+    .select("id, title")
+    .eq("id", eventId)
+    .single();
+
+  if (!event) {
+    return NextResponse.json(
+      { error: "イベントが見つかりません" },
+      { status: 404 }
     );
   }
 

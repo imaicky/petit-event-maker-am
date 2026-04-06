@@ -360,16 +360,16 @@ function EventPreview({ values }: { values: Partial<CreateEventFormValues> }) {
   return (
     <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-[#E5E5E5]">
       {/* Hero */}
-      <div className="relative flex h-40 items-center justify-center overflow-hidden bg-gradient-to-br from-[#F2F2F2] to-[#E0E0E0]">
+      <div className="relative flex min-h-[120px] items-center justify-center overflow-hidden bg-gradient-to-br from-[#F2F2F2] to-[#E0E0E0]">
         {values.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={values.image_url}
             alt="プレビュー"
-            className="h-full w-full object-cover"
+            className="w-full object-contain"
           />
         ) : (
-          <div className="text-center">
+          <div className="py-8 text-center">
             <span className="text-5xl">🎉</span>
             <p className="mt-2 text-xs text-[#999999]">画像なし</p>
           </div>

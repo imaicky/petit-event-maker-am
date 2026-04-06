@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { canManageEvent } from "@/lib/check-event-access";
 
 export async function POST(
   request: NextRequest,
@@ -23,6 +24,15 @@ export async function POST(
       );
     }
 
+    // Access check (creator or co-admin)
+    const hasAccess = await canManageEvent(supabase, eventId, user.id);
+    if (!hasAccess) {
+      return NextResponse.json(
+        { error: "権限がありません" },
+        { status: 403 }
+      );
+    }
+
     // Fetch event
     const { data: event, error: eventError } = await supabase
       .from("events")
@@ -34,14 +44,6 @@ export async function POST(
       return NextResponse.json(
         { error: "イベントが見つかりません" },
         { status: 404 }
-      );
-    }
-
-    // Ownership check
-    if (event.creator_id !== user.id) {
-      return NextResponse.json(
-        { error: "権限がありません" },
-        { status: 403 }
       );
     }
 

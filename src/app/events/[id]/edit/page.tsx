@@ -21,6 +21,11 @@ import {
   Video,
   Shield,
   Lock,
+  UserPlus,
+  Link2,
+  Check,
+  X,
+  Mail,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -35,6 +40,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ImageUpload } from "@/components/image-upload";
+import { useAuth } from "@/components/auth-provider";
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -151,6 +157,271 @@ function FieldWrapper({
   );
 }
 
+// ─── Co-admin section ─────────────────────────────────────────────────────────
+
+type AdminRecord = {
+  id: string;
+  event_id: string;
+  user_id: string | null;
+  email: string | null;
+  status: string;
+  created_at: string;
+  profile: { display_name: string | null; avatar_url: string | null } | null;
+};
+
+function CoAdminSection({ eventId, isCreator }: { eventId: string; isCreator: boolean }) {
+  const [admins, setAdmins] = useState<AdminRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [generatingLink, setGeneratingLink] = useState(false);
+
+  useEffect(() => {
+    fetchAdmins();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId]);
+
+  async function fetchAdmins() {
+    try {
+      const res = await fetch(`/api/events/${eventId}/admins`);
+      if (res.ok) {
+        const data = await res.json();
+        setAdmins(data.admins ?? []);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleInviteByEmail() {
+    if (!inviteEmail.trim()) return;
+    setInviting(true);
+    setInviteError(null);
+    setInviteUrl(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/admins`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: inviteEmail.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setInviteError(data.error ?? "招待に失敗しました");
+        return;
+      }
+      setInviteEmail("");
+      setInviteUrl(data.invite_url);
+      fetchAdmins();
+    } catch {
+      setInviteError("招待に失敗しました");
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  async function handleGenerateLink() {
+    setGeneratingLink(true);
+    setInviteError(null);
+    setInviteUrl(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/admins`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setInviteError(data.error ?? "リンクの生成に失敗しました");
+        return;
+      }
+      setInviteUrl(data.invite_url);
+      fetchAdmins();
+    } catch {
+      setInviteError("リンクの生成に失敗しました");
+    } finally {
+      setGeneratingLink(false);
+    }
+  }
+
+  async function handleRemoveAdmin(adminId: string) {
+    try {
+      const res = await fetch(`/api/events/${eventId}/admins/${adminId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setAdmins((prev) => prev.filter((a) => a.id !== adminId));
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  function handleCopyUrl() {
+    if (!inviteUrl) return;
+    navigator.clipboard.writeText(inviteUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  if (!isCreator) return null;
+
+  return (
+    <FormSection title="共同管理者">
+      <div className="space-y-4">
+        {/* Current admins list */}
+        {loading ? (
+          <div className="flex items-center gap-2 text-sm text-[#999999]">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            読み込み中...
+          </div>
+        ) : admins.length === 0 ? (
+          <p className="text-sm text-[#999999]">
+            共同管理者はまだいません。メールアドレスまたは招待リンクで追加できます。
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {admins.map((admin) => (
+              <div
+                key={admin.id}
+                className="flex items-center justify-between rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] px-4 py-3"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#E5E5E5] text-xs font-bold text-[#1A1A1A]">
+                    {admin.profile?.display_name
+                      ? admin.profile.display_name.slice(0, 1)
+                      : admin.email
+                      ? admin.email.slice(0, 1).toUpperCase()
+                      : "?"}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-[#1A1A1A] truncate">
+                      {admin.profile?.display_name ?? admin.email ?? "招待リンク"}
+                    </p>
+                    <p className="text-xs text-[#999999]">
+                      {admin.status === "accepted" ? (
+                        <span className="text-green-600">参加中</span>
+                      ) : (
+                        <span className="text-amber-600">招待中</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveAdmin(admin.id)}
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[#999999] hover:bg-red-50 hover:text-red-500 transition-colors"
+                  aria-label="削除"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Invite by email */}
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-[#1A1A1A]">メールアドレスで招待</p>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#999999]" />
+              <input
+                type="email"
+                placeholder="example@email.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleInviteByEmail();
+                  }
+                }}
+                className="h-10 w-full rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] pl-9 pr-3 text-sm focus:outline-none focus:border-[#1A1A1A] focus:ring-1 focus:ring-[#1A1A1A]/20"
+              />
+            </div>
+            <Button
+              type="button"
+              onClick={handleInviteByEmail}
+              disabled={inviting || !inviteEmail.trim()}
+              className="h-10 rounded-xl bg-[#1A1A1A] text-white hover:bg-[#111111] gap-1.5 shrink-0"
+            >
+              {inviting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <UserPlus className="h-4 w-4" />
+              )}
+              招待
+            </Button>
+          </div>
+        </div>
+
+        {/* Generate invite link */}
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-[#1A1A1A]">招待リンクで招待</p>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleGenerateLink}
+            disabled={generatingLink}
+            className="h-10 rounded-xl border-[#E5E5E5] gap-1.5 text-sm text-[#666666] hover:text-[#1A1A1A] hover:border-[#1A1A1A]/30"
+          >
+            {generatingLink ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Link2 className="h-4 w-4" />
+            )}
+            招待リンクを生成
+          </Button>
+        </div>
+
+        {/* Generated invite URL */}
+        {inviteUrl && (
+          <div className="rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-3">
+            <p className="text-xs text-[#999999] mb-2">招待リンク（このリンクを共有してください）</p>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                readOnly
+                value={inviteUrl}
+                className="flex-1 h-9 rounded-lg border border-[#E5E5E5] bg-white px-3 text-xs text-[#1A1A1A] select-all"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleCopyUrl}
+                className="h-9 rounded-lg gap-1.5 shrink-0"
+              >
+                {copied ? (
+                  <>
+                    <Check className="h-3.5 w-3.5 text-green-500" />
+                    コピー済
+                  </>
+                ) : (
+                  <>
+                    <Link2 className="h-3.5 w-3.5" />
+                    コピー
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Error */}
+        {inviteError && (
+          <p className="text-xs text-red-500">{inviteError}</p>
+        )}
+      </div>
+    </FormSection>
+  );
+}
+
 // ─── Loading skeleton ─────────────────────────────────────────────────────────
 
 function LoadingSkeleton() {
@@ -180,6 +451,7 @@ export default function EditEventPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const eventId = params.id;
+  const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -188,6 +460,7 @@ export default function EditEventPage() {
   const [isPublished, setIsPublished] = useState(true);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isCreator, setIsCreator] = useState(false);
 
   const {
     register,
@@ -246,6 +519,9 @@ export default function EditEventPage() {
           teacher_bio: event.teacher_bio ?? "",
         });
         setIsPublished(event.is_published ?? true);
+        if (user && event.creator_id === user.id) {
+          setIsCreator(true);
+        }
       } catch {
         setServerError("イベントの読み込みに失敗しました");
       } finally {
@@ -675,6 +951,9 @@ export default function EditEventPage() {
                 </FieldWrapper>
               </div>
             </FormSection>
+
+            {/* Co-admin management (creator only) */}
+            <CoAdminSection eventId={eventId} isCreator={isCreator} />
 
             {/* Server error */}
             {serverError && (

@@ -623,6 +623,51 @@ export type Database = {
         }
         Relationships: []
       }
+      event_admins: {
+        Row: {
+          id: string
+          event_id: string
+          user_id: string | null
+          email: string | null
+          invite_token: string | null
+          status: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          event_id: string
+          user_id?: string | null
+          email?: string | null
+          invite_token?: string | null
+          status?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          event_id?: string
+          user_id?: string | null
+          email?: string | null
+          invite_token?: string | null
+          status?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'event_admins_event_id_fkey'
+            columns: ['event_id']
+            isOneToOne: false
+            referencedRelation: 'events'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'event_admins_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
     }
     Views: Record<string, never>
     Functions: {
@@ -701,6 +746,10 @@ export type MenuBookingInsert = Database['public']['Tables']['menu_bookings']['I
 
 export type MenuMessage = Database['public']['Tables']['menu_messages']['Row']
 export type MenuMessageInsert = Database['public']['Tables']['menu_messages']['Insert']
+
+export type EventAdmin = Database['public']['Tables']['event_admins']['Row']
+export type EventAdminInsert = Database['public']['Tables']['event_admins']['Insert']
+export type EventAdminUpdate = Database['public']['Tables']['event_admins']['Update']
 
 export type BookingStatus = 'confirmed' | 'cancelled'
 

@@ -8,6 +8,7 @@ import {
   multicastLineMessage,
   buildEventFlexBubble,
 } from "@/lib/line";
+import { canManageEvent } from "@/lib/check-event-access";
 
 type SegmentParam =
   | "all"
@@ -50,6 +51,15 @@ export async function POST(
       );
     }
 
+    // Access check (creator or co-admin)
+    const hasAccess = await canManageEvent(supabase, eventId, user.id);
+    if (!hasAccess) {
+      return NextResponse.json(
+        { error: "権限がありません" },
+        { status: 403 }
+      );
+    }
+
     // Fetch event
     const { data: event, error: eventError } = await supabase
       .from("events")
@@ -61,14 +71,6 @@ export async function POST(
       return NextResponse.json(
         { error: "イベントが見つかりません" },
         { status: 404 }
-      );
-    }
-
-    // Ownership check
-    if (event.creator_id !== user.id) {
-      return NextResponse.json(
-        { error: "権限がありません" },
-        { status: 403 }
       );
     }
 
