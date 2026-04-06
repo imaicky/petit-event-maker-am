@@ -368,7 +368,7 @@ export default async function EventPage({ params, searchParams }: EventPageProps
             src={event.image_url}
             alt={event.title}
             className="w-full object-contain"
-            style={{ maxHeight: "520px", minHeight: "240px" }}
+            style={{ minHeight: "240px" }}
           />
         ) : (
           <div className="flex h-[320px] w-full items-center justify-center sm:h-[420px]">
