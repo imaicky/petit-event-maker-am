@@ -25,6 +25,8 @@ interface EventData {
   location: string;
   location_type?: string | null;
   online_url?: string | null;
+  zoom_meeting_id?: string | null;
+  zoom_passcode?: string | null;
   capacity: number;
   price: number;
   /** booking_count is returned by the API (computed via subquery) */
@@ -441,7 +443,20 @@ export default async function EventPage({ params, searchParams }: EventPageProps
               {(locationType === "online" || locationType === "hybrid") && (
                 <MetaCell icon={Video} label="オンライン" delay="delay-200">
                   <p className="mt-0.5 text-sm font-semibold text-[#1A1A1A]">オンライン開催</p>
-                  <p className="text-xs text-[#999999] italic">お申し込み後にURLをお知らせします</p>
+                  {event.zoom_meeting_id ? (
+                    <div className="mt-1 space-y-0.5">
+                      <p className="text-xs text-[#555555]">
+                        ID：<span className="font-mono font-medium">{event.zoom_meeting_id}</span>
+                      </p>
+                      {event.zoom_passcode && (
+                        <p className="text-xs text-[#555555]">
+                          パスコード：<span className="font-mono font-medium">{event.zoom_passcode}</span>
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[#999999] italic">お申し込み後にURLをお知らせします</p>
+                  )}
                 </MetaCell>
               )}
 

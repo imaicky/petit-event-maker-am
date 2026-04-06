@@ -15,6 +15,8 @@ const createEventSchema = z.object({
   location: z.string().optional().nullable(),
   location_type: z.enum(["physical", "online", "hybrid"]).optional().default("physical"),
   online_url: z.string().url("有効なURLを入力してください").optional().nullable(),
+  zoom_meeting_id: z.string().max(50).optional().nullable(),
+  zoom_passcode: z.string().max(50).optional().nullable(),
   location_url: z.string().url("有効なURLを入力してください").optional().nullable(),
   capacity: z.coerce
     .number()
@@ -111,6 +113,8 @@ export async function POST(request: NextRequest) {
         location: data.location || null,
         location_type: data.location_type ?? "physical",
         online_url: data.online_url || null,
+        zoom_meeting_id: data.zoom_meeting_id || null,
+        zoom_passcode: data.zoom_passcode || null,
         location_url: data.location_url || null,
         capacity: data.capacity,
         price: data.price,
@@ -124,7 +128,7 @@ export async function POST(request: NextRequest) {
         slug,
         short_code,
         is_published: data.is_published ?? true,
-      })
+      } as never)
       .select()
       .single();
 

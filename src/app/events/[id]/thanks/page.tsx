@@ -24,6 +24,8 @@ interface EventData {
   location: string;
   location_type?: string | null;
   online_url?: string | null;
+  zoom_meeting_id?: string | null;
+  zoom_passcode?: string | null;
   location_url?: string | null;
   capacity: number;
   price: number;
@@ -344,6 +346,16 @@ export default async function ThanksPage({
                         </a>
                       ) : (
                         <p className="mt-0.5 text-xs text-[#999999]">URLは後日お知らせします</p>
+                      )}
+                      {event.zoom_meeting_id && (
+                        <p className="mt-1 text-xs text-[#1A1A1A]/70">
+                          ミーティングID：<span className="font-mono font-medium text-[#1A1A1A]">{event.zoom_meeting_id}</span>
+                        </p>
+                      )}
+                      {event.zoom_passcode && (
+                        <p className="mt-0.5 text-xs text-[#1A1A1A]/70">
+                          パスコード：<span className="font-mono font-medium text-[#1A1A1A]">{event.zoom_passcode}</span>
+                        </p>
                       )}
                     </div>
                   </div>

@@ -45,6 +45,8 @@ const createEventBaseSchema = z.object({
   location: z.string().optional(),
   location_type: z.enum(["physical", "online", "hybrid"]),
   online_url: z.string().optional(),
+  zoom_meeting_id: z.string().optional(),
+  zoom_passcode: z.string().optional(),
   location_url: z.string().optional(),
   capacity: z
     .string()
@@ -91,6 +93,8 @@ interface CreateEventPayload {
   location?: string;
   location_type: string;
   online_url?: string;
+  zoom_meeting_id?: string;
+  zoom_passcode?: string;
   location_url?: string;
   capacity: number;
   price: number;
@@ -506,6 +510,8 @@ export default function NewEventPage() {
       location: data.location || undefined,
       location_type: data.location_type ?? "physical",
       online_url: data.online_url || undefined,
+      zoom_meeting_id: data.zoom_meeting_id || undefined,
+      zoom_passcode: data.zoom_passcode || undefined,
       location_url: data.location_url || undefined,
       capacity: Number(data.capacity),
       price: Number(data.price),
@@ -720,21 +726,48 @@ export default function NewEventPage() {
                   )}
 
                   {(watchedValues.location_type === "online" || watchedValues.location_type === "hybrid") && (
-                    <FieldWrapper
-                      label="オンラインURL"
-                      hint="Zoom, Google Meet, Teams などのURLを入力"
-                    >
-                      <div className="relative">
-                        <Video className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
-                        <Input
-                          placeholder="例：https://zoom.us/j/..."
-                          aria-invalid={!!errors.online_url}
-                          {...register("online_url")}
-                          className={inputWithIconCls}
-                        />
+                    <>
+                      <FieldWrapper
+                        label="オンラインURL"
+                        hint="Zoom, Google Meet, Teams などのURLを入力"
+                      >
+                        <div className="relative">
+                          <Video className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
+                          <Input
+                            placeholder="例：https://zoom.us/j/..."
+                            aria-invalid={!!errors.online_url}
+                            {...register("online_url")}
+                            className={inputWithIconCls}
+                          />
+                        </div>
+                        <FieldError message={errors.online_url?.message} />
+                      </FieldWrapper>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <FieldWrapper
+                          label="ミーティングID"
+                          optional
+                          hint="Zoom等のID"
+                        >
+                          <Input
+                            placeholder="例：123 456 7890"
+                            {...register("zoom_meeting_id")}
+                            className={inputCls}
+                          />
+                        </FieldWrapper>
+                        <FieldWrapper
+                          label="パスコード"
+                          optional
+                          hint="参加用パスワード"
+                        >
+                          <Input
+                            placeholder="例：abc123"
+                            {...register("zoom_passcode")}
+                            className={inputCls}
+                          />
+                        </FieldWrapper>
                       </div>
-                      <FieldError message={errors.online_url?.message} />
-                    </FieldWrapper>
+                    </>
                   )}
 
                   {(watchedValues.location_type === "physical" || watchedValues.location_type === "hybrid") && (
