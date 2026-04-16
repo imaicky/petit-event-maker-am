@@ -106,7 +106,7 @@ export function BookingForm({
   };
 
   const isFull = remainingSpots <= 0;
-  const isLow = remainingSpots > 0 && remainingSpots <= 3;
+  const isLow = !isFull && remainingSpots > 0 && remainingSpots <= 3;
 
   const inputBase =
     "h-11 rounded-xl border-[#E5E5E5] bg-white pl-10 transition-colors focus-visible:border-[#1A1A1A] focus-visible:ring-[#1A1A1A]/20";
@@ -137,15 +137,19 @@ export function BookingForm({
           {priceNote && (
             <p className="text-xs text-[#999999] mt-1">{priceNote}</p>
           )}
-          {isLow && (
-            <span className="flex items-center gap-1 text-xs font-medium text-[#1A1A1A]">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#1A1A1A] opacity-50" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-[#1A1A1A]" />
-              </span>
-              あと{remainingSpots}名
+          {isFull ? (
+            <span className="text-xs font-medium text-[#FF8C00]">
+              キャンセル待ち
             </span>
-          )}
+          ) : isLow ? (
+            <span className="flex items-center gap-1 text-xs font-bold text-[#FF8C00]">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF8C00] opacity-50" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-[#FF8C00]" />
+              </span>
+              残りわずか
+            </span>
+          ) : null}
         </div>
       </div>
 
@@ -257,11 +261,11 @@ export function BookingForm({
       {/* Submit button */}
       <Button
         type="submit"
-        disabled={isSubmitting || isFull}
+        disabled={isSubmitting}
         className={cn(
           "relative h-14 w-full overflow-hidden rounded-xl text-lg font-bold text-white transition-all duration-200 disabled:opacity-60",
           isFull
-            ? "bg-[#DC2626] disabled:opacity-100"
+            ? "bg-gradient-to-r from-[#FF8C00] to-[#E67700] shadow-lg shadow-[#FF8C00]/30 hover:from-[#E67700] hover:to-[#CC6A00] hover:shadow-xl hover:shadow-[#FF8C00]/40 hover:-translate-y-0.5 active:translate-y-0 active:shadow-md"
             : "bg-gradient-to-r from-[#E8590C] to-[#D9480F] shadow-lg shadow-[#E8590C]/30 hover:from-[#D9480F] hover:to-[#C92A2A] hover:shadow-xl hover:shadow-[#E8590C]/40 hover:-translate-y-0.5 active:translate-y-0 active:shadow-md"
         )}
       >
@@ -271,14 +275,16 @@ export function BookingForm({
             <span>送信中...</span>
           </span>
         ) : isFull ? (
-          "満員御礼"
+          "キャンセル待ちに登録"
         ) : (
           "参加を申し込む"
         )}
       </Button>
 
       <p className="text-center text-xs text-[#999999]">
-        送信後、ご確認メールをお送りします
+        {isFull
+          ? "キャンセルが出た場合、自動的に繰り上がります"
+          : "送信後、ご確認メールをお送りします"}
       </p>
     </form>
   );

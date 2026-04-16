@@ -32,6 +32,9 @@ export function TrendingEvents({ events, reviewAggs }: TrendingEventsProps) {
             }
           })();
           const agg = reviewAggs[event.id];
+          const remaining = event.capacity ? event.capacity - event.booking_count : null;
+          const isFull = remaining !== null && remaining <= 0;
+          const isLow = !isFull && remaining !== null && remaining > 0 && remaining <= 3;
 
           return (
             <Link
@@ -81,8 +84,14 @@ export function TrendingEvents({ events, reviewAggs }: TrendingEventsProps) {
                     <span>{dateStr}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-[#999999]">
-                      {event.booking_count}名申込み
+                    <span className="text-[10px] font-bold">
+                      {isFull ? (
+                        <span className="text-[#999999]">満員</span>
+                      ) : isLow ? (
+                        <span className="text-[#FF8C00]">残りわずか</span>
+                      ) : remaining !== null ? (
+                        <span className="text-[#404040]">受付中</span>
+                      ) : null}
                     </span>
                     {agg && agg.reviewCount > 0 && (
                       <AverageRatingBadge

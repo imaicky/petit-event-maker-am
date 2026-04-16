@@ -225,15 +225,29 @@ function SpotsBadge({
 }) {
   if (remaining <= 0) {
     return (
-      <Badge className="bg-[#DC2626] px-3 py-1 text-sm text-white">
-        満員御礼
+      <Badge className="bg-[#FF8C00] px-3 py-1 text-sm text-white">
+        キャンセル待ち受付中
       </Badge>
     );
   }
 
-  // Show capacity only (no remaining count for guests)
+  if (remaining <= 3) {
+    return (
+      <Badge className="bg-[#FF8C00] px-3 py-1 text-sm text-white flex items-center gap-1.5">
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
+        </span>
+        残りわずか
+      </Badge>
+    );
+  }
+
   return capacity > 0 ? (
-    <span className="text-sm text-[#999999]">定員{capacity}名</span>
+    <div className="flex items-center gap-2">
+      <Badge className="bg-[#404040] px-3 py-1 text-sm text-white">受付中</Badge>
+      <span className="text-sm text-[#999999]">定員{capacity}名</span>
+    </div>
   ) : null;
 }
 
@@ -469,8 +483,8 @@ export default async function EventPage({ params, searchParams }: EventPageProps
                   {event.capacity}名
                 </p>
                 {remaining <= 0 && (
-                  <p className="text-xs font-medium text-[#DC2626]">
-                    満員御礼
+                  <p className="text-xs font-medium text-[#FF8C00]">
+                    キャンセル待ち受付中
                   </p>
                 )}
               </MetaCell>
@@ -720,11 +734,11 @@ export default async function EventPage({ params, searchParams }: EventPageProps
             href="#booking-form"
             className={`shine-on-hover shrink-0 rounded-xl px-6 py-3 text-sm font-bold text-white transition-all duration-200 ${
               remaining <= 0
-                ? "pointer-events-none bg-[#DC2626]"
+                ? "bg-gradient-to-r from-[#FF8C00] to-[#E67700] shadow-lg shadow-[#FF8C00]/30 hover:from-[#E67700] hover:to-[#CC6A00] hover:shadow-xl active:scale-95"
                 : "bg-gradient-to-r from-[#E8590C] to-[#D9480F] shadow-lg shadow-[#E8590C]/30 hover:from-[#D9480F] hover:to-[#C92A2A] hover:shadow-xl active:scale-95"
             }`}
           >
-            {remaining <= 0 ? "満員御礼" : "申し込む"}
+            {remaining <= 0 ? "キャンセル待ち" : "申し込む"}
           </a>
         </div>
       </div>

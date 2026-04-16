@@ -256,7 +256,7 @@ export async function GET(
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  background: remaining <= 3 ? "#1A1A1A" : "#404040",
+                  background: remaining <= 0 ? "#1A1A1A" : "#404040",
                   borderRadius: 20,
                   padding: "16px 36px",
                   fontSize: 28,
@@ -266,7 +266,7 @@ export async function GET(
               >
                 {remaining <= 0
                   ? "満員"
-                  : `残り${remaining}名`}
+                  : `定員${event.capacity}名`}
               </div>
             </div>
           </div>

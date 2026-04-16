@@ -63,6 +63,7 @@ export function EventCard({
 }: EventCardProps) {
   const remaining = capacity - booked_count;
   const isFull = remaining <= 0;
+  const isLow = !isFull && remaining > 0 && remaining <= 3;
   const { date, time } = formatDateShort(datetime);
   const isFree = price === 0;
 
@@ -125,14 +126,23 @@ export function EventCard({
           </div>
         )}
 
-        {/* Spots badge — only show "満員" to prevent wasted clicks */}
-        {isFull && (
-          <div className="absolute right-3 top-3">
+        {/* Availability badge */}
+        <div className="absolute right-3 top-3">
+          {isFull ? (
             <span className="inline-flex items-center rounded-full bg-[#1A1A1A]/80 px-2.5 py-0.5 text-xs font-medium text-white backdrop-blur-sm">
-              {"満員"}
+              満員
             </span>
-          </div>
-        )}
+          ) : isLow ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#FF8C00]/90 px-2.5 py-0.5 text-xs font-bold text-white backdrop-blur-sm">
+              <span className="relative flex h-1.5 w-1.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" /><span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" /></span>
+              残りわずか
+            </span>
+          ) : capacity > 0 ? (
+            <span className="inline-flex items-center rounded-full bg-[#404040]/80 px-2.5 py-0.5 text-xs font-medium text-white backdrop-blur-sm">
+              受付中
+            </span>
+          ) : null}
+        </div>
       </div>
 
       {/* Content */}
@@ -178,16 +188,12 @@ export function EventCard({
           )}
         </div>
 
-        {/* Capacity info — show "満員" or just the capacity */}
-        {isFull ? (
+        {/* Capacity info */}
+        {capacity > 0 && (
           <div className="mb-3">
-            <span className="text-xs font-medium text-[#1A1A1A]">{"満員"}</span>
+            <span className="text-xs text-[#999999]">定員{capacity}名</span>
           </div>
-        ) : capacity > 0 ? (
-          <div className="mb-3">
-            <span className="text-xs text-[#999999]">{"定員"}{capacity}{"名"}</span>
-          </div>
-        ) : null}
+        )}
 
         {/* Price + CTA */}
         <div className="flex items-center justify-between">

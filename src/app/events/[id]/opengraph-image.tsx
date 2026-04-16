@@ -24,6 +24,7 @@ interface EventData {
   capacity: number;
   price: number;
   booking_count: number;
+  image_url?: string | null;
 }
 
 export default async function Image({ params }: Props) {
@@ -72,6 +73,125 @@ export default async function Image({ params }: Props) {
       : "対面"
     : "";
 
+  if (event?.image_url) {
+    // Image background layout
+    return new ImageResponse(
+      (
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            display: "flex",
+            position: "relative",
+            fontFamily: "sans-serif",
+            overflow: "hidden",
+          }}
+        >
+          {/* Background image */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={event.image_url}
+            alt=""
+            width={1200}
+            height={630}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+            }}
+          />
+
+          {/* Gradient overlay */}
+          <div
+            style={{
+              position: "absolute",
+              bottom: 0,
+              left: 0,
+              width: "100%",
+              height: "70%",
+              background: "linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 60%, transparent 100%)",
+            }}
+          />
+
+          {/* Content overlay */}
+          <div
+            style={{
+              position: "absolute",
+              bottom: 0,
+              left: 0,
+              width: "100%",
+              display: "flex",
+              flexDirection: "column",
+              padding: "0 60px 40px",
+              gap: 16,
+            }}
+          >
+            {/* Brand */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <span style={{ fontSize: 20 }}>🎉</span>
+              <span style={{ fontSize: 16, color: "rgba(255,255,255,0.8)", fontWeight: 600 }}>
+                プチイベント作成くん
+              </span>
+            </div>
+
+            {/* Event title */}
+            <div
+              style={{
+                fontSize: title.length > 30 ? 40 : 48,
+                fontWeight: 900,
+                color: "#FFFFFF",
+                lineHeight: 1.2,
+                maxWidth: 900,
+                textShadow: "0 2px 8px rgba(0,0,0,0.3)",
+              }}
+            >
+              {title}
+            </div>
+
+            {/* Meta row */}
+            <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "center" }}>
+              {dateStr && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 18 }}>📅</span>
+                  <span style={{ fontSize: 18, color: "#FFFFFF", fontWeight: 600 }}>
+                    {dateStr} {timeStr}〜
+                  </span>
+                </div>
+              )}
+              {location && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 18 }}>📍</span>
+                  <span style={{ fontSize: 18, color: "#FFFFFF", fontWeight: 600 }}>
+                    {location}
+                  </span>
+                </div>
+              )}
+              {priceStr && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 18 }}>💴</span>
+                  <span style={{ fontSize: 18, color: "#FFFFFF", fontWeight: 700 }}>
+                    {priceStr}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ),
+      size
+    );
+  }
+
+  // Text-only layout (no image)
   return new ImageResponse(
     (
       <div
@@ -233,18 +353,18 @@ export default async function Image({ params }: Props) {
             {event && (
               <div
                 style={{
-                  background: remaining <= 3 ? "#F7F7F7" : "#EFF6F2",
-                  border: `2px solid ${remaining <= 3 ? "#1A1A1A" : "#404040"}`,
+                  background: remaining <= 0 ? "#F7F7F7" : "#EFF6F2",
+                  border: `2px solid ${remaining <= 0 ? "#1A1A1A" : "#404040"}`,
                   borderRadius: 12,
                   padding: "10px 24px",
                   fontSize: 20,
                   fontWeight: 700,
-                  color: remaining <= 3 ? "#1A1A1A" : "#404040",
+                  color: remaining <= 0 ? "#1A1A1A" : "#404040",
                 }}
               >
                 {remaining <= 0
                   ? "満員"
-                  : `残り${remaining}名 / ${event.capacity}名`}
+                  : `定員${event.capacity}名`}
               </div>
             )}
           </div>

@@ -2,7 +2,6 @@ import Link from "next/link";
 import {
   Calendar,
   MapPin,
-  Users,
   ArrowRight,
   Video,
 } from "lucide-react";
@@ -28,6 +27,7 @@ function formatDateShort(dt: string) {
 export function PublicEventCard({ event, isPast }: { event: EventWithBookings; isPast?: boolean }) {
   const spotsLeft = event.capacity ? event.capacity - event.booking_count : null;
   const isFull = spotsLeft !== null && spotsLeft <= 0;
+  const isLow = !isFull && spotsLeft !== null && spotsLeft > 0 && spotsLeft <= 3;
   return (
     <Link href={`/events/${event.id}`} className="block group">
       <div className={`rounded-2xl border border-[#E5E5E5] bg-white overflow-hidden hover:shadow-lg hover:border-[#1A1A1A]/30 transition-all duration-200 ${isPast ? "opacity-75" : ""}`}>
@@ -51,20 +51,27 @@ export function PublicEventCard({ event, isPast }: { event: EventWithBookings; i
                 : `¥${(event.price ?? 0).toLocaleString("ja-JP")}`}
             </span>
           </div>
-          {/* Status badge — past or full only */}
-          {isPast ? (
-            <div className="absolute bottom-3 left-3">
+          {/* Status badge */}
+          <div className="absolute bottom-3 left-3">
+            {isPast ? (
               <span className="inline-block rounded-full bg-[#E5E5E5]/90 px-2.5 py-1 text-xs font-bold text-[#999999] backdrop-blur-sm">
                 終了
               </span>
-            </div>
-          ) : isFull ? (
-            <div className="absolute bottom-3 left-3">
+            ) : isFull ? (
               <span className="inline-block rounded-full bg-[#E5E5E5]/90 px-2.5 py-1 text-xs font-bold text-[#999999] backdrop-blur-sm">
                 満員
               </span>
-            </div>
-          ) : null}
+            ) : isLow ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#FF8C00]/90 px-2.5 py-1 text-xs font-bold text-white backdrop-blur-sm">
+                <span className="relative flex h-1.5 w-1.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" /><span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" /></span>
+                残りわずか
+              </span>
+            ) : spotsLeft !== null ? (
+              <span className="inline-block rounded-full bg-[#404040]/80 px-2.5 py-1 text-xs font-bold text-white backdrop-blur-sm">
+                受付中
+              </span>
+            ) : null}
+          </div>
         </div>
 
         <div className="p-4 space-y-3">
@@ -98,11 +105,7 @@ export function PublicEventCard({ event, isPast }: { event: EventWithBookings; i
             )}
           </div>
 
-          <div className="flex items-center justify-between pt-1">
-            <div className="flex items-center gap-1 text-xs text-[#999999]">
-              <Users className="h-3 w-3 text-[#1A1A1A]" />
-              <span>{event.booking_count}名申込み済み</span>
-            </div>
+          <div className="flex items-center justify-end pt-1">
             <span className="flex items-center gap-0.5 text-xs font-medium text-[#1A1A1A] group-hover:gap-1 transition-all">
               詳細を見る
               <ArrowRight className="h-3 w-3" />

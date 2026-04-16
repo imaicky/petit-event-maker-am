@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { JapaneseYen, Users, ArrowRight, Tag } from "lucide-react";
+import { JapaneseYen, ArrowRight, Tag } from "lucide-react";
 import type { Menu } from "@/types/database";
 
 type MenuWithBookings = Menu & { booking_count: number };
@@ -7,6 +7,7 @@ type MenuWithBookings = Menu & { booking_count: number };
 export function MenuCard({ menu }: { menu: MenuWithBookings }) {
   const spotsLeft = menu.capacity ? menu.capacity - menu.booking_count : null;
   const isFull = spotsLeft !== null && spotsLeft <= 0;
+  const isLow = !isFull && spotsLeft !== null && spotsLeft > 0 && spotsLeft <= 3;
 
   return (
     <Link href={`/menus/${menu.id}`} className="block group">
@@ -35,13 +36,20 @@ export function MenuCard({ menu }: { menu: MenuWithBookings }) {
           {spotsLeft !== null && (
             <div className="absolute bottom-3 left-3">
               <span
-                className={`inline-block rounded-full px-2.5 py-1 text-xs font-bold backdrop-blur-sm ${
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold backdrop-blur-sm ${
                   isFull
                     ? "bg-[#E5E5E5]/90 text-[#999999]"
+                    : isLow
+                    ? "bg-[#FF8C00]/90 text-white"
                     : "bg-[#404040]/90 text-white"
                 }`}
               >
-                {isFull ? "満員" : `残${spotsLeft}枠`}
+                {isFull ? "満員" : isLow ? (
+                  <>
+                    <span className="relative flex h-1.5 w-1.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" /><span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" /></span>
+                    残りわずか
+                  </>
+                ) : "受付中"}
               </span>
             </div>
           )}
@@ -68,11 +76,7 @@ export function MenuCard({ menu }: { menu: MenuWithBookings }) {
             </p>
           )}
 
-          <div className="flex items-center justify-between pt-1">
-            <div className="flex items-center gap-1 text-xs text-[#999999]">
-              <Users className="h-3 w-3 text-[#1A1A1A]" />
-              <span>{menu.booking_count}名申込み</span>
-            </div>
+          <div className="flex items-center justify-end pt-1">
             <span className="flex items-center gap-0.5 text-xs font-medium text-[#1A1A1A] group-hover:gap-1 transition-all">
               詳細を見る
               <ArrowRight className="h-3 w-3" />

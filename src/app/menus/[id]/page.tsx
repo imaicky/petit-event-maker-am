@@ -52,6 +52,8 @@ export default async function MenuDetailPage({
   const priceStr = menu.price === 0 ? "無料" : `¥${menu.price.toLocaleString()}`;
   const customFields = (menu.custom_fields ?? []) as unknown as CustomField[];
   const isFull = menu.capacity !== null && (bookingCount ?? 0) >= menu.capacity;
+  const spotsLeft = menu.capacity !== null ? menu.capacity - (bookingCount ?? 0) : null;
+  const isLow = !isFull && spotsLeft !== null && spotsLeft > 0 && spotsLeft <= 3;
 
   return (
     <div className="min-h-dvh bg-[#FAFAFA]">
@@ -125,10 +127,10 @@ export default async function MenuDetailPage({
               <Users className="h-4 w-4 text-[#1A1A1A]" />
               <div>
                 <p className="text-sm font-medium text-[#1A1A1A]">
-                  {bookingCount ?? 0} / {menu.capacity}名
+                  定員{menu.capacity}名
                 </p>
-                <p className="text-xs text-[#999999]">
-                  {isFull ? "満員" : `残り${menu.capacity - (bookingCount ?? 0)}枠`}
+                <p className={`text-xs font-bold ${isFull ? "text-[#999999]" : isLow ? "text-[#FF8C00]" : "text-[#404040]"}`}>
+                  {isFull ? "満員" : isLow ? "残りわずか" : "受付中"}
                 </p>
               </div>
             </div>
