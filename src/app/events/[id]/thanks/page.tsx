@@ -5,6 +5,7 @@ import {
   MapPin,
   ArrowRight,
   CheckCircle2,
+  Clock,
   Copy,
   ExternalLink,
   Share2,
@@ -13,6 +14,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { buildGoogleCalendarUrl } from "@/lib/calendar";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -188,6 +190,26 @@ export default async function ThanksPage({
 
   const guestName = typeof sp?.name === "string" ? sp.name : "";
   const guestEmail = typeof sp?.email === "string" ? sp.email : "";
+  const isWaitlisted = sp?.waitlisted === "1";
+  const sessionId = typeof sp?.session_id === "string" ? sp.session_id : "";
+
+  // Verify payment via DB instead of trusting the URL parameter
+  let isPaid = false;
+  if (sessionId) {
+    try {
+      const admin = createAdminClient();
+      const { data: paidBooking } = await admin
+        .from("bookings")
+        .select("id")
+        .eq("stripe_session_id", sessionId)
+        .eq("event_id", id)
+        .eq("payment_status", "paid")
+        .maybeSingle();
+      isPaid = !!paidBooking;
+    } catch {
+      // DB check failed — safe side: don't show "paid"
+    }
+  }
 
   // Fetch event from API
   const headersList = await headers();
@@ -263,11 +285,15 @@ export default async function ThanksPage({
         <div className="mb-8 flex flex-col items-center text-center">
           <div className="relative mb-5">
             {/* Outer ring ping */}
-            <span className="absolute inset-0 animate-ping rounded-full bg-[#404040]/20" />
+            <span className={`absolute inset-0 animate-ping rounded-full ${isWaitlisted ? "bg-[#FF8C00]/20" : "bg-[#404040]/20"}`} />
             {/* Outer decorative ring */}
-            <span className="absolute -inset-3 rounded-full bg-[#404040]/10 animate-pulse" />
-            <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-[#404040] shadow-lg">
-              <CheckCircle2 className="h-10 w-10 text-white" strokeWidth={2.5} />
+            <span className={`absolute -inset-3 rounded-full animate-pulse ${isWaitlisted ? "bg-[#FF8C00]/10" : "bg-[#404040]/10"}`} />
+            <div className={`relative flex h-20 w-20 items-center justify-center rounded-full shadow-lg ${isWaitlisted ? "bg-[#FF8C00]" : "bg-[#404040]"}`}>
+              {isWaitlisted ? (
+                <Clock className="h-10 w-10 text-white" strokeWidth={2.5} />
+              ) : (
+                <CheckCircle2 className="h-10 w-10 text-white" strokeWidth={2.5} />
+              )}
             </div>
           </div>
 
@@ -275,21 +301,72 @@ export default async function ThanksPage({
             className="text-2xl font-bold text-[#1A1A1A]"
             style={{ fontFamily: "var(--font-zen-maru)" }}
           >
-            お申し込み完了！
+            {isWaitlisted ? "キャンセル待ち登録完了！" : isPaid ? "決済＆お申し込み完了！" : "お申し込み完了！"}
           </h1>
           {guestName && (
             <p className="mt-2 text-base text-[#1A1A1A]/70">
-              {guestName}さん、ありがとうございます🎉
+              {guestName}さん、ありがとうございます{isWaitlisted ? "" : "🎉"}
             </p>
           )}
-          {guestEmail && (
+          {isWaitlisted ? (
             <p className="mt-1 text-sm text-[#999999]">
-              確認メールを{" "}
-              <span className="font-medium text-[#1A1A1A]">{guestEmail}</span>{" "}
-              へお送りしました
+              空きが出た場合、自動的に予約が確定されメールでお知らせします
             </p>
+          ) : (
+            <>
+              {isPaid && (
+                <p className="mt-1 text-sm text-green-600 font-medium">
+                  お支払いが正常に完了しました
+                </p>
+              )}
+              {guestEmail && (
+                <p className="mt-1 text-sm text-[#999999]">
+                  確認メールを{" "}
+                  <span className="font-medium text-[#1A1A1A]">{guestEmail}</span>{" "}
+                  へお送りしました
+                </p>
+              )}
+            </>
           )}
         </div>
+
+        {/* ── LINE friend add (top priority) ──────────────────────────── */}
+        {event?.line_friend_url && (
+          <div className="mb-6 rounded-2xl border border-[#06C755]/30 bg-[#06C755]/5 p-6 text-center">
+            <div className="mb-3 flex justify-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#06C755]/15">
+                <svg className="h-6 w-6 text-[#06C755]" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63h2.386c.349 0 .63.285.63.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63.349 0 .631.285.631.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314" />
+                </svg>
+              </div>
+            </div>
+            <p className="text-base font-bold text-[#1A1A1A] mb-1">
+              LINEで予約確認・リマインドを受け取る
+            </p>
+            <ul className="mx-auto mb-4 inline-flex flex-col gap-1 text-left text-xs text-[#666666]">
+              <li className="flex items-center gap-1.5">
+                <span>🔔</span> イベントリマインド通知
+              </li>
+              <li className="flex items-center gap-1.5">
+                <span>📢</span> 最新イベント情報のお届け
+              </li>
+              <li className="flex items-center gap-1.5">
+                <span>📝</span> 変更・キャンセル通知
+              </li>
+            </ul>
+            <a
+              href={event.line_friend_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex h-14 w-full items-center justify-center gap-2.5 rounded-xl bg-[#06C755] text-base font-bold text-white shadow-lg shadow-[#06C755]/30 transition-all hover:bg-[#05b54c] active:scale-95"
+            >
+              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63h2.386c.349 0 .63.285.63.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63.349 0 .631.285.631.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314" />
+              </svg>
+              友だち追加する
+            </a>
+          </div>
+        )}
 
         {/* ── Event summary card ────────────────────────────────────────── */}
         {event && (
@@ -404,7 +481,7 @@ export default async function ThanksPage({
 
         {/* ── Actions ───────────────────────────────────────────────────── */}
         <div className="space-y-3 mb-6">
-          {calendarUrl && (
+          {calendarUrl && !isWaitlisted && (
             <a
               href={calendarUrl}
               target="_blank"
@@ -426,32 +503,6 @@ export default async function ThanksPage({
             </Button>
           </Link>
         </div>
-
-        {/* ── LINE friend add ─────────────────────────────────────────── */}
-        {event?.line_friend_url && (
-          <div className="mb-6 rounded-2xl border border-[#06C755]/30 bg-[#06C755]/5 p-5 text-center">
-            <div className="mb-2 flex justify-center">
-              <span className="text-3xl">💬</span>
-            </div>
-            <p className="text-sm font-bold text-[#1A1A1A] mb-1">
-              主催者のLINE公式アカウント
-            </p>
-            <p className="text-xs text-[#999999] mb-4">
-              友だち追加すると、イベントの最新情報やお知らせが届きます
-            </p>
-            <a
-              href={event.line_friend_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#06C755] px-6 text-sm font-bold text-white shadow-sm transition-all hover:bg-[#05b54c] active:scale-95"
-            >
-              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63h2.386c.349 0 .63.285.63.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63.349 0 .631.285.631.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314" />
-              </svg>
-              友だち追加
-            </a>
-          </div>
-        )}
 
         {/* ── Review prompt ────────────────────────────────────────────── */}
         <div className="mb-4 rounded-2xl border border-[#E5E5E5] bg-white p-4 text-center">

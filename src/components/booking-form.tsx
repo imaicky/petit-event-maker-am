@@ -10,6 +10,13 @@ import { Loader2, User, Mail, Phone, CheckCircle2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 const bookingSchema = z.object({
@@ -67,6 +74,11 @@ export function BookingForm({
 }: BookingFormProps) {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [lineModal, setLineModal] = useState<{
+    open: boolean;
+    url: string;
+    redirect: string;
+  }>({ open: false, url: "", redirect: "" });
 
   const {
     register,
@@ -92,13 +104,63 @@ export function BookingForm({
         return;
       }
 
-      // Redirect to thanks page with booking details
-      if (json.redirect) {
-        router.push(json.redirect);
+      // If paid event, redirect to Stripe Checkout
+      if (json.requires_payment && json.booking_id) {
+        try {
+          const stripeRes = await fetch("/api/stripe/checkout", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              booking_id: json.booking_id,
+              event_id: eventId,
+            }),
+          });
+          const stripeJson = await stripeRes.json();
+          if (stripeRes.ok && stripeJson.url) {
+            window.location.href = stripeJson.url;
+            return;
+          }
+          // Stripe checkout failed — cancel the pending booking to clean up
+          try {
+            await fetch(`/api/events/${eventId}/cancel`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ booking_id: json.booking_id }),
+            });
+          } catch {
+            // Cleanup failed — ignore, booking will remain pending
+          }
+          setServerError("決済ページの作成に失敗しました。主催者にお問い合わせください。");
+          return;
+        } catch {
+          // Network error — try to cancel the pending booking
+          try {
+            await fetch(`/api/events/${eventId}/cancel`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ booking_id: json.booking_id }),
+            });
+          } catch {
+            // Cleanup failed — ignore
+          }
+          setServerError("決済ページへの接続に失敗しました。");
+          return;
+        }
+      }
+
+      const redirectUrl =
+        json.redirect ??
+        `/events/${eventId}/thanks?name=${encodeURIComponent(data.guest_name)}&email=${encodeURIComponent(data.guest_email)}`;
+
+      // Show LINE friend modal if URL is available, otherwise redirect immediately
+      if (json.line_friend_url) {
+        setLineModal({
+          open: true,
+          url: json.line_friend_url,
+          redirect: redirectUrl,
+        });
       } else {
-        router.push(
-          `/events/${eventId}/thanks?name=${encodeURIComponent(data.guest_name)}&email=${encodeURIComponent(data.guest_email)}`
-        );
+        router.push(redirectUrl);
       }
     } catch {
       setServerError("ネットワークエラーが発生しました。もう一度お試しください。");
@@ -258,6 +320,15 @@ export function BookingForm({
         </div>
       )}
 
+      {/* Stripe info for paid events */}
+      {price > 0 && !isFull && (
+        <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3">
+          <p className="text-xs text-blue-700">
+            Stripeの安全な決済画面に移動します。クレジットカードで決済できます。
+          </p>
+        </div>
+      )}
+
       {/* Submit button */}
       <Button
         type="submit"
@@ -272,10 +343,12 @@ export function BookingForm({
         {isSubmitting ? (
           <span className="flex items-center justify-center gap-2">
             <Loader2 className="h-5 w-5 animate-spin" />
-            <span>送信中...</span>
+            <span>{price > 0 && !isFull ? "決済ページへ移動中..." : "送信中..."}</span>
           </span>
         ) : isFull ? (
           "キャンセル待ちに登録"
+        ) : price > 0 ? (
+          "決済に進む"
         ) : (
           "参加を申し込む"
         )}
@@ -284,8 +357,81 @@ export function BookingForm({
       <p className="text-center text-xs text-[#999999]">
         {isFull
           ? "キャンセルが出た場合、自動的に繰り上がります"
+          : price > 0
+          ? "決済完了後、ご確認メールをお送りします"
           : "送信後、ご確認メールをお送りします"}
       </p>
+
+      {/* LINE Friend Add Modal */}
+      <Dialog
+        open={lineModal.open}
+        onOpenChange={(open) => {
+          if (!open) {
+            setLineModal((prev) => ({ ...prev, open: false }));
+            router.push(lineModal.redirect);
+          }
+        }}
+      >
+        <DialogContent showCloseButton={false} className="text-center px-6 py-8">
+          <DialogHeader className="items-center">
+            <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-[#06C755]/10">
+              <CheckCircle2 className="h-8 w-8 text-[#06C755]" />
+            </div>
+            <DialogTitle className="text-xl font-bold text-[#1A1A1A]">
+              お申し込み完了！
+            </DialogTitle>
+            <DialogDescription className="text-sm text-[#666666]">
+              LINEで予約確認・リマインドを受け取りませんか？
+            </DialogDescription>
+          </DialogHeader>
+
+          <ul className="mx-auto mt-2 space-y-1.5 text-left text-sm text-[#666666]">
+            <li className="flex items-center gap-2">
+              <span className="text-base">🔔</span>
+              イベントリマインド通知
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="text-base">📢</span>
+              最新イベント情報
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="text-base">📝</span>
+              変更・キャンセル通知
+            </li>
+          </ul>
+
+          <div className="mt-4 space-y-3">
+            <a
+              href={lineModal.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => {
+                // Navigate to thanks page after opening LINE link
+                setTimeout(() => {
+                  setLineModal((prev) => ({ ...prev, open: false }));
+                  router.push(lineModal.redirect);
+                }, 500);
+              }}
+              className="flex h-14 w-full items-center justify-center gap-2.5 rounded-xl bg-[#06C755] text-base font-bold text-white shadow-lg shadow-[#06C755]/30 transition-all hover:bg-[#05b54c] active:scale-95"
+            >
+              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63h2.386c.349 0 .63.285.63.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63.349 0 .631.285.631.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314" />
+              </svg>
+              LINE友だち追加
+            </a>
+            <button
+              type="button"
+              onClick={() => {
+                setLineModal((prev) => ({ ...prev, open: false }));
+                router.push(lineModal.redirect);
+              }}
+              className="w-full text-sm text-[#999999] hover:text-[#666666] transition-colors py-2"
+            >
+              あとで
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </form>
   );
 }
