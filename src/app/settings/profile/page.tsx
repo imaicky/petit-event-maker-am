@@ -514,41 +514,75 @@ export default function ProfileSettingsPage() {
 
           {/* 連携サービス */}
           <SectionCard title="連携サービス">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#06C755]/10">
-                  <svg
-                    className="h-5 w-5 text-[#06C755]"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#06C755]/10">
+                    <svg
+                      className="h-5 w-5 text-[#06C755]"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-[#1A1A1A]">
+                      LINE公式アカウント
+                    </p>
+                    <p className="text-xs text-[#999999]">
+                      イベント作成時にフォロワーへ自動通知
+                    </p>
+                  </div>
+                </div>
+                <Link href="/settings/line">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full text-xs gap-1.5 border-[#E5E5E5] hover:border-[#1A1A1A]/30 shrink-0"
                   >
-                    <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-[#1A1A1A]">
-                    LINE公式アカウント
-                  </p>
-                  <p className="text-xs text-[#999999]">
-                    イベント作成時にフォロワーへ自動通知
-                  </p>
-                </div>
+                    <ExternalLink className="h-3 w-3" />
+                    設定する
+                  </Button>
+                </Link>
               </div>
-              <Link href="/settings/line">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full text-xs gap-1.5 border-[#E5E5E5] hover:border-[#1A1A1A]/30 shrink-0"
-                >
-                  <ExternalLink className="h-3 w-3" />
-                  設定する
-                </Button>
-              </Link>
+
+              <div className="border-t border-[#F2F2F2]" />
+
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#635BFF]/10">
+                    <svg className="h-5 w-5 text-[#635BFF]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect width="20" height="14" x="2" y="5" rx="2" />
+                      <line x1="2" x2="22" y1="10" y2="10" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-[#1A1A1A]">
+                      Stripe決済
+                    </p>
+                    <p className="text-xs text-[#999999]">
+                      有料イベントのオンライン決済を受付
+                    </p>
+                  </div>
+                </div>
+                <Link href="/settings/stripe/guide">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full text-xs gap-1.5 border-[#E5E5E5] hover:border-[#1A1A1A]/30 shrink-0"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    設定ガイド
+                  </Button>
+                </Link>
+              </div>
             </div>
           </SectionCard>
 

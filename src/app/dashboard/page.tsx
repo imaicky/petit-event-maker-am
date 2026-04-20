@@ -25,6 +25,8 @@ import {
   Tag,
   UserPlus,
   Shield,
+  Copy,
+  CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/header";
@@ -466,6 +468,16 @@ function EventCard({
           )}
           {copied ? "コピー済み" : "URLコピー"}
         </Button>
+        <Link href={`/events/new?duplicate=${event.id}`}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 rounded-full border-[#E5E5E5] gap-1.5 text-xs text-[#666666] hover:text-[#1A1A1A] hover:border-[#1A1A1A]/30"
+          >
+            <Copy className="h-3 w-3" />
+            複製
+          </Button>
+        </Link>
 
         {event.is_published && !isPast && (
           event.line_notified_at ? (
@@ -881,6 +893,16 @@ export default function DashboardPage() {
               >
                 <Settings className="h-3.5 w-3.5" />
                 プロフィール編集
+              </Button>
+            </Link>
+            <Link href="/settings/stripe/guide">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 rounded-full border-[#635BFF]/30 gap-1.5 text-[#635BFF] hover:bg-[#635BFF]/10 hover:border-[#635BFF]/50"
+              >
+                <CreditCard className="h-3.5 w-3.5" />
+                Stripe決済
               </Button>
             </Link>
             <Link href="/menus/new">

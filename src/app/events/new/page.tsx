@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -316,7 +316,7 @@ function FieldWrapper({
   label: string;
   required?: boolean;
   optional?: boolean;
-  hint?: string;
+  hint?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -460,7 +460,16 @@ function EventPreview({ values }: { values: Partial<CreateEventFormValues> }) {
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function NewEventPage() {
+  return (
+    <Suspense>
+      <NewEventPageInner />
+    </Suspense>
+  );
+}
+
+function NewEventPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, isLoading } = useAuth();
   const [showPreview, setShowPreview] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -484,6 +493,42 @@ export default function NewEventPage() {
   });
 
   const watchedValues = watch();
+
+  // Duplicate: fetch source event and prefill form
+  const duplicateId = searchParams.get("duplicate");
+  useEffect(() => {
+    if (!duplicateId) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/events/${duplicateId}`);
+        if (!res.ok) return;
+        const json = await res.json();
+        const ev = json.event;
+        if (!ev) return;
+        reset({
+          title: `【コピー】${ev.title}`,
+          description: ev.description ?? "",
+          datetime: "", // user should set a new date
+          location: ev.location ?? "",
+          location_type: ev.location_type ?? "physical",
+          online_url: ev.online_url ?? "",
+          zoom_meeting_id: ev.zoom_meeting_id ?? "",
+          zoom_passcode: ev.zoom_passcode ?? "",
+          location_url: ev.location_url ?? "",
+          capacity: String(ev.capacity ?? 10),
+          price: String(ev.price ?? 0),
+          image_url: ev.image_url ?? "",
+          price_note: ev.price_note ?? "",
+          is_limited: ev.is_limited ?? false,
+          limited_passcode: ev.limited_passcode ?? "",
+          teacher_name: ev.teacher_name ?? "",
+          teacher_bio: ev.teacher_bio ?? "",
+        });
+      } catch {
+        // silently ignore fetch errors
+      }
+    })();
+  }, [duplicateId, reset]);
 
   const applyTemplate = (template: EventTemplate) => {
     reset({
@@ -812,7 +857,7 @@ export default function NewEventPage() {
                     <FieldWrapper
                       label="参加費（円）"
                       required
-                      hint="無料の場合は 0 と入力"
+                      hint={<>無料の場合は 0 と入力。有料にするには<a href="/settings/stripe/guide" target="_blank" rel="noopener noreferrer" className="text-[#635BFF] underline underline-offset-2 hover:no-underline">Stripe連携</a>が必要です</>}
                     >
                       <div className="relative">
                         <JapaneseYen className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
