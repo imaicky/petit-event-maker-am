@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, User, Mail, Phone, CheckCircle2, Lock } from "lucide-react";
+import { Loader2, User, Mail, Phone, CheckCircle2, Lock, ExternalLink } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +49,9 @@ interface BookingFormProps {
   remainingSpots: number;
   isLimited?: boolean;
   passcodeVerified?: boolean;
+  paymentMethod?: string | null;
+  paymentInfo?: string | null;
+  paymentLink?: string | null;
   className?: string;
 }
 
@@ -70,6 +73,9 @@ export function BookingForm({
   remainingSpots,
   isLimited,
   passcodeVerified,
+  paymentMethod,
+  paymentInfo,
+  paymentLink,
   className,
 }: BookingFormProps) {
   const router = useRouter();
@@ -320,12 +326,40 @@ export function BookingForm({
         </div>
       )}
 
-      {/* Stripe info for paid events */}
-      {price > 0 && !isFull && (
+      {/* Payment info for paid events */}
+      {price > 0 && !isFull && (paymentMethod ?? 'stripe') === 'stripe' && (
         <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3">
           <p className="text-xs text-blue-700">
             Stripeの安全な決済画面に移動します。クレジットカードで決済できます。
           </p>
+        </div>
+      )}
+      {price > 0 && !isFull && paymentMethod === 'onsite' && (
+        <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3">
+          <p className="text-xs text-amber-700">
+            参加費は当日、現地にてお支払いください。
+          </p>
+        </div>
+      )}
+      {price > 0 && !isFull && paymentMethod === 'custom' && (
+        <div className="rounded-xl bg-gray-50 border border-gray-200 px-4 py-3 space-y-1.5">
+          {paymentInfo && (
+            <p className="text-xs text-gray-700 whitespace-pre-line">{paymentInfo}</p>
+          )}
+          {paymentLink && (
+            <a
+              href={paymentLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-blue-600 underline hover:text-blue-800"
+            >
+              <ExternalLink className="h-3 w-3" />
+              お支払い方法を確認する
+            </a>
+          )}
+          {!paymentInfo && !paymentLink && (
+            <p className="text-xs text-gray-700">お支払い方法は主催者にお問い合わせください。</p>
+          )}
         </div>
       )}
 
@@ -343,11 +377,11 @@ export function BookingForm({
         {isSubmitting ? (
           <span className="flex items-center justify-center gap-2">
             <Loader2 className="h-5 w-5 animate-spin" />
-            <span>{price > 0 && !isFull ? "決済ページへ移動中..." : "送信中..."}</span>
+            <span>{price > 0 && !isFull && (paymentMethod ?? 'stripe') === 'stripe' ? "決済ページへ移動中..." : "送信中..."}</span>
           </span>
         ) : isFull ? (
           "キャンセル待ちに登録"
-        ) : price > 0 ? (
+        ) : price > 0 && (paymentMethod ?? 'stripe') === 'stripe' ? (
           "決済に進む"
         ) : (
           "参加を申し込む"
@@ -357,7 +391,7 @@ export function BookingForm({
       <p className="text-center text-xs text-[#999999]">
         {isFull
           ? "キャンセルが出た場合、自動的に繰り上がります"
-          : price > 0
+          : price > 0 && (paymentMethod ?? 'stripe') === 'stripe'
           ? "決済完了後、ご確認メールをお送りします"
           : "送信後、ご確認メールをお送りします"}
       </p>

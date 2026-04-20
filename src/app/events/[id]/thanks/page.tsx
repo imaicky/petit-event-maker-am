@@ -35,6 +35,9 @@ interface EventData {
   image_url?: string;
   is_published?: boolean;
   line_friend_url?: string | null;
+  payment_method?: string | null;
+  payment_info?: string | null;
+  payment_link?: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -319,6 +322,16 @@ export default async function ThanksPage({
                   お支払いが正常に完了しました
                 </p>
               )}
+              {!isPaid && event && (event.price ?? 0) > 0 && event.payment_method === 'onsite' && (
+                <p className="mt-1 text-sm text-amber-600 font-medium">
+                  参加費は当日会場にてお支払いください
+                </p>
+              )}
+              {!isPaid && event && (event.price ?? 0) > 0 && event.payment_method === 'custom' && (
+                <p className="mt-1 text-sm text-gray-600 font-medium">
+                  お支払い方法をご確認ください
+                </p>
+              )}
               {guestEmail && (
                 <p className="mt-1 text-sm text-[#999999]">
                   確認メールを{" "}
@@ -365,6 +378,38 @@ export default async function ThanksPage({
               </svg>
               友だち追加する
             </a>
+          </div>
+        )}
+
+        {/* ── Payment method-specific notice ──────────────────────────── */}
+        {event && !isWaitlisted && (event.price ?? 0) > 0 && event.payment_method === 'onsite' && (
+          <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+            <p className="text-sm font-bold text-amber-800 mb-1">当日現地払い</p>
+            <p className="text-sm text-amber-700">
+              参加費 ¥{event.price.toLocaleString("ja-JP")} は当日会場にてお支払いください。
+            </p>
+          </div>
+        )}
+        {event && !isWaitlisted && (event.price ?? 0) > 0 && event.payment_method === 'custom' && (
+          <div className="mb-5 rounded-2xl border border-gray-200 bg-gray-50 p-5 space-y-2">
+            <p className="text-sm font-bold text-gray-800">お支払いについて</p>
+            {event.payment_info && (
+              <p className="text-sm text-gray-700 whitespace-pre-line">{event.payment_info}</p>
+            )}
+            {event.payment_link && (
+              <a
+                href={event.payment_link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#1A1A1A] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-[#111111] active:scale-95"
+              >
+                <ExternalLink className="h-4 w-4" />
+                お支払いページを開く
+              </a>
+            )}
+            {!event.payment_info && !event.payment_link && (
+              <p className="text-sm text-gray-700">お支払い方法は主催者にお問い合わせください。</p>
+            )}
           </div>
         )}
 

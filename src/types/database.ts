@@ -86,6 +86,9 @@ export type Database = {
           location_url: string | null
           reminder_24h_sent: boolean
           reminder_2h_sent: boolean
+          payment_method: string | null
+          payment_link: string | null
+          payment_info: string | null
           created_at: string
           updated_at: string
         }
@@ -118,6 +121,9 @@ export type Database = {
           location_url?: string | null
           reminder_24h_sent?: boolean
           reminder_2h_sent?: boolean
+          payment_method?: string | null
+          payment_link?: string | null
+          payment_info?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -150,6 +156,9 @@ export type Database = {
           location_url?: string | null
           reminder_24h_sent?: boolean
           reminder_2h_sent?: boolean
+          payment_method?: string | null
+          payment_link?: string | null
+          payment_info?: string | null
           created_at?: string
           updated_at?: string
         }

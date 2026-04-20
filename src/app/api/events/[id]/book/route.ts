@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { broadcastLineMessage, pushLineMessage, pushFlexMessage, buildBookingNotifyText, buildBookingConfirmationFlex } from "@/lib/line";
+import { broadcastLineMessage, pushLineMessage, pushFlexMessage, buildBookingNotifyText, buildBookingConfirmationFlex, buildWaitlistNotifyText, buildWaitlistConfirmationFlex } from "@/lib/line";
 import { sendBatchEmails } from "@/lib/email";
 import { wrapInHtml } from "@/lib/email-templates";
 
@@ -137,7 +137,7 @@ export async function POST(
     // 1. Fetch event
     const { data: ev, error: evErr } = await admin
       .from("events")
-      .select("id, capacity, is_published")
+      .select("id, capacity, is_published, price, payment_method")
       .eq("id", eventId)
       .single();
     if (evErr || !ev) {
@@ -154,22 +154,22 @@ export async function POST(
       .select("*", { count: "exact", head: true })
       .eq("event_id", eventId)
       .eq("status", "confirmed");
-    if (ev.capacity !== null && (count ?? 0) >= ev.capacity) {
-      return NextResponse.json({ error: "このイベントは満員です" }, { status: 409 });
-    }
+    const isFull = ev.capacity !== null && (count ?? 0) >= ev.capacity;
 
-    // 3. Check duplicate
+    // 3. Check duplicate (confirmed or waitlisted)
     const { count: dupCount } = await admin
       .from("bookings")
       .select("*", { count: "exact", head: true })
       .eq("event_id", eventId)
       .eq("guest_email", data.guest_email)
-      .eq("status", "confirmed");
+      .in("status", ["confirmed", "waitlisted"]);
     if ((dupCount ?? 0) > 0) {
       return NextResponse.json({ error: "このメールアドレスは既にお申し込み済みです" }, { status: 409 });
     }
 
-    // 4. Insert booking
+    // 4. Insert booking (waitlisted if full)
+    const bookingStatus = isFull ? "waitlisted" : "confirmed";
+    const isPaid = (ev.price ?? 0) > 0 && ((ev as Record<string, unknown>).payment_method ?? 'stripe') === 'stripe';
     const { data: inserted, error: insErr } = await admin
       .from("bookings")
       .insert({
@@ -178,7 +178,8 @@ export async function POST(
         guest_name: data.guest_name,
         guest_email: data.guest_email,
         guest_phone: data.guest_phone || null,
-        status: "confirmed",
+        status: bookingStatus,
+        payment_status: isPaid ? "pending" : "none",
       })
       .select()
       .single();
@@ -192,9 +193,33 @@ export async function POST(
     // Fetch event details for notifications (use admin client for reliability)
     const { data: event } = await admin
       .from("events")
-      .select("id, title, datetime, location, location_type, online_url, location_url, capacity, price, creator_id, is_published")
+      .select("id, title, datetime, location, location_type, online_url, zoom_meeting_id, zoom_passcode, location_url, capacity, price, creator_id, is_published")
       .eq("id", eventId)
       .single();
+
+    // Fetch LINE account info early (used for email + LINE notification + API response)
+    let lineFriendUrl: string | null = null;
+    type LineAccountRow = {
+      id: string;
+      channel_access_token: string | null;
+      is_active: boolean;
+      notify_on_booking: boolean;
+      owner_line_user_id: string | null;
+      bot_basic_id: string | null;
+    };
+    let lineAccount: LineAccountRow | null = null;
+    if (event?.creator_id && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const adminForLine = createAdminClient();
+      const { data: la } = await adminForLine
+        .from("line_accounts")
+        .select("id, channel_access_token, is_active, notify_on_booking, owner_line_user_id, bot_basic_id")
+        .eq("user_id", event.creator_id)
+        .maybeSingle();
+      lineAccount = la as LineAccountRow | null;
+      if (lineAccount?.bot_basic_id) {
+        lineFriendUrl = `https://line.me/R/ti/p/${lineAccount.bot_basic_id}`;
+      }
+    }
 
     // Insert notifications (fire-and-forget – do not block the response)
     if (event) {
@@ -202,27 +227,67 @@ export async function POST(
       const priceStr =
         event.price === 0 ? "無料" : `¥${event.price.toLocaleString("ja-JP")}`;
 
-      const guestSubject = `【申し込み完了】${event.title}`;
       const locationType = (event as Record<string, unknown>).location_type as string | null;
       const onlineUrl = (event as Record<string, unknown>).online_url as string | null;
+      const zoomMeetingId = (event as Record<string, unknown>).zoom_meeting_id as string | null;
+      const zoomPasscode = (event as Record<string, unknown>).zoom_passcode as string | null;
       const locationUrl = (event as Record<string, unknown>).location_url as string | null;
+
+      // Build online meeting info: Zoom ID/Passcode takes priority over online_url
+      function buildOnlineLines(): string {
+        if (zoomMeetingId) {
+          let lines = `■ ZoomミーティングID：${zoomMeetingId}`;
+          if (zoomPasscode) lines += `\n■ Zoomパスコード：${zoomPasscode}`;
+          return lines;
+        }
+        if (onlineUrl) return `■ オンラインURL：${onlineUrl}`;
+        return "■ オンライン（URLは後日お知らせします）";
+      }
 
       let locationLines = `■ 場所：${event.location ?? "未定"}`;
       if (locationType === "online") {
-        locationLines = onlineUrl
-          ? `■ オンラインURL：${onlineUrl}`
-          : "■ オンライン（URLは後日お知らせします）";
+        locationLines = buildOnlineLines();
       } else if (locationType === "hybrid") {
         locationLines = `■ 場所：${event.location ?? "未定"}`;
         if (locationUrl) locationLines += `\n■ 地図URL：${locationUrl}`;
-        locationLines += onlineUrl
-          ? `\n■ オンラインURL：${onlineUrl}`
-          : "\n■ オンライン（URLは後日お知らせします）";
+        locationLines += `\n${buildOnlineLines()}`;
       } else {
         if (locationUrl) locationLines += `\n■ 地図URL：${locationUrl}`;
       }
 
-      const guestBody = `${data.guest_name} 様
+      const isWaitlisted = bookingStatus === "waitlisted";
+      const guestSubject = isWaitlisted
+        ? `【キャンセル待ち登録完了】${event.title}`
+        : `【申し込み完了】${event.title}`;
+
+      const lineSection = lineFriendUrl
+        ? `
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📱 LINEで予約確認・リマインドを受け取る
+以下のリンクから友だち追加してください：
+${lineFriendUrl}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+        : "";
+
+      const guestBody = isWaitlisted
+        ? `${data.guest_name} 様
+
+${event.title} のキャンセル待ちに登録されました。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+■ 予約番号：${booking.id}
+■ イベント：${event.title}
+■ 日時：${dateStr}
+${locationLines}
+■ 参加費：${priceStr}
+■ ステータス：キャンセル待ち
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+空きが出た場合、自動的に予約が確定されメールでお知らせします。
+${lineSection}
+プチイベント作成くん`
+        : `${data.guest_name} 様
 
 ${event.title} へのお申し込みが完了しました。
 
@@ -236,14 +301,14 @@ ${locationLines}
 
 ご不明な点は主催者までお問い合わせください。
 当日のご参加を心よりお待ちしております。
-
+${lineSection}
 プチイベント作成くん`;
 
       supabase
         .from("notifications")
         .insert({
           recipient_email: data.guest_email,
-          type: "booking_confirmation",
+          type: isWaitlisted ? "waitlist_confirmation" : "booking_confirmation",
           subject: guestSubject,
           body: guestBody,
         })
@@ -266,16 +331,20 @@ ${locationLines}
       if (event.creator_id && process.env.SUPABASE_SERVICE_ROLE_KEY) {
         (async () => {
           try {
-            const admin = createAdminClient();
-            const { data: creatorAuth } = await admin.auth.admin.getUserById(event.creator_id!);
+            const adminForCreator = createAdminClient();
+            const { data: creatorAuth } = await adminForCreator.auth.admin.getUserById(event.creator_id!);
             if (creatorAuth?.user?.email) {
-              const creatorSubject = `【新規申し込み】${event.title}`;
-              const creatorBody = `${event.title} に新しい申し込みがありました。\n申込者：${data.guest_name}（${data.guest_email}）`;
-              await admin
+              const creatorSubject = isWaitlisted
+                ? `【キャンセル待ち登録】${event.title}`
+                : `【新規申し込み】${event.title}`;
+              const creatorBody = isWaitlisted
+                ? `${event.title} にキャンセル待ちが追加されました。\n申込者：${data.guest_name}（${data.guest_email}）`
+                : `${event.title} に新しい申し込みがありました。\n申込者：${data.guest_name}（${data.guest_email}）`;
+              await adminForCreator
                 .from("notifications")
                 .insert({
                   recipient_email: creatorAuth.user.email,
-                  type: "new_booking_alert",
+                  type: isWaitlisted ? "waitlist_alert" : "new_booking_alert",
                   subject: creatorSubject,
                   body: creatorBody,
                 });
@@ -297,43 +366,61 @@ ${locationLines}
     }
 
     // Send LINE notification to creator (async, non-blocking)
-    if (event?.creator_id && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    if (event?.creator_id && process.env.SUPABASE_SERVICE_ROLE_KEY && lineAccount) {
+      const isWaitlisted = bookingStatus === "waitlisted";
       (async () => {
         try {
           const adminClient = createAdminClient();
-          const { data: lineAccount } = await adminClient
-            .from("line_accounts")
-            .select("id, channel_access_token, is_active, notify_on_booking, owner_line_user_id")
-            .eq("user_id", event.creator_id!)
-            .maybeSingle();
 
           if (lineAccount?.is_active && lineAccount.channel_access_token) {
             // Notify creator
             if (lineAccount.notify_on_booking) {
-              const { count } = await adminClient
-                .from("bookings")
-                .select("*", { count: "exact", head: true })
-                .eq("event_id", eventId)
-                .eq("status", "confirmed");
+              if (isWaitlisted) {
+                // Get waitlist count
+                const { count: wlCount } = await adminClient
+                  .from("bookings")
+                  .select("*", { count: "exact", head: true })
+                  .eq("event_id", eventId)
+                  .eq("status", "waitlisted");
 
-              const message = buildBookingNotifyText(
-                event.title,
-                data.guest_name,
-                count ?? 1,
-                event.capacity
-              );
-
-              // Only send booking notification via DM to the owner (never broadcast)
-              if (lineAccount.owner_line_user_id) {
-                await pushLineMessage(
-                  lineAccount.channel_access_token,
-                  lineAccount.owner_line_user_id,
-                  message
+                const message = buildWaitlistNotifyText(
+                  event.title,
+                  data.guest_name,
+                  wlCount ?? 1
                 );
+
+                if (lineAccount.owner_line_user_id) {
+                  await pushLineMessage(
+                    lineAccount.channel_access_token,
+                    lineAccount.owner_line_user_id,
+                    message
+                  );
+                }
+              } else {
+                const { count: confirmedCount } = await adminClient
+                  .from("bookings")
+                  .select("*", { count: "exact", head: true })
+                  .eq("event_id", eventId)
+                  .eq("status", "confirmed");
+
+                const message = buildBookingNotifyText(
+                  event.title,
+                  data.guest_name,
+                  confirmedCount ?? 1,
+                  event.capacity
+                );
+
+                if (lineAccount.owner_line_user_id) {
+                  await pushLineMessage(
+                    lineAccount.channel_access_token,
+                    lineAccount.owner_line_user_id,
+                    message
+                  );
+                }
               }
             }
 
-            // Send booking confirmation to attendee via LINE (if they have line_user_id)
+            // Send LINE message to attendee (if they have line_user_id)
             if (booking.user_id) {
               const { data: attendeeProfile } = await adminClient
                 .from("profiles")
@@ -352,16 +439,26 @@ ${locationLines}
                   .maybeSingle();
 
                 if (follower) {
-                  const confirmFlex = buildBookingConfirmationFlex(
-                    { ...event, booking_count: 0 },
-                    data.guest_name,
-                    process.env.NEXT_PUBLIC_BASE_URL || "https://petit-event-maker-am.vercel.app"
-                  );
+                  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://petit-event-maker-am.vercel.app";
+                  const flex = isWaitlisted
+                    ? buildWaitlistConfirmationFlex(
+                        { ...event, booking_count: 0 },
+                        data.guest_name,
+                        baseUrl
+                      )
+                    : buildBookingConfirmationFlex(
+                        { ...event, booking_count: 0 },
+                        data.guest_name,
+                        baseUrl
+                      );
+                  const altText = isWaitlisted
+                    ? `📋 キャンセル待ち登録: ${event.title}`
+                    : `✅ 予約完了: ${event.title}`;
                   await pushFlexMessage(
                     lineAccount.channel_access_token,
                     attendeeProfile.line_user_id,
-                    `✅ 予約完了: ${event.title}`,
-                    confirmFlex
+                    altText,
+                    flex
                   );
                 }
               }
@@ -373,10 +470,15 @@ ${locationLines}
       })();
     }
 
+    const waitlistedParam = bookingStatus === "waitlisted" ? "&waitlisted=1" : "";
     return NextResponse.json(
       {
         booking,
-        redirect: `/events/${eventId}/thanks?name=${encodeURIComponent(data.guest_name)}&email=${encodeURIComponent(data.guest_email)}`,
+        redirect: `/events/${eventId}/thanks?name=${encodeURIComponent(data.guest_name)}&email=${encodeURIComponent(data.guest_email)}${waitlistedParam}`,
+        line_friend_url: lineFriendUrl,
+        requires_payment: isPaid && !isFull,
+        booking_id: booking.id,
+        payment_method: (ev as Record<string, unknown>).payment_method ?? ((ev.price ?? 0) > 0 ? 'stripe' : null),
       },
       { status: 201 }
     );

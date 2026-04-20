@@ -26,6 +26,9 @@ import {
   Check,
   X,
   Mail,
+  CreditCard,
+  Banknote,
+  FileText,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -76,6 +79,9 @@ const editEventBaseSchema = z.object({
     .union([z.string().url("有効なURLを入力してください"), z.literal("")])
     .optional(),
   price_note: z.string().max(100).optional(),
+  payment_method: z.enum(['stripe', 'onsite', 'custom']).optional(),
+  payment_link: z.string().optional(),
+  payment_info: z.string().max(500).optional(),
   is_limited: z.boolean().optional(),
   limited_passcode: z.string().max(50).optional(),
   teacher_name: z.string().optional(),
@@ -482,6 +488,8 @@ export default function EditEventPage() {
 
   const watchedLocationType = watch("location_type");
   const watchedIsLimited = watch("is_limited");
+  const watchedPrice = watch("price");
+  const watchedPaymentMethod = watch("payment_method");
 
   // ── Load existing event ───────────────────────────────────────────────────
 
@@ -519,6 +527,9 @@ export default function EditEventPage() {
           price: String(event.price ?? 0),
           image_url: event.image_url ?? "",
           price_note: event.price_note ?? "",
+          payment_method: event.payment_method ?? "stripe",
+          payment_link: event.payment_link ?? "",
+          payment_info: event.payment_info ?? "",
           is_limited: event.is_limited ?? false,
           limited_passcode: event.limited_passcode ?? "",
           teacher_name: event.teacher_name ?? "",
@@ -578,6 +589,9 @@ export default function EditEventPage() {
       price: Number(data.price),
       image_url: data.image_url || undefined,
       price_note: data.price_note || undefined,
+      payment_method: Number(data.price) > 0 ? (data.payment_method || 'stripe') : undefined,
+      payment_link: data.payment_method === 'custom' ? (data.payment_link || undefined) : undefined,
+      payment_info: data.payment_method === 'custom' ? (data.payment_info || undefined) : undefined,
       is_limited: data.is_limited || false,
       limited_passcode: data.is_limited ? (data.limited_passcode || undefined) : undefined,
       teacher_name: data.teacher_name,
@@ -953,6 +967,70 @@ export default function EditEventPage() {
                     className={inputCls}
                   />
                 </FieldWrapper>
+
+                {/* Payment method selector (only when price > 0) */}
+                {Number(watchedPrice) > 0 && (
+                  <div className="space-y-3">
+                    <FieldWrapper label="集金方法" required hint="参加費の受け取り方法を選択してください">
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        {([
+                          { value: "stripe" as const, label: "Stripe決済", icon: CreditCard, desc: "クレジットカード" },
+                          { value: "onsite" as const, label: "現地払い", icon: Banknote, desc: "当日会場でお支払い" },
+                          { value: "custom" as const, label: "カスタム案内", icon: FileText, desc: "PayPay・振込など" },
+                        ]).map((opt) => {
+                          const isSelected = (watchedPaymentMethod ?? 'stripe') === opt.value;
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => setValue("payment_method", opt.value, { shouldDirty: true })}
+                              className={`flex items-center gap-2.5 rounded-xl border-2 p-3 text-left transition-all ${
+                                isSelected
+                                  ? "border-[#1A1A1A] bg-[#F7F7F7]"
+                                  : "border-[#E5E5E5] bg-white hover:border-[#1A1A1A]/40"
+                              }`}
+                            >
+                              <opt.icon className={`h-4 w-4 shrink-0 ${isSelected ? "text-[#1A1A1A]" : "text-[#999999]"}`} />
+                              <div>
+                                <p className={`text-sm font-medium ${isSelected ? "text-[#1A1A1A]" : "text-[#666666]"}`}>{opt.label}</p>
+                                <p className="text-[10px] text-[#999999]">{opt.desc}</p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </FieldWrapper>
+
+                    {watchedPaymentMethod === 'stripe' && (
+                      <p className="text-xs text-[#999999]">
+                        <a href="/settings/stripe" target="_blank" rel="noopener noreferrer" className="text-[#635BFF] underline underline-offset-2 hover:no-underline">Stripe連携</a>が必要です
+                      </p>
+                    )}
+
+                    {watchedPaymentMethod === 'custom' && (
+                      <div className="space-y-3 rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-4">
+                        <FieldWrapper label="お支払い案内文" optional hint="PayPayや振込先など、参加者に表示する案内を入力">
+                          <Textarea
+                            placeholder="例：PayPayで以下のアカウントにお支払いください。&#10;アカウント：@example"
+                            rows={3}
+                            {...register("payment_info")}
+                            className="rounded-xl border-[#E5E5E5] focus-visible:border-[#1A1A1A] focus-visible:ring-[#1A1A1A]/20 bg-[#FAFAFA] resize-none"
+                          />
+                        </FieldWrapper>
+                        <FieldWrapper label="お支払いリンク" optional hint="PayPayリンクや振込先ページのURL">
+                          <div className="relative">
+                            <ExternalLink className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
+                            <Input
+                              placeholder="例：https://pay.paypay.ne.jp/..."
+                              {...register("payment_link")}
+                              className={inputWithIconCls}
+                            />
+                          </div>
+                        </FieldWrapper>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </FormSection>
 

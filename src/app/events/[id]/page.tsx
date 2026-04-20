@@ -28,6 +28,7 @@ interface EventData {
   online_url?: string | null;
   zoom_meeting_id?: string | null;
   zoom_passcode?: string | null;
+  location_url?: string | null;
   capacity: number;
   price: number;
   /** booking_count is returned by the API (computed via subquery) */
@@ -41,6 +42,9 @@ interface EventData {
   is_published?: boolean;
   short_code?: string | null;
   line_friend_url?: string | null;
+  payment_method?: string | null;
+  payment_link?: string | null;
+  payment_info?: string | null;
 }
 
 // ─── Data fetching ────────────────────────────────────────────────────────────
@@ -453,8 +457,26 @@ export default async function EventPage({ params, searchParams }: EventPageProps
 
               {(locationType === "physical" || locationType === "hybrid") && (
                 <MetaCell icon={MapPin} label="場所" delay="delay-200">
-                  <p className="mt-0.5 text-sm font-semibold text-[#1A1A1A]">対面開催</p>
-                  <p className="text-xs text-[#999999] italic">お申し込み後にお知らせします</p>
+                  {event.location ? (
+                    <>
+                      <p className="mt-0.5 text-sm font-semibold text-[#1A1A1A]">{event.location}</p>
+                      {event.location_url && (
+                        <a
+                          href={event.location_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-600 underline hover:text-blue-800"
+                        >
+                          地図を見る
+                        </a>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <p className="mt-0.5 text-sm font-semibold text-[#1A1A1A]">対面開催</p>
+                      <p className="text-xs text-[#999999] italic">お申し込み後にお知らせします</p>
+                    </>
+                  )}
                 </MetaCell>
               )}
 
@@ -496,6 +518,12 @@ export default async function EventPage({ params, searchParams }: EventPageProps
                   <p className="mt-0.5 text-xl font-bold text-[#1A1A1A]">
                     ¥{event.price.toLocaleString("ja-JP")}
                   </p>
+                )}
+                {event.price > 0 && event.payment_method === 'onsite' && (
+                  <p className="mt-0.5 text-xs font-medium text-amber-600">当日現地払い</p>
+                )}
+                {event.price > 0 && event.payment_method === 'custom' && (
+                  <p className="mt-0.5 text-xs font-medium text-gray-600">カスタム決済</p>
                 )}
                 {event.price_note && (
                   <p className="mt-0.5 text-xs text-[#999999]">{event.price_note}</p>
@@ -677,6 +705,9 @@ export default async function EventPage({ params, searchParams }: EventPageProps
                   remainingSpots={remaining}
                   isLimited={event.is_limited}
                   passcodeVerified={isLimited}
+                  paymentMethod={event.payment_method}
+                  paymentInfo={event.payment_info}
+                  paymentLink={event.payment_link}
                 />
               </div>
             </section>
@@ -711,6 +742,9 @@ export default async function EventPage({ params, searchParams }: EventPageProps
                 remainingSpots={remaining}
                 isLimited={event.is_limited}
                 passcodeVerified={isLimited}
+                paymentMethod={event.payment_method}
+                paymentInfo={event.payment_info}
+                paymentLink={event.payment_link}
               />
             </div>
           </aside>

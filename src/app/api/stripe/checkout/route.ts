@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     // Fetch event details (include creator_id for per-creator Stripe)
     const { data: event, error: eventErr } = await admin
       .from("events")
-      .select("id, title, price, image_url, creator_id")
+      .select("id, title, price, image_url, creator_id, payment_method")
       .eq("id", event_id)
       .single();
 
@@ -32,6 +32,13 @@ export async function POST(request: NextRequest) {
     if (event.price <= 0) {
       return NextResponse.json(
         { error: "This event is free" },
+        { status: 400 }
+      );
+    }
+
+    if ((event as Record<string, unknown>).payment_method && (event as Record<string, unknown>).payment_method !== 'stripe') {
+      return NextResponse.json(
+        { error: "This event does not use Stripe" },
         { status: 400 }
       );
     }
