@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getStripe } from "@/lib/stripe";
+import { getStripeForCreator } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function POST(request: NextRequest) {
@@ -13,19 +13,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!process.env.STRIPE_SECRET_KEY) {
-      return NextResponse.json(
-        { error: "Stripe is not configured" },
-        { status: 503 }
-      );
-    }
-
     const admin = createAdminClient();
 
-    // Fetch event details
+    // Fetch event details (include creator_id for per-creator Stripe)
     const { data: event, error: eventErr } = await admin
       .from("events")
-      .select("id, title, price, image_url")
+      .select("id, title, price, image_url, creator_id")
       .eq("id", event_id)
       .single();
 
@@ -40,6 +33,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "This event is free" },
         { status: 400 }
+      );
+    }
+
+    // Get Stripe instance for this creator (DB → env var fallback)
+    const stripe = await getStripeForCreator(event.creator_id);
+    if (!stripe) {
+      return NextResponse.json(
+        { error: "Stripe is not configured" },
+        { status: 503 }
       );
     }
 
@@ -64,8 +66,6 @@ export async function POST(request: NextRequest) {
         { status: 409 }
       );
     }
-
-    const stripe = getStripe();
 
     // If pending with an existing session, check if it's still open
     if (booking.payment_status === "pending" && booking.stripe_session_id) {

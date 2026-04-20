@@ -857,7 +857,7 @@ function NewEventPageInner() {
                     <FieldWrapper
                       label="参加費（円）"
                       required
-                      hint={<>無料の場合は 0 と入力。有料にするには<a href="/settings/stripe/guide" target="_blank" rel="noopener noreferrer" className="text-[#635BFF] underline underline-offset-2 hover:no-underline">Stripe連携</a>が必要です</>}
+                      hint={<>無料の場合は 0 と入力。有料にするには<a href="/settings/stripe" target="_blank" rel="noopener noreferrer" className="text-[#635BFF] underline underline-offset-2 hover:no-underline">Stripe連携</a>が必要です</>}
                     >
                       <div className="relative">
                         <JapaneseYen className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />

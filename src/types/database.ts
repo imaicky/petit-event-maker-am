@@ -81,6 +81,8 @@ export type Database = {
           line_schedule_message: string | null
           location_type: string | null
           online_url: string | null
+          zoom_meeting_id: string | null
+          zoom_passcode: string | null
           location_url: string | null
           reminder_24h_sent: boolean
           reminder_2h_sent: boolean
@@ -111,6 +113,8 @@ export type Database = {
           line_schedule_message?: string | null
           location_type?: string | null
           online_url?: string | null
+          zoom_meeting_id?: string | null
+          zoom_passcode?: string | null
           location_url?: string | null
           reminder_24h_sent?: boolean
           reminder_2h_sent?: boolean
@@ -141,6 +145,8 @@ export type Database = {
           line_schedule_message?: string | null
           location_type?: string | null
           online_url?: string | null
+          zoom_meeting_id?: string | null
+          zoom_passcode?: string | null
           location_url?: string | null
           reminder_24h_sent?: boolean
           reminder_2h_sent?: boolean
@@ -165,8 +171,10 @@ export type Database = {
           guest_name: string
           guest_email: string
           guest_phone: string | null
-          status: 'confirmed' | 'cancelled'
+          status: 'confirmed' | 'cancelled' | 'waitlisted'
           attended: boolean | null
+          stripe_session_id: string | null
+          payment_status: 'none' | 'pending' | 'paid' | 'failed' | 'refunded'
           created_at: string
         }
         Insert: {
@@ -176,8 +184,10 @@ export type Database = {
           guest_name: string
           guest_email: string
           guest_phone?: string | null
-          status?: 'confirmed' | 'cancelled'
+          status?: 'confirmed' | 'cancelled' | 'waitlisted'
           attended?: boolean | null
+          stripe_session_id?: string | null
+          payment_status?: 'none' | 'pending' | 'paid' | 'failed' | 'refunded'
           created_at?: string
         }
         Update: {
@@ -187,8 +197,10 @@ export type Database = {
           guest_name?: string
           guest_email?: string
           guest_phone?: string | null
-          status?: 'confirmed' | 'cancelled'
+          status?: 'confirmed' | 'cancelled' | 'waitlisted'
           attended?: boolean | null
+          stripe_session_id?: string | null
+          payment_status?: 'none' | 'pending' | 'paid' | 'failed' | 'refunded'
           created_at?: string
         }
         Relationships: [
@@ -500,7 +512,7 @@ export type Database = {
           guest_email: string
           guest_phone: string | null
           custom_field_values: Json
-          status: 'confirmed' | 'cancelled'
+          status: 'confirmed' | 'cancelled' | 'waitlisted'
           attended: boolean | null
           created_at: string
         }
@@ -512,7 +524,7 @@ export type Database = {
           guest_email: string
           guest_phone?: string | null
           custom_field_values?: Json
-          status?: 'confirmed' | 'cancelled'
+          status?: 'confirmed' | 'cancelled' | 'waitlisted'
           attended?: boolean | null
           created_at?: string
         }
@@ -524,7 +536,7 @@ export type Database = {
           guest_email?: string
           guest_phone?: string | null
           custom_field_values?: Json
-          status?: 'confirmed' | 'cancelled'
+          status?: 'confirmed' | 'cancelled' | 'waitlisted'
           attended?: boolean | null
           created_at?: string
         }
@@ -623,6 +635,56 @@ export type Database = {
         }
         Relationships: []
       }
+      stripe_settings: {
+        Row: {
+          id: string
+          user_id: string
+          stripe_account_id: string | null
+          stripe_secret_key: string
+          stripe_webhook_id: string | null
+          stripe_webhook_secret: string | null
+          display_name: string
+          is_test_mode: boolean
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          stripe_account_id?: string | null
+          stripe_secret_key: string
+          stripe_webhook_id?: string | null
+          stripe_webhook_secret?: string | null
+          display_name?: string
+          is_test_mode?: boolean
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          stripe_account_id?: string | null
+          stripe_secret_key?: string
+          stripe_webhook_id?: string | null
+          stripe_webhook_secret?: string | null
+          display_name?: string
+          is_test_mode?: boolean
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'stripe_settings_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: true
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
       event_admins: {
         Row: {
           id: string
@@ -696,7 +758,7 @@ export type Database = {
       }
     }
     Enums: {
-      booking_status: 'confirmed' | 'cancelled'
+      booking_status: 'confirmed' | 'cancelled' | 'waitlisted'
     }
     CompositeTypes: Record<string, never>
   }
@@ -747,11 +809,15 @@ export type MenuBookingInsert = Database['public']['Tables']['menu_bookings']['I
 export type MenuMessage = Database['public']['Tables']['menu_messages']['Row']
 export type MenuMessageInsert = Database['public']['Tables']['menu_messages']['Insert']
 
+export type StripeSettings = Database['public']['Tables']['stripe_settings']['Row']
+export type StripeSettingsInsert = Database['public']['Tables']['stripe_settings']['Insert']
+export type StripeSettingsUpdate = Database['public']['Tables']['stripe_settings']['Update']
+
 export type EventAdmin = Database['public']['Tables']['event_admins']['Row']
 export type EventAdminInsert = Database['public']['Tables']['event_admins']['Insert']
 export type EventAdminUpdate = Database['public']['Tables']['event_admins']['Update']
 
-export type BookingStatus = 'confirmed' | 'cancelled'
+export type BookingStatus = 'confirmed' | 'cancelled' | 'waitlisted'
 
 export type CustomField = {
   id: string

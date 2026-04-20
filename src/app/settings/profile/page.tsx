@@ -571,7 +571,7 @@ export default function ProfileSettingsPage() {
                     </p>
                   </div>
                 </div>
-                <Link href="/settings/stripe/guide">
+                <Link href="/settings/stripe">
                   <Button
                     type="button"
                     variant="outline"

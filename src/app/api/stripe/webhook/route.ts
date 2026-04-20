@@ -1,26 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getStripe } from "@/lib/stripe";
+import { getActiveWebhookSecrets } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import Stripe from "stripe";
 
 export async function POST(request: NextRequest) {
   const sig = request.headers.get("stripe-signature");
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-  if (!sig || !webhookSecret) {
+  if (!sig) {
     return NextResponse.json(
-      { error: "Missing signature or webhook secret" },
+      { error: "Missing stripe-signature header" },
       { status: 400 }
     );
   }
 
-  let event: Stripe.Event;
-  try {
-    const body = await request.text();
-    const stripe = getStripe();
-    event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
-  } catch (err) {
-    console.error("[Stripe Webhook] Signature verification failed:", err);
+  const body = await request.text();
+
+  // Get all active webhook secrets (DB + env var)
+  const secrets = await getActiveWebhookSecrets();
+  if (secrets.length === 0) {
+    return NextResponse.json(
+      { error: "No webhook secrets configured" },
+      { status: 400 }
+    );
+  }
+
+  // Try each secret to find the matching one
+  let event: Stripe.Event | null = null;
+  let matchedSecretKey: string | null = null;
+
+  for (const { secret, secretKey } of secrets) {
+    try {
+      const stripe = new Stripe(secretKey);
+      event = stripe.webhooks.constructEvent(body, sig, secret);
+      matchedSecretKey = secretKey;
+      break;
+    } catch {
+      // Try next secret
+    }
+  }
+
+  if (!event || !matchedSecretKey) {
+    console.error("[Stripe Webhook] No matching webhook secret found");
     return NextResponse.json(
       { error: "Invalid signature" },
       { status: 400 }
@@ -28,6 +47,7 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createAdminClient();
+  const stripe = new Stripe(matchedSecretKey);
 
   try {
     switch (event.type) {
@@ -48,8 +68,6 @@ export async function POST(request: NextRequest) {
             console.log(`[Stripe Webhook] Booking ${bookingId} marked as paid`);
           }
         }
-        // For async payment methods (e.g. konbini), payment_status will be
-        // "unpaid" here — wait for checkout.session.async_payment_succeeded
         break;
       }
 
@@ -121,7 +139,6 @@ export async function POST(request: NextRequest) {
 
         // Look up the checkout session by payment_intent to find booking_id
         try {
-          const stripe = getStripe();
           const sessions = await stripe.checkout.sessions.list({
             payment_intent: paymentIntentId,
             limit: 1,

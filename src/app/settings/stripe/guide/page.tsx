@@ -11,7 +11,6 @@ import {
   CreditCard,
   Shield,
   Key,
-  Webhook,
   TestTube,
   Rocket,
 } from "lucide-react";
@@ -96,16 +95,6 @@ function StepBadge({ n }: { n: number }) {
     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#635BFF] text-white text-sm font-bold">
       {n}
     </div>
-  );
-}
-
-// ─── Code block ───────────────────────────────────────────────
-
-function CodeBlock({ children }: { children: string }) {
-  return (
-    <pre className="rounded-lg bg-[#1A1A2E] text-[#E2E8F0] text-xs font-mono p-4 overflow-x-auto leading-relaxed">
-      <code>{children}</code>
-    </pre>
   );
 }
 
@@ -221,72 +210,6 @@ function Step2Mockup() {
   );
 }
 
-function Step3Mockup() {
-  return (
-    <BrowserFrame url="dashboard.stripe.com/test/webhooks/create">
-      <div className="p-4 sm:p-6 bg-[#FAFAFA] min-h-[240px] space-y-4">
-        <div className="text-sm font-medium text-[#1A1A1A] mb-2">
-          Webhook エンドポイントを追加
-        </div>
-        <Highlight label="あなたのアプリのWebhook URL">
-          <div className="bg-white border border-[#E5E5E5] rounded-lg px-4 py-2.5">
-            <div className="text-[11px] text-[#999]">エンドポイント URL</div>
-            <div className="bg-[#F2F2F2] rounded px-2 py-1 text-[10px] font-mono text-[#666] mt-1">
-              https://your-app.vercel.app/api/stripe/webhook
-            </div>
-          </div>
-        </Highlight>
-        <div className="bg-white border border-[#E5E5E5] rounded-lg px-4 py-3">
-          <div className="text-[11px] text-[#999] mb-2">イベントを選択</div>
-          <div className="space-y-1.5">
-            <Highlight label="この2つを選択">
-              <div className="space-y-1.5 p-2">
-                <label className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-[#635BFF] rounded bg-[#635BFF]/20 flex items-center justify-center">
-                    <CheckCircle2 className="h-3 w-3 text-[#635BFF]" />
-                  </div>
-                  <span className="text-[11px] font-mono text-[#1A1A1A]">checkout.session.completed</span>
-                </label>
-                <label className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-[#635BFF] rounded bg-[#635BFF]/20 flex items-center justify-center">
-                    <CheckCircle2 className="h-3 w-3 text-[#635BFF]" />
-                  </div>
-                  <span className="text-[11px] font-mono text-[#1A1A1A]">checkout.session.expired</span>
-                </label>
-              </div>
-            </Highlight>
-          </div>
-        </div>
-        <button className="bg-[#635BFF] text-white text-sm font-medium px-4 py-2 rounded-lg w-full text-center">
-          エンドポイントを追加
-        </button>
-      </div>
-    </BrowserFrame>
-  );
-}
-
-function Step3WebhookSecretMockup() {
-  return (
-    <BrowserFrame url="dashboard.stripe.com/test/webhooks/we_xxxxx">
-      <div className="p-4 sm:p-6 bg-[#FAFAFA]">
-        <Highlight label="この署名シークレットをコピー">
-          <div className="bg-white border border-[#E5E5E5] rounded-lg px-4 py-3">
-            <div className="text-[11px] text-[#999]">署名シークレット</div>
-            <div className="flex items-center gap-2 mt-1">
-              <div className="flex-1 bg-[#F2F2F2] rounded px-2 py-1 text-[10px] font-mono text-[#666] truncate">
-                whsec_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-              </div>
-              <div className="bg-[#F2F2F2] text-[#666] text-[11px] px-2 py-1 rounded shrink-0">
-                コピー
-              </div>
-            </div>
-          </div>
-        </Highlight>
-      </div>
-    </BrowserFrame>
-  );
-}
-
 // ─── FAQ ──────────────────────────────────────────────────────
 
 function FAQItem({
@@ -319,11 +242,11 @@ export default function StripeSetupGuidePage() {
       <main className="flex-1 w-full max-w-3xl mx-auto px-4 py-8 pb-28 sm:pb-8">
         {/* Back link */}
         <Link
-          href="/dashboard"
+          href="/settings/stripe"
           className="inline-flex items-center gap-1 text-sm text-[#999999] hover:text-[#1A1A1A] transition-colors mb-6"
         >
           <ChevronLeft className="h-4 w-4" />
-          ダッシュボードへ戻る
+          Stripe決済設定へ戻る
         </Link>
 
         {/* Page header */}
@@ -390,6 +313,22 @@ export default function StripeSetupGuidePage() {
             参加者のカード情報はpetit event makerのサーバーを<strong>一切通りません</strong>。
             決済はStripeの安全な画面（Stripe Checkout）で行われるため、主催者も参加者も安心してご利用いただけます。
           </InfoBox>
+        </div>
+
+        {/* Auto-setup callout */}
+        <div className="rounded-2xl bg-[#635BFF]/5 border-2 border-[#635BFF]/30 p-6 mb-10">
+          <div className="flex items-start gap-3">
+            <CheckCircle2 className="h-5 w-5 text-[#635BFF] mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-[#1A1A1A]">
+                かんたん自動セットアップ
+              </p>
+              <p className="text-sm text-[#666] mt-1 leading-relaxed">
+                <Link href="/settings/stripe" className="text-[#635BFF] underline underline-offset-2 hover:no-underline font-medium">Stripe決済設定ページ</Link>でシークレットキーを貼り付けるだけで、Webhook設定を含めすべて自動で連携されます。
+                以下はStripeアカウントの作成とキー取得の手順です。
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Steps */}
@@ -470,10 +409,48 @@ export default function StripeSetupGuidePage() {
                     <span><code className="bg-[#F2F2F2] px-1 rounded text-xs">sk_test_...</code> — サーバー用（絶対に公開しない！）</span>
                   </li>
                 </ul>
+                <p className="text-sm text-[#666] mt-3 leading-relaxed">
+                  シークレットキーが未作成の場合は「<strong className="text-[#1A1A1A]">＋ シークレットキーを作成</strong>」をクリックします。
+                  キーの使用方法を選ぶダイアログが表示されたら、一番上の
+                  「<strong className="text-[#635BFF]">構築した連携を強化</strong>」を選択してください。
+                  これはアプリのコードからStripe APIを直接呼び出すための標準的な方法です。
+                </p>
               </div>
             </div>
             <div className="ml-11">
               <Step2Mockup />
+
+              <div className="mt-4 rounded-xl bg-white border border-[#E5E5E5] p-4">
+                <p className="text-xs font-bold text-[#999] uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                  <Key className="h-3.5 w-3.5" />
+                  「secretキーを作成」の選択画面
+                </p>
+                <p className="text-sm text-[#666] mb-3">
+                  キーの使用方法を聞かれたら、以下のように選択してください:
+                </p>
+                <div className="space-y-2">
+                  <div className="flex items-start gap-3 bg-[#635BFF]/5 border border-[#635BFF]/30 rounded-lg px-4 py-3">
+                    <CheckCircle2 className="h-4 w-4 text-[#635BFF] mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium text-[#1A1A1A]">構築した連携を強化</p>
+                      <p className="text-xs text-[#666] mt-0.5">アプリのコードからStripe APIを呼び出す場合はこれを選択</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 bg-[#F9FAFB] border border-[#E5E5E5] rounded-lg px-4 py-3 opacity-50">
+                    <div className="h-4 w-4 border border-[#D1D5DB] rounded mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm text-[#999]">サードパーティーのアプリケーションに提供する</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 bg-[#F9FAFB] border border-[#E5E5E5] rounded-lg px-4 py-3 opacity-50">
+                    <div className="h-4 w-4 border border-[#D1D5DB] rounded mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm text-[#999]">AIエージェントのオーソリ</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <NoteBox>
                 <strong>シークレットキー（sk_test_...）は絶対に公開しないでください。</strong>
                 GitHubにコミットしたり、フロントエンドのコードに含めたりしてはいけません。
@@ -482,110 +459,52 @@ export default function StripeSetupGuidePage() {
             </div>
           </section>
 
-          {/* ─── Step 3: Webhook ─── */}
+          {/* ─── Step 3: Webhook (auto) ─── */}
           <section className="space-y-4">
             <div className="flex items-start gap-3">
               <StepBadge n={3} />
               <div>
                 <h2 className="text-lg font-bold text-[#1A1A1A]">
-                  Webhookを設定
+                  設定ページでキーを貼り付け
                 </h2>
                 <p className="text-sm text-[#666] mt-1 leading-relaxed">
-                  Webhookは、決済が完了したときにStripeからアプリに通知を送る仕組みです。
-                  ダッシュボードの「<strong className="text-[#1A1A1A]">開発者</strong>」→「
-                  <strong className="text-[#1A1A1A]">Webhook</strong>」を開き、
-                  「<strong className="text-[#1A1A1A]">エンドポイントを追加</strong>」をクリックします。
+                  ステップ2で取得したシークレットキーを、
+                  <Link href="/settings/stripe" className="text-[#635BFF] underline underline-offset-2 hover:no-underline font-medium">
+                    Stripe決済設定ページ
+                  </Link>
+                  に貼り付けて「接続テスト＆保存」をクリックしてください。
                 </p>
                 <p className="text-sm text-[#666] mt-2 leading-relaxed">
-                  以下の情報を入力してください:
+                  以下がすべて<strong className="text-[#1A1A1A]">自動で</strong>行われます:
                 </p>
                 <ul className="mt-2 space-y-1 text-sm text-[#666]">
                   <li className="flex items-start gap-2">
-                    <Webhook className="h-4 w-4 text-[#635BFF] shrink-0 mt-0.5" />
-                    <span>
-                      エンドポイントURL:{" "}
-                      <code className="bg-[#F2F2F2] px-1 rounded text-xs break-all">
-                        https://あなたのドメイン/api/stripe/webhook
-                      </code>
-                    </span>
+                    <CheckCircle2 className="h-4 w-4 text-[#635BFF] shrink-0 mt-0.5" />
+                    <span>シークレットキーの検証</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <CheckCircle2 className="h-4 w-4 text-[#635BFF] shrink-0 mt-0.5" />
-                    <span>
-                      受信するイベント: <code className="bg-[#F2F2F2] px-1 rounded text-xs">checkout.session.completed</code> と{" "}
-                      <code className="bg-[#F2F2F2] px-1 rounded text-xs">checkout.session.expired</code>
-                    </span>
+                    <span>Webhookエンドポイントの自動作成</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-[#635BFF] shrink-0 mt-0.5" />
+                    <span>署名シークレットの自動取得・保存</span>
                   </li>
                 </ul>
               </div>
             </div>
             <div className="ml-11">
-              <Step3Mockup />
-
-              <p className="text-sm text-[#666] mt-6 mb-3 leading-relaxed">
-                エンドポイントを追加すると、「<strong className="text-[#1A1A1A]">署名シークレット</strong>」が表示されます。
-                これはWebhookリクエストが本物のStripeから送信されたものか検証するための鍵です。コピーしてください:
-              </p>
-              <Step3WebhookSecretMockup />
-
-              <NoteBox>
-                <strong>署名シークレット（whsec_...）は一度しか完全表示されません。</strong>
-                すぐにメモ帳などにコピーしてください。紛失した場合はWebhookを再作成する必要があります。
-              </NoteBox>
+              <TipBox>
+                <strong>環境変数の手動設定やWebhookの手動作成は不要です。</strong>
+                すべてシークレットキー1つの入力で自動化されています。
+              </TipBox>
             </div>
           </section>
 
-          {/* ─── Step 4: Environment variables ─── */}
+          {/* ─── Step 4: Test mode ─── */}
           <section className="space-y-4">
             <div className="flex items-start gap-3">
               <StepBadge n={4} />
-              <div>
-                <h2 className="text-lg font-bold text-[#1A1A1A]">
-                  環境変数を設定
-                </h2>
-                <p className="text-sm text-[#666] mt-1 leading-relaxed">
-                  取得した3つのキーを、アプリの環境変数に設定します。
-                  Vercelをお使いの場合は、プロジェクトの「Settings」→「Environment Variables」で設定してください。
-                  ローカル開発の場合は <code className="bg-[#F2F2F2] px-1 rounded text-xs">.env.local</code> ファイルに追記します。
-                </p>
-              </div>
-            </div>
-            <div className="ml-11">
-              <div className="rounded-xl bg-white border border-[#E5E5E5] p-4 mb-4">
-                <p className="text-xs font-bold text-[#999] uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                  <Key className="h-3.5 w-3.5" />
-                  設定する環境変数（3つ）
-                </p>
-                <CodeBlock>{`# Stripeシークレットキー（ステップ2で取得）
-STRIPE_SECRET_KEY=sk_test_あなたのシークレットキー
-
-# Webhook署名シークレット（ステップ3で取得）
-STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxxxxxxxxxx
-
-# 公開可能キー（ステップ2で取得）※現在未使用ですが将来の拡張用
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_あなたの公開キー`}</CodeBlock>
-              </div>
-
-              <InfoBox>
-                <strong>Vercelでの設定方法:</strong><br />
-                <span className="inline-block mt-1">
-                  1. Vercelダッシュボード → プロジェクト → Settings → Environment Variables<br />
-                  2. 上記3つの変数を1つずつ追加（Production, Preview, Developmentすべてにチェック）<br />
-                  3. 設定後、<strong>再デプロイ</strong>が必要です（Settings変更だけでは反映されません）
-                </span>
-              </InfoBox>
-
-              <NoteBox>
-                <strong>.env.localファイルは絶対にGitにコミットしないでください。</strong>
-                .gitignoreに <code className="bg-amber-100 px-1 rounded text-xs">.env.local</code> が含まれていることを確認してください（通常はNext.jsプロジェクトでデフォルトで除外されています）。
-              </NoteBox>
-            </div>
-          </section>
-
-          {/* ─── Step 5: Test mode ─── */}
-          <section className="space-y-4">
-            <div className="flex items-start gap-3">
-              <StepBadge n={5} />
               <div>
                 <h2 className="text-lg font-bold text-[#1A1A1A]">
                   テストモードで動作確認
@@ -665,10 +584,10 @@ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_あなたの公開キー`}</CodeBlock
             </div>
           </section>
 
-          {/* ─── Step 6: Go live ─── */}
+          {/* ─── Step 5: Go live ─── */}
           <section className="space-y-4">
             <div className="flex items-start gap-3">
-              <StepBadge n={6} />
+              <StepBadge n={5} />
               <div>
                 <h2 className="text-lg font-bold text-[#1A1A1A]">
                   本番モードに切り替え
@@ -701,45 +620,30 @@ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_あなたの公開キー`}</CodeBlock
                   <div className="flex items-start gap-2">
                     <span className="text-[#635BFF] font-bold shrink-0">3.</span>
                     <span>
-                      「開発者」→「APIキー」で<strong>本番用のキー</strong>を取得
-                      （<code className="bg-[#F2F2F2] px-1 rounded text-xs">sk_live_...</code>,{" "}
-                      <code className="bg-[#F2F2F2] px-1 rounded text-xs">pk_live_...</code>）
+                      「開発者」→「APIキー」で<strong>本番用のシークレットキー</strong>を取得
+                      （<code className="bg-[#F2F2F2] px-1 rounded text-xs">sk_live_...</code>）
                     </span>
                   </div>
                   <div className="flex items-start gap-2">
                     <span className="text-[#635BFF] font-bold shrink-0">4.</span>
                     <span>
-                      「開発者」→「Webhook」で本番用エンドポイントを追加し、署名シークレットを取得
-                    </span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-[#635BFF] font-bold shrink-0">5.</span>
-                    <span>
-                      環境変数を本番用のキーに差し替える（Vercel: Settings → Environment Variables）
-                    </span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-[#635BFF] font-bold shrink-0">6.</span>
-                    <span>
-                      再デプロイして完了！
+                      <Link href="/settings/stripe" className="text-[#635BFF] underline underline-offset-2 hover:no-underline">Stripe決済設定ページ</Link>で一度連携を解除し、本番キーで再連携する
                     </span>
                   </div>
                 </div>
               </div>
 
-              <NoteBox>
-                <strong>本番キーとテストキーを混在させないでください。</strong>
-                本番環境には <code className="bg-amber-100 px-1 rounded text-xs">sk_live_...</code>、
-                テスト環境には <code className="bg-amber-100 px-1 rounded text-xs">sk_test_...</code> を使います。
-                Vercelでは環境ごとに異なる値を設定できます（Production / Preview / Development）。
-              </NoteBox>
+              <TipBox>
+                本番キー（<code className="bg-white/80 px-1 rounded text-xs">sk_live_...</code>）で再連携すると、
+                本番用のWebhookも自動作成されます。環境変数の手動変更や再デプロイは不要です。
+              </TipBox>
             </div>
           </section>
 
-          {/* ─── Step 7: Refunds ─── */}
+          {/* ─── Step 6: Refunds ─── */}
           <section className="space-y-4">
             <div className="flex items-start gap-3">
-              <StepBadge n={7} />
+              <StepBadge n={6} />
               <div>
                 <h2 className="text-lg font-bold text-[#1A1A1A]">
                   返金について
@@ -875,7 +779,7 @@ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_あなたの公開キー`}</CodeBlock
               <FAQItem q="無料イベントへの影響はありますか？">
                 <p>
                   <strong>一切ありません。</strong>
-                  Stripeの環境変数が設定されていない場合、またはイベントの参加費が0円の場合は、
+                  Stripeが連携されていない場合、またはイベントの参加費が0円の場合は、
                   これまでと同じ無料の申込フローが使われます。
                 </p>
               </FAQItem>
@@ -896,12 +800,8 @@ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_あなたの公開キー`}</CodeBlock
                 <p className="mb-2">以下を順に確認してください:</p>
                 <ul className="list-disc pl-4 space-y-2">
                   <li>
-                    <strong>STRIPE_SECRET_KEY が正しく設定されているか</strong> —
-                    テストモードなら <code className="bg-[#F2F2F2] px-1 rounded text-xs">sk_test_...</code> で始まるキーを使っているか確認。
-                  </li>
-                  <li>
-                    <strong>環境変数の設定後に再デプロイしたか</strong> —
-                    Vercelで環境変数を変更した場合、再デプロイしないと反映されません。
+                    <strong>Stripe連携が完了しているか</strong> —
+                    <Link href="/settings/stripe" className="text-[#635BFF] underline underline-offset-2 hover:no-underline">Stripe決済設定ページ</Link>で「接続済み」になっているか確認。
                   </li>
                   <li>
                     <strong>イベントの参加費が0円になっていないか</strong> —
@@ -911,25 +811,14 @@ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_あなたの公開キー`}</CodeBlock
               </FAQItem>
 
               <FAQItem q="Webhook が動作しない / 支払済バッジが表示されない">
-                <p className="mb-2">Webhookの問題は以下を確認してください:</p>
+                <p className="mb-2">Webhookは連携時に自動設定されますが、問題がある場合は以下を確認してください:</p>
                 <ul className="list-disc pl-4 space-y-2">
                   <li>
-                    <strong>STRIPE_WEBHOOK_SECRET が設定されているか</strong> —
-                    <code className="bg-[#F2F2F2] px-1 rounded text-xs">whsec_...</code> で始まるキーが環境変数に設定されているか確認。
+                    <strong>Stripe連携を一度解除して再連携する</strong> —
+                    <Link href="/settings/stripe" className="text-[#635BFF] underline underline-offset-2 hover:no-underline">設定ページ</Link>で解除→再連携すると、Webhookが再作成されます。
                   </li>
                   <li>
-                    <strong>エンドポイントURLが正しいか</strong> —
-                    Stripeダッシュボードの「Webhook」で、URLが{" "}
-                    <code className="bg-[#F2F2F2] px-1 rounded text-xs">https://あなたのドメイン/api/stripe/webhook</code>{" "}
-                    になっているか確認。
-                  </li>
-                  <li>
-                    <strong>選択したイベントが正しいか</strong> —
-                    <code className="bg-[#F2F2F2] px-1 rounded text-xs">checkout.session.completed</code> と{" "}
-                    <code className="bg-[#F2F2F2] px-1 rounded text-xs">checkout.session.expired</code> が選択されているか確認。
-                  </li>
-                  <li>
-                    <strong>Stripeダッシュボードの「Webhook」→「イベント」タブ</strong>で、
+                    <strong>Stripeダッシュボードの「ワークベンチ」→「Webhook」</strong>で、
                     送信されたイベントとレスポンスステータスを確認できます。
                   </li>
                 </ul>

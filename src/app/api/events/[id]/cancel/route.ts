@@ -12,7 +12,7 @@ import {
 } from "@/lib/line";
 import { sendBatchEmails } from "@/lib/email";
 import { wrapInHtml } from "@/lib/email-templates";
-import { getStripe } from "@/lib/stripe";
+import { getStripeForCreator } from "@/lib/stripe";
 
 // ─── Validation ──────────────────────────────────────────────
 
@@ -139,9 +139,9 @@ export async function POST(
     }
 
     // ─── Stripe refund / session expiration ──────────────────────────────────────
-    if (booking.stripe_session_id && process.env.STRIPE_SECRET_KEY) {
+    const stripe = await getStripeForCreator(event.creator_id);
+    if (booking.stripe_session_id && stripe) {
       try {
-        const stripe = getStripe();
         if (booking.payment_status === "paid") {
           // Retrieve payment_intent from the checkout session, then refund
           const session = await stripe.checkout.sessions.retrieve(booking.stripe_session_id);

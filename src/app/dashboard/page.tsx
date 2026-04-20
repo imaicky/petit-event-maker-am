@@ -895,7 +895,7 @@ export default function DashboardPage() {
                 プロフィール編集
               </Button>
             </Link>
-            <Link href="/settings/stripe/guide">
+            <Link href="/settings/stripe">
               <Button
                 variant="outline"
                 size="sm"
