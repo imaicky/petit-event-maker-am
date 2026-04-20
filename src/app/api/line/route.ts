@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getLineBotInfo } from "@/lib/line";
+import { resolveTargetUser } from "@/lib/admin";
 
 // ─── GET /api/line ─ 自分のLINE連携情報を取得 ─────────────────
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     const {
@@ -14,10 +16,22 @@ export async function GET() {
       return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
     }
 
-    const { data, error } = await supabase
+    const targetParam = request.nextUrl.searchParams.get("target_user_id");
+
+    let targetUserId: string;
+    try {
+      ({ targetUserId } = await resolveTargetUser(user.id, targetParam));
+    } catch {
+      return NextResponse.json({ error: "権限がありません" }, { status: 403 });
+    }
+
+    // Admin needs admin client to bypass RLS for other users
+    const client = targetUserId !== user.id ? createAdminClient() : supabase;
+
+    const { data, error } = await client
       .from("line_accounts")
       .select("id, channel_name, bot_user_id, owner_line_user_id, is_active, notify_on_booking, created_at, updated_at")
-      .eq("user_id", user.id)
+      .eq("user_id", targetUserId)
       .maybeSingle();
 
     if (error) {
@@ -53,11 +67,20 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const token = body.channel_access_token;
     const channelSecret = body.channel_secret;
+    const targetParam = body.target_user_id || null;
+
     if (!token || typeof token !== "string" || token.trim().length === 0) {
       return NextResponse.json(
         { error: "チャネルアクセストークンを入力してください" },
         { status: 400 }
       );
+    }
+
+    let targetUserId: string;
+    try {
+      ({ targetUserId } = await resolveTargetUser(user.id, targetParam));
+    } catch {
+      return NextResponse.json({ error: "権限がありません" }, { status: 403 });
     }
 
     // Validate token by fetching bot info
@@ -72,9 +95,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Upsert line_accounts
+    // Upsert line_accounts — use admin client when operating on behalf of another user
+    const client = targetUserId !== user.id ? createAdminClient() : supabase;
+
     const upsertData = {
-      user_id: user.id,
+      user_id: targetUserId,
       channel_name: botResult.data.displayName,
       channel_access_token: token.trim(),
       bot_user_id: botResult.data.userId,
@@ -86,7 +111,7 @@ export async function POST(request: NextRequest) {
           : undefined,
     };
 
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from("line_accounts")
       .upsert(upsertData, { onConflict: "user_id" })
       .select("id, channel_name, bot_user_id, owner_line_user_id, is_active, notify_on_booking, created_at, updated_at")
@@ -123,6 +148,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
+    const targetParam = body.target_user_id || null;
     const updates: Record<string, boolean> = {};
 
     if (typeof body.notify_on_booking === "boolean") {
@@ -136,10 +162,19 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const { data, error } = await supabase
+    let targetUserId: string;
+    try {
+      ({ targetUserId } = await resolveTargetUser(user.id, targetParam));
+    } catch {
+      return NextResponse.json({ error: "権限がありません" }, { status: 403 });
+    }
+
+    const client = targetUserId !== user.id ? createAdminClient() : supabase;
+
+    const { data, error } = await client
       .from("line_accounts")
       .update(updates)
-      .eq("user_id", user.id)
+      .eq("user_id", targetUserId)
       .select("id, channel_name, bot_user_id, owner_line_user_id, is_active, notify_on_booking, created_at, updated_at")
       .single();
 
@@ -163,7 +198,7 @@ export async function PATCH(request: NextRequest) {
 
 // ─── DELETE /api/line ─ LINE連携を解除 ────────────────────────
 
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
   try {
     const supabase = await createClient();
     const {
@@ -173,10 +208,21 @@ export async function DELETE() {
       return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
     }
 
-    const { error } = await supabase
+    const targetParam = request.nextUrl.searchParams.get("target_user_id");
+
+    let targetUserId: string;
+    try {
+      ({ targetUserId } = await resolveTargetUser(user.id, targetParam));
+    } catch {
+      return NextResponse.json({ error: "権限がありません" }, { status: 403 });
+    }
+
+    const client = targetUserId !== user.id ? createAdminClient() : supabase;
+
+    const { error } = await client
       .from("line_accounts")
       .delete()
-      .eq("user_id", user.id);
+      .eq("user_id", targetUserId);
 
     if (error) {
       console.error("[DELETE /api/line] Supabase error:", error);

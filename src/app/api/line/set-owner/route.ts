@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveTargetUser } from "@/lib/admin";
 
 // ─── POST /api/line/set-owner ───────────────────────────────
 // Sets the owner_line_user_id on line_accounts so booking
@@ -7,6 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export async function POST(request: NextRequest) {
   try {
+    // Auth check with user-scoped client
     const supabase = await createClient();
     const {
       data: { user },
@@ -17,6 +20,8 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const lineUserId = body.line_user_id;
+    const targetParam = body.target_user_id || null;
+
     if (!lineUserId || typeof lineUserId !== "string") {
       return NextResponse.json(
         { error: "LINE User IDを指定してください" },
@@ -24,11 +29,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify the line_user_id exists as a follower of this user's account
-    const { data: lineAccount } = await supabase
+    let targetUserId: string;
+    try {
+      ({ targetUserId } = await resolveTargetUser(user.id, targetParam));
+    } catch {
+      return NextResponse.json({ error: "権限がありません" }, { status: 403 });
+    }
+
+    // Data queries with admin client (bypasses RLS)
+    const admin = createAdminClient();
+
+    // Verify the line_user_id exists as a follower of the target user's account
+    const { data: lineAccount } = await admin
       .from("line_accounts")
       .select("id")
-      .eq("user_id", user.id)
+      .eq("user_id", targetUserId)
       .maybeSingle();
 
     if (!lineAccount) {
@@ -38,7 +53,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: follower } = await supabase
+    const { data: follower } = await admin
       .from("line_followers")
       .select("id")
       .eq("line_account_id", lineAccount.id)
@@ -54,10 +69,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Update owner_line_user_id
-    const { error: updateError } = await supabase
+    const { error: updateError } = await admin
       .from("line_accounts")
       .update({ owner_line_user_id: lineUserId })
-      .eq("user_id", user.id);
+      .eq("user_id", targetUserId);
 
     if (updateError) {
       console.error("[POST /api/line/set-owner] Supabase error:", updateError);

@@ -1,10 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveTargetUser } from "@/lib/admin";
 
 // ─── GET /api/line/followers ────────────────────────────────
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // Auth check with user-scoped client
     const supabase = await createClient();
     const {
       data: { user },
@@ -13,11 +16,23 @@ export async function GET() {
       return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
     }
 
-    // Get the user's line_account
-    const { data: lineAccount } = await supabase
+    const targetParam = request.nextUrl.searchParams.get("target_user_id");
+
+    let targetUserId: string;
+    try {
+      ({ targetUserId } = await resolveTargetUser(user.id, targetParam));
+    } catch {
+      return NextResponse.json({ error: "権限がありません" }, { status: 403 });
+    }
+
+    // Data queries with admin client (bypasses RLS)
+    const admin = createAdminClient();
+
+    // Get the target user's line_account
+    const { data: lineAccount } = await admin
       .from("line_accounts")
       .select("id, owner_line_user_id")
-      .eq("user_id", user.id)
+      .eq("user_id", targetUserId)
       .maybeSingle();
 
     if (!lineAccount) {
@@ -25,7 +40,7 @@ export async function GET() {
     }
 
     // Get followers
-    const { data: followers, error } = await supabase
+    const { data: followers, error } = await admin
       .from("line_followers")
       .select("id, line_user_id, display_name, picture_url, is_following, followed_at")
       .eq("line_account_id", lineAccount.id)

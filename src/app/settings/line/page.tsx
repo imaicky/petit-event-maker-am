@@ -22,6 +22,9 @@ import {
   UserCheck,
   Tag,
   X,
+  BookOpen,
+  Shield,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,6 +75,15 @@ type Follower = {
   tags: string[];
 };
 
+type AdminUser = {
+  id: string;
+  username: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  line_connected: boolean;
+  line_channel_name: string | null;
+};
+
 const inputCls =
   "h-10 rounded-xl border-[#E5E5E5] focus-visible:border-[#1A1A1A] focus-visible:ring-[#1A1A1A]/20 bg-[#FAFAFA]";
 
@@ -99,6 +111,15 @@ export default function LineSettingsPage() {
   const [editingTags, setEditingTags] = useState<string | null>(null);
   const [tagInput, setTagInput] = useState("");
 
+  // Admin
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [targetUserId, setTargetUserId] = useState<string | null>(null);
+  const [showUserPicker, setShowUserPicker] = useState(false);
+
+  const targetQuery = targetUserId ? `?target_user_id=${targetUserId}` : "";
+  const selectedUser = adminUsers.find((u) => u.id === targetUserId);
+
   // Redirect if not logged in
   useEffect(() => {
     if (!authLoading && !user) {
@@ -106,10 +127,29 @@ export default function LineSettingsPage() {
     }
   }, [authLoading, user, router]);
 
+  // Check admin status and fetch user list
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/users");
+        if (res.ok) {
+          const json = await res.json();
+          if (json.isAdmin) {
+            setIsAdmin(true);
+            setAdminUsers(json.users ?? []);
+          }
+        }
+      } catch {
+        // not admin, ignore
+      }
+    })();
+  }, [user]);
+
   // Fetch existing LINE account
   const fetchLineAccount = useCallback(async () => {
     try {
-      const res = await fetch("/api/line");
+      const res = await fetch(`/api/line${targetUserId ? `?target_user_id=${targetUserId}` : ""}`);
       if (res.ok) {
         const json = await res.json();
         setLineAccount(json.lineAccount ?? null);
@@ -119,13 +159,13 @@ export default function LineSettingsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [targetUserId]);
 
   // Fetch followers
   const fetchFollowers = useCallback(async () => {
     setFollowersLoading(true);
     try {
-      const res = await fetch("/api/line/followers");
+      const res = await fetch(`/api/line/followers${targetUserId ? `?target_user_id=${targetUserId}` : ""}`);
       if (res.ok) {
         const json = await res.json();
         setFollowers(json.followers ?? []);
@@ -136,10 +176,15 @@ export default function LineSettingsPage() {
     } finally {
       setFollowersLoading(false);
     }
-  }, []);
+  }, [targetUserId]);
 
   useEffect(() => {
-    if (user) fetchLineAccount();
+    if (user) {
+      setLoading(true);
+      setLineAccount(null);
+      setFollowers([]);
+      fetchLineAccount();
+    }
   }, [user, fetchLineAccount]);
 
   useEffect(() => {
@@ -167,6 +212,9 @@ export default function LineSettingsPage() {
       };
       if (secret.trim()) {
         payload.channel_secret = secret.trim();
+      }
+      if (targetUserId) {
+        payload.target_user_id = targetUserId;
       }
 
       const res = await fetch("/api/line", {
@@ -200,7 +248,7 @@ export default function LineSettingsPage() {
     setSuccessMsg(null);
 
     try {
-      const res = await fetch("/api/line", { method: "DELETE" });
+      const res = await fetch(`/api/line${targetQuery}`, { method: "DELETE" });
 
       if (!res.ok) {
         const json = await res.json();
@@ -226,7 +274,7 @@ export default function LineSettingsPage() {
       const res = await fetch("/api/line", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notify_on_booking: checked }),
+        body: JSON.stringify({ notify_on_booking: checked, ...(targetUserId ? { target_user_id: targetUserId } : {}) }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -263,7 +311,7 @@ export default function LineSettingsPage() {
       const res = await fetch("/api/line/set-owner", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ line_user_id: lineUserId }),
+        body: JSON.stringify({ line_user_id: lineUserId, ...(targetUserId ? { target_user_id: targetUserId } : {}) }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -354,6 +402,59 @@ export default function LineSettingsPage() {
           プロフィール設定へ戻る
         </Link>
 
+        {/* Admin user picker */}
+        {isAdmin && (
+          <div className="mb-6 rounded-2xl bg-amber-50 border border-amber-200 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Shield className="h-4 w-4 text-amber-600" />
+              <span className="text-sm font-semibold text-amber-800">管理者モード</span>
+            </div>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowUserPicker(!showUserPicker)}
+                className="w-full flex items-center justify-between gap-2 rounded-xl border border-amber-300 bg-white px-4 py-2.5 text-sm text-left hover:border-amber-400 transition-colors"
+              >
+                <span className="truncate">
+                  {targetUserId
+                    ? `${selectedUser?.display_name || selectedUser?.username || "ユーザー"} ${selectedUser?.line_connected ? "✅ LINE連携済" : "❌ 未連携"}`
+                    : "自分のアカウント（デフォルト）"}
+                </span>
+                <ChevronDown className={`h-4 w-4 text-amber-600 shrink-0 transition-transform ${showUserPicker ? "rotate-180" : ""}`} />
+              </button>
+              {showUserPicker && (
+                <div className="absolute z-50 mt-1 w-full max-h-64 overflow-y-auto rounded-xl border border-amber-200 bg-white shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => { setTargetUserId(null); setShowUserPicker(false); }}
+                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-amber-50 transition-colors ${!targetUserId ? "bg-amber-50 font-medium" : ""}`}
+                  >
+                    自分のアカウント
+                  </button>
+                  {adminUsers.filter((u) => u.id !== user?.id).map((u) => (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => { setTargetUserId(u.id); setShowUserPicker(false); }}
+                      className={`w-full text-left px-4 py-2.5 text-sm hover:bg-amber-50 transition-colors flex items-center justify-between ${targetUserId === u.id ? "bg-amber-50 font-medium" : ""}`}
+                    >
+                      <span className="truncate">{u.display_name || `@${u.username}` || u.id.slice(0, 8)}</span>
+                      <span className={`text-xs shrink-0 ml-2 ${u.line_connected ? "text-green-600" : "text-gray-400"}`}>
+                        {u.line_connected ? `✅ ${u.line_channel_name || "連携済"}` : "未連携"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {targetUserId && (
+              <p className="mt-2 text-xs text-amber-600">
+                {selectedUser?.display_name || selectedUser?.username} さんのLINE設定を管理中
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-1">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#06C755]/10">
@@ -366,9 +467,18 @@ export default function LineSettingsPage() {
               LINE連携設定
             </h1>
           </div>
-          <p className="mt-2 text-sm text-[#999999]">
-            LINE公式アカウントを連携すると、イベント作成時にフォロワーへ自動通知が送れます
-          </p>
+          <div className="flex items-center gap-3 mt-2">
+            <p className="text-sm text-[#999999]">
+              LINE公式アカウントを連携すると、イベント作成時にフォロワーへ自動通知が送れます
+            </p>
+            <Link
+              href="/settings/line/guide"
+              className="shrink-0 inline-flex items-center gap-1 text-xs text-[#06C755] hover:underline underline-offset-2"
+            >
+              <BookOpen className="h-3 w-3" />
+              ガイド
+            </Link>
+          </div>
         </div>
 
         {/* Success toast */}
@@ -653,6 +763,22 @@ export default function LineSettingsPage() {
                 </div>
               </SectionCard>
 
+              {/* Setup guide link */}
+              <SectionCard title="セットアップガイド">
+                <div className="space-y-3">
+                  <p className="text-sm text-[#666666]">
+                    LINE連携の手順を画像付きで詳しく解説しています。他の方にLINE連携を案内する際にもご活用ください。
+                  </p>
+                  <Link
+                    href="/settings/line/guide"
+                    className="flex items-center gap-2 px-4 py-3 rounded-xl bg-[#06C755]/10 text-[#06C755] text-sm font-medium hover:bg-[#06C755]/20 transition-colors"
+                  >
+                    <BookOpen className="h-4 w-4" />
+                    画像付きセットアップガイドを見る →
+                  </Link>
+                </div>
+              </SectionCard>
+
               {/* Disconnect */}
               <SectionCard title="連携解除">
                 <div className="space-y-3">
@@ -828,6 +954,13 @@ export default function LineSettingsPage() {
                     </span>
                   </li>
                 </ol>
+                <Link
+                  href="/settings/line/guide"
+                  className="flex items-center gap-2 mt-4 px-4 py-3 rounded-xl bg-[#06C755]/10 text-[#06C755] text-sm font-medium hover:bg-[#06C755]/20 transition-colors"
+                >
+                  <BookOpen className="h-4 w-4" />
+                  画像付きの詳しいセットアップガイドを見る →
+                </Link>
               </SectionCard>
             </>
           )}

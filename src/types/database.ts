@@ -18,6 +18,7 @@ export type Database = {
           bio: string | null
           sns_links: Json | null
           is_teacher: boolean
+          is_admin: boolean
           line_user_id: string | null
           created_at: string
           updated_at: string
@@ -30,6 +31,7 @@ export type Database = {
           bio?: string | null
           sns_links?: Json | null
           is_teacher?: boolean
+          is_admin?: boolean
           line_user_id?: string | null
           created_at?: string
           updated_at?: string
@@ -42,6 +44,7 @@ export type Database = {
           bio?: string | null
           sns_links?: Json | null
           is_teacher?: boolean
+          is_admin?: boolean
           line_user_id?: string | null
           created_at?: string
           updated_at?: string
