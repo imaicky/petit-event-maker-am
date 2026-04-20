@@ -905,6 +905,18 @@ export default function DashboardPage() {
                 Stripe決済
               </Button>
             </Link>
+            {isSuperAdmin && (
+              <Link href="/settings/line">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 rounded-full border-[#06C755]/30 gap-1.5 text-[#06C755] hover:bg-[#06C755]/10 hover:border-[#06C755]/50"
+                >
+                  <Shield className="h-3.5 w-3.5" />
+                  LINE管理
+                </Button>
+              </Link>
+            )}
             <Link href="/menus/new">
               <Button
                 variant="outline"

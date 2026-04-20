@@ -13,6 +13,8 @@ import {
   Bell,
   ChevronDown,
   LogIn,
+  Shield,
+  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -178,6 +180,15 @@ export function Header() {
                               icon: <Settings className="h-4 w-4" />,
                               label: "プロフィール設定",
                             },
+                            ...(profile?.is_admin
+                              ? [
+                                  {
+                                    href: "/settings/line",
+                                    icon: <MessageSquare className="h-4 w-4" />,
+                                    label: "LINE管理（Admin）",
+                                  },
+                                ]
+                              : []),
                           ].map(({ href, icon, label }) => (
                             <Link
                               key={href}
@@ -355,6 +366,16 @@ export function Header() {
                     <Settings className="h-4 w-4 shrink-0 text-[#999999]" />
                     プロフィール設定
                   </Link>
+                  {profile?.is_admin && (
+                    <Link
+                      href="/settings/line"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-3 px-5 py-3.5 text-sm text-[#06C755] hover:bg-[#06C755]/5 transition-colors duration-150"
+                    >
+                      <Shield className="h-4 w-4 shrink-0" />
+                      LINE管理（Admin）
+                    </Link>
+                  )}
                   <div className="mx-5 my-1 h-px bg-[#E5E5E5]" />
                   <button
                     onClick={handleLogout}
