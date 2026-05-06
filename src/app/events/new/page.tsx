@@ -1221,7 +1221,7 @@ function NewEventPageInner() {
         </div>
       </div>
 
-      <LoginDialog open={showLoginDialog} onOpenChange={setShowLoginDialog} />
+      <LoginDialog open={showLoginDialog} onOpenChange={setShowLoginDialog} defaultMode="signup" />
     </main>
   );
 }
