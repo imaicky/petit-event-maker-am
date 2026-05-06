@@ -195,6 +195,10 @@ type EventForFlex = {
   title: string;
   datetime: string;
   location?: string | null;
+  location_type?: string | null;
+  online_url?: string | null;
+  zoom_meeting_id?: string | null;
+  zoom_passcode?: string | null;
   price: number;
   capacity?: number | null;
   image_url?: string | null;
@@ -461,7 +465,7 @@ export function buildReminderFlexBubble(
                 { type: "text", text: dateStr, size: "sm", color: "#666666", flex: 5, wrap: true },
               ],
             },
-            ...(event.location
+            ...(event.location && event.location_type !== "online"
               ? [
                   {
                     type: "box",
@@ -474,6 +478,9 @@ export function buildReminderFlexBubble(
                   },
                 ]
               : []),
+            ...(event.location_type === "online" || event.location_type === "hybrid"
+              ? buildOnlineFlexLines(event)
+              : []),
           ],
         },
       ],
@@ -483,10 +490,24 @@ export function buildReminderFlexBubble(
       layout: "vertical",
       spacing: "sm",
       contents: [
+        ...(event.online_url
+          ? [
+              {
+                type: "button",
+                style: "primary",
+                color: "#06C755",
+                action: {
+                  type: "uri",
+                  label: "オンラインルームに入る",
+                  uri: event.online_url,
+                },
+              },
+            ]
+          : []),
         {
           type: "button",
-          style: "primary",
-          color: "#1A1A1A",
+          style: event.online_url ? "secondary" : "primary",
+          color: event.online_url ? undefined : "#1A1A1A",
           action: {
             type: "uri",
             label: "イベント詳細",
@@ -499,6 +520,44 @@ export function buildReminderFlexBubble(
   };
 
   return bubble;
+}
+
+// Build LINE Flex rows for online meeting info (Zoom ID/passcode/URL).
+function buildOnlineFlexLines(event: EventForFlex): Record<string, unknown>[] {
+  const rows: Record<string, unknown>[] = [];
+  if (event.zoom_meeting_id) {
+    rows.push({
+      type: "box",
+      layout: "baseline",
+      spacing: "sm",
+      contents: [
+        { type: "text", text: "🎥", size: "sm", flex: 0 },
+        { type: "text", text: `ID: ${event.zoom_meeting_id}`, size: "sm", color: "#666666", flex: 5, wrap: true },
+      ],
+    });
+    if (event.zoom_passcode) {
+      rows.push({
+        type: "box",
+        layout: "baseline",
+        spacing: "sm",
+        contents: [
+          { type: "text", text: "🔑", size: "sm", flex: 0 },
+          { type: "text", text: `Pass: ${event.zoom_passcode}`, size: "sm", color: "#666666", flex: 5, wrap: true },
+        ],
+      });
+    }
+  } else if (event.online_url) {
+    rows.push({
+      type: "box",
+      layout: "baseline",
+      spacing: "sm",
+      contents: [
+        { type: "text", text: "🎥", size: "sm", flex: 0 },
+        { type: "text", text: "オンライン開催", size: "sm", color: "#666666", flex: 5, wrap: true },
+      ],
+    });
+  }
+  return rows;
 }
 
 // ─── Booking Confirmation Flex (for attendees) ─────────────
@@ -841,6 +900,343 @@ export function buildMenuBookingConfirmationFlex(
 }
 
 // ─── Booking Notification Text Helpers ──────────────────
+
+// ─── Cancellation & Waitlist Notification Builders ──────────
+
+export function buildCancellationNotifyText(
+  eventTitle: string,
+  guestName: string,
+  currentCount: number,
+  capacity: number | null
+): string {
+  const capacityStr = capacity != null ? `（現在${currentCount}名／定員${capacity}名）` : `（現在${currentCount}名）`;
+  return `📩 予約がキャンセルされました\n\n${eventTitle}\n${guestName}さんがキャンセルしました${capacityStr}`;
+}
+
+export function buildWaitlistNotifyText(
+  eventTitle: string,
+  guestName: string,
+  waitlistCount: number
+): string {
+  return `📋 キャンセル待ちが追加されました\n\n${eventTitle}\n${guestName}さんがキャンセル待ちに登録しました（待ち${waitlistCount}名）`;
+}
+
+export function buildWaitlistPromotionNotifyText(
+  eventTitle: string,
+  guestName: string,
+  currentCount: number,
+  capacity: number | null
+): string {
+  const capacityStr = capacity != null ? `（現在${currentCount}名／定員${capacity}名）` : `（現在${currentCount}名）`;
+  return `📩 キャンセル待ちから繰り上がりました\n\n${eventTitle}\n${guestName}さんの予約が確定しました${capacityStr}`;
+}
+
+export function buildWaitlistConfirmationFlex(
+  event: EventForFlex,
+  guestName: string,
+  baseUrl: string
+): FlexContainer {
+  const eventUrl = event.short_code
+    ? `${baseUrl}/e/${event.short_code}`
+    : `${baseUrl}/events/${event.id}`;
+  const dateStr = formatDateJa(event.datetime);
+  const priceStr = event.price === 0 ? "無料" : `¥${event.price.toLocaleString()}`;
+
+  const bubble: Record<string, unknown> = {
+    type: "bubble",
+    body: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "text",
+          text: "📋 キャンセル待ち登録完了",
+          color: "#FF8C00",
+          size: "sm",
+          weight: "bold",
+        },
+        {
+          type: "text",
+          text: event.title,
+          weight: "bold",
+          size: "lg",
+          wrap: true,
+          margin: "md",
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          margin: "lg",
+          spacing: "sm",
+          contents: [
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "👤", size: "sm", flex: 0 },
+                { type: "text", text: `${guestName} 様`, size: "sm", color: "#666666", flex: 5 },
+              ],
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "📅", size: "sm", flex: 0 },
+                { type: "text", text: dateStr, size: "sm", color: "#666666", flex: 5, wrap: true },
+              ],
+            },
+            ...(event.location
+              ? [
+                  {
+                    type: "box",
+                    layout: "baseline",
+                    spacing: "sm",
+                    contents: [
+                      { type: "text", text: "📍", size: "sm", flex: 0 },
+                      { type: "text", text: event.location, size: "sm", color: "#666666", flex: 5, wrap: true },
+                    ],
+                  },
+                ]
+              : []),
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "💰", size: "sm", flex: 0 },
+                { type: "text", text: priceStr, size: "sm", color: "#1A1A1A", weight: "bold", flex: 5 },
+              ],
+            },
+          ],
+        },
+        {
+          type: "text",
+          text: "空きが出た場合、自動的に繰り上がります",
+          size: "xs",
+          color: "#999999",
+          margin: "lg",
+          wrap: true,
+        },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#FF8C00",
+          action: {
+            type: "uri",
+            label: "イベント詳細",
+            uri: eventUrl,
+          },
+        },
+      ],
+      flex: 0,
+    },
+  };
+
+  return bubble;
+}
+
+export function buildWaitlistPromotionFlex(
+  event: EventForFlex,
+  guestName: string,
+  baseUrl: string
+): FlexContainer {
+  const eventUrl = event.short_code
+    ? `${baseUrl}/e/${event.short_code}`
+    : `${baseUrl}/events/${event.id}`;
+  const dateStr = formatDateJa(event.datetime);
+  const priceStr = event.price === 0 ? "無料" : `¥${event.price.toLocaleString()}`;
+
+  const bubble: Record<string, unknown> = {
+    type: "bubble",
+    body: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "text",
+          text: "🎉 予約が確定しました！",
+          color: "#06C755",
+          size: "sm",
+          weight: "bold",
+        },
+        {
+          type: "text",
+          text: event.title,
+          weight: "bold",
+          size: "lg",
+          wrap: true,
+          margin: "md",
+        },
+        {
+          type: "text",
+          text: "キャンセル待ちから繰り上がりました",
+          size: "xs",
+          color: "#06C755",
+          margin: "sm",
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          margin: "lg",
+          spacing: "sm",
+          contents: [
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "👤", size: "sm", flex: 0 },
+                { type: "text", text: `${guestName} 様`, size: "sm", color: "#666666", flex: 5 },
+              ],
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "📅", size: "sm", flex: 0 },
+                { type: "text", text: dateStr, size: "sm", color: "#666666", flex: 5, wrap: true },
+              ],
+            },
+            ...(event.location
+              ? [
+                  {
+                    type: "box",
+                    layout: "baseline",
+                    spacing: "sm",
+                    contents: [
+                      { type: "text", text: "📍", size: "sm", flex: 0 },
+                      { type: "text", text: event.location, size: "sm", color: "#666666", flex: 5, wrap: true },
+                    ],
+                  },
+                ]
+              : []),
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "💰", size: "sm", flex: 0 },
+                { type: "text", text: priceStr, size: "sm", color: "#1A1A1A", weight: "bold", flex: 5 },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#06C755",
+          action: {
+            type: "uri",
+            label: "イベント詳細",
+            uri: eventUrl,
+          },
+        },
+      ],
+      flex: 0,
+    },
+  };
+
+  return bubble;
+}
+
+export function buildCancellationFlex(
+  event: EventForFlex,
+  guestName: string,
+  baseUrl: string
+): FlexContainer {
+  const eventUrl = event.short_code
+    ? `${baseUrl}/e/${event.short_code}`
+    : `${baseUrl}/events/${event.id}`;
+  const dateStr = formatDateJa(event.datetime);
+
+  const bubble: Record<string, unknown> = {
+    type: "bubble",
+    body: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "text",
+          text: "❌ 予約がキャンセルされました",
+          color: "#DC2626",
+          size: "sm",
+          weight: "bold",
+        },
+        {
+          type: "text",
+          text: event.title,
+          weight: "bold",
+          size: "lg",
+          wrap: true,
+          margin: "md",
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          margin: "lg",
+          spacing: "sm",
+          contents: [
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "👤", size: "sm", flex: 0 },
+                { type: "text", text: `${guestName} 様`, size: "sm", color: "#666666", flex: 5 },
+              ],
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "📅", size: "sm", flex: 0 },
+                { type: "text", text: dateStr, size: "sm", color: "#666666", flex: 5, wrap: true },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#1A1A1A",
+          action: {
+            type: "uri",
+            label: "イベント詳細",
+            uri: eventUrl,
+          },
+        },
+      ],
+      flex: 0,
+    },
+  };
+
+  return bubble;
+}
 
 export function buildMenuBookingNotifyText(
   menuTitle: string,

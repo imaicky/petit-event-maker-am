@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { CopyableText } from "@/components/copyable-text";
+import { PaymentPendingNotice } from "@/components/payment-pending-notice";
 import { buildGoogleCalendarUrl } from "@/lib/calendar";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -36,8 +38,21 @@ interface EventData {
   is_published?: boolean;
   line_friend_url?: string | null;
   payment_method?: string | null;
+  payment_methods?: string[] | null;
   payment_info?: string | null;
   payment_link?: string | null;
+  bank_name?: string | null;
+  bank_branch?: string | null;
+  bank_account_type?: string | null;
+  bank_account_number?: string | null;
+  bank_account_holder?: string | null;
+  bank_note?: string | null;
+}
+
+interface BookingExtras {
+  chosenMethod: string | null;
+  paymentDeadline: string | null;
+  isPaymentPending: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -195,6 +210,7 @@ export default async function ThanksPage({
   const guestEmail = typeof sp?.email === "string" ? sp.email : "";
   const isWaitlisted = sp?.waitlisted === "1";
   const sessionId = typeof sp?.session_id === "string" ? sp.session_id : "";
+  const bookingId = typeof sp?.booking_id === "string" ? sp.booking_id : "";
 
   // Verify payment via DB instead of trusting the URL parameter
   let isPaid = false;
@@ -231,6 +247,91 @@ export default async function ThanksPage({
     }
   } catch {
     /* ignore */
+  }
+
+  // The public API hides Zoom credentials / online URL. Re-fetch them via admin
+  // client only after verifying this visitor actually booked. Verification order
+  // (strongest first):
+  //   1. booking_id + email match (UUID is unguessable, email pins the identity)
+  //   2. Stripe session_id match (issued only at checkout success)
+  //   3. email-only match (legacy URLs from before booking_id was added)
+  let bookingExtras: BookingExtras = { chosenMethod: null, paymentDeadline: null, isPaymentPending: false };
+  if (event && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    try {
+      const admin = createAdminClient();
+      type FoundBooking = { id: string; payment_method: string | null; payment_status: string | null; payment_deadline: string | null };
+      let booking: FoundBooking | null = null;
+      const select = "id, payment_method, payment_status, payment_deadline";
+
+      if (bookingId && guestEmail) {
+        const { data: bk } = await admin
+          .from("bookings")
+          .select(select)
+          .eq("id", bookingId)
+          .eq("event_id", id)
+          .eq("guest_email", guestEmail)
+          .in("status", ["confirmed", "waitlisted"])
+          .maybeSingle();
+        booking = bk as FoundBooking | null;
+      }
+      if (!booking && sessionId) {
+        const { data: bk } = await admin
+          .from("bookings")
+          .select(select)
+          .eq("event_id", id)
+          .eq("stripe_session_id", sessionId)
+          .maybeSingle();
+        booking = bk as FoundBooking | null;
+      }
+      if (!booking && !bookingId && guestEmail) {
+        // Legacy fallback for thanks URLs issued before booking_id was added.
+        const { data: bk } = await admin
+          .from("bookings")
+          .select(select)
+          .eq("event_id", id)
+          .eq("guest_email", guestEmail)
+          .in("status", ["confirmed", "waitlisted"])
+          .limit(1)
+          .maybeSingle();
+        booking = bk as FoundBooking | null;
+      }
+      if (booking) {
+        bookingExtras = {
+          chosenMethod: booking.payment_method ?? null,
+          paymentDeadline: booking.payment_deadline ?? null,
+          isPaymentPending: booking.payment_status === "pending",
+        };
+        // Withhold Zoom info from any pending-payment booking. This catches:
+        //   - Bank: until organizer manually confirms
+        //   - Stripe: between Stripe redirect and webhook firing, OR if a
+        //     malicious user copied the session_id from Stripe checkout URL
+        //     and abandoned the payment (status remains 'pending')
+        const isBankPending = booking.payment_status === "pending";
+        const { data: full } = await admin
+          .from("events")
+          .select("online_url, zoom_meeting_id, zoom_passcode, bank_name, bank_branch, bank_account_type, bank_account_number, bank_account_holder, bank_note")
+          .eq("id", id)
+          .single();
+        if (full) {
+          const f = full as unknown as Record<string, string | null | undefined>;
+          event = {
+            ...event,
+            // Withhold Zoom info while bank payment is still pending.
+            online_url: isBankPending ? null : (f.online_url ?? null),
+            zoom_meeting_id: isBankPending ? null : (f.zoom_meeting_id ?? null),
+            zoom_passcode: isBankPending ? null : (f.zoom_passcode ?? null),
+            bank_name: f.bank_name ?? null,
+            bank_branch: f.bank_branch ?? null,
+            bank_account_type: f.bank_account_type ?? null,
+            bank_account_number: f.bank_account_number ?? null,
+            bank_account_holder: f.bank_account_holder ?? null,
+            bank_note: f.bank_note ?? null,
+          };
+        }
+      }
+    } catch {
+      /* non-fatal: thanks page still renders without Zoom info */
+    }
   }
 
   // Fetch a few other published events as suggestions (exclude this one)
@@ -322,12 +423,17 @@ export default async function ThanksPage({
                   お支払いが正常に完了しました
                 </p>
               )}
-              {!isPaid && event && (event.price ?? 0) > 0 && event.payment_method === 'onsite' && (
+              {!isPaid && event && (event.price ?? 0) > 0 && (bookingExtras.chosenMethod ?? event.payment_method) === 'bank' && (
+                <p className="mt-1 text-sm text-emerald-700 font-medium">
+                  銀行振込のご案内をお送りしました（入金確認後に参加情報をお届け）
+                </p>
+              )}
+              {!isPaid && event && (event.price ?? 0) > 0 && (bookingExtras.chosenMethod ?? event.payment_method) === 'onsite' && (
                 <p className="mt-1 text-sm text-amber-600 font-medium">
                   参加費は当日会場にてお支払いください
                 </p>
               )}
-              {!isPaid && event && (event.price ?? 0) > 0 && event.payment_method === 'custom' && (
+              {!isPaid && event && (event.price ?? 0) > 0 && (bookingExtras.chosenMethod ?? event.payment_method) === 'custom' && (
                 <p className="mt-1 text-sm text-gray-600 font-medium">
                   お支払い方法をご確認ください
                 </p>
@@ -381,8 +487,44 @@ export default async function ThanksPage({
           </div>
         )}
 
+        {/* Pending payment notice (Stripe webhook race window OR bank waiting) */}
+        {event && !isWaitlisted && bookingExtras.isPaymentPending &&
+          (bookingExtras.chosenMethod === 'stripe' || bookingExtras.chosenMethod === 'bank') && (
+            <PaymentPendingNotice method={bookingExtras.chosenMethod} />
+        )}
+
+        {/* ── Bank transfer payment instructions ─────────────────────── */}
+        {event && !isWaitlisted && (event.price ?? 0) > 0 && bookingExtras.chosenMethod === 'bank' && (
+          <div className="mb-5 rounded-2xl border-2 border-emerald-200 bg-emerald-50/60 p-5">
+            <p className="text-sm font-bold text-emerald-900 mb-1">💴 銀行振込でのお支払い</p>
+            <p className="text-xs text-emerald-800 mb-4">
+              下記口座へお振込みください。入金確認後、参加情報（オンライン参加URL等）をメールでお送りします。
+            </p>
+            <dl className="space-y-1.5 rounded-xl bg-white border border-emerald-100 p-4 text-sm">
+              <div className="flex justify-between gap-2"><dt className="text-emerald-700/80 shrink-0">銀行</dt><dd className="font-medium text-[#1A1A1A] text-right">{event.bank_name ?? "—"}</dd></div>
+              <div className="flex justify-between gap-2"><dt className="text-emerald-700/80 shrink-0">支店</dt><dd className="font-medium text-[#1A1A1A] text-right">{event.bank_branch ?? "—"}</dd></div>
+              <div className="flex justify-between gap-2"><dt className="text-emerald-700/80 shrink-0">口座種別</dt><dd className="font-medium text-[#1A1A1A] text-right">{event.bank_account_type ?? "普通"}</dd></div>
+              <div className="flex justify-between gap-2"><dt className="text-emerald-700/80 shrink-0">口座番号</dt><dd className="font-mono font-medium text-[#1A1A1A] text-right">{event.bank_account_number ?? "—"}</dd></div>
+              <div className="flex justify-between gap-2"><dt className="text-emerald-700/80 shrink-0">口座名義</dt><dd className="font-medium text-[#1A1A1A] text-right">{event.bank_account_holder ?? "—"}</dd></div>
+              <div className="flex justify-between gap-2 border-t border-emerald-100 pt-1.5 mt-1.5">
+                <dt className="text-emerald-700/80 shrink-0">振込金額</dt>
+                <dd className="font-bold text-[#1A1A1A] text-right">¥{event.price.toLocaleString("ja-JP")}</dd>
+              </div>
+              {bookingExtras.paymentDeadline && (
+                <div className="flex justify-between gap-2">
+                  <dt className="text-emerald-700/80 shrink-0">振込期限</dt>
+                  <dd className="font-medium text-red-600 text-right">{formatDatetime(bookingExtras.paymentDeadline)}</dd>
+                </div>
+              )}
+            </dl>
+            {event.bank_note && (
+              <p className="mt-3 text-xs text-emerald-800 whitespace-pre-line">📝 {event.bank_note}</p>
+            )}
+          </div>
+        )}
+
         {/* ── Payment method-specific notice ──────────────────────────── */}
-        {event && !isWaitlisted && (event.price ?? 0) > 0 && event.payment_method === 'onsite' && (
+        {event && !isWaitlisted && (event.price ?? 0) > 0 && (bookingExtras.chosenMethod ?? event.payment_method) === 'onsite' && (
           <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-5">
             <p className="text-sm font-bold text-amber-800 mb-1">当日現地払い</p>
             <p className="text-sm text-amber-700">
@@ -390,7 +532,7 @@ export default async function ThanksPage({
             </p>
           </div>
         )}
-        {event && !isWaitlisted && (event.price ?? 0) > 0 && event.payment_method === 'custom' && (
+        {event && !isWaitlisted && (event.price ?? 0) > 0 && (bookingExtras.chosenMethod ?? event.payment_method) === 'custom' && (
           <div className="mb-5 rounded-2xl border border-gray-200 bg-gray-50 p-5 space-y-2">
             <p className="text-sm font-bold text-gray-800">お支払いについて</p>
             {event.payment_info && (
@@ -487,13 +629,15 @@ export default async function ThanksPage({
                         <p className="mt-0.5 text-xs text-[#999999]">URLは後日お知らせします</p>
                       )}
                       {event.zoom_meeting_id && (
-                        <p className="mt-1 text-xs text-[#1A1A1A]/70">
-                          ミーティングID：<span className="font-mono font-medium text-[#1A1A1A]">{event.zoom_meeting_id}</span>
+                        <p className="mt-1 flex items-center gap-1 text-xs text-[#1A1A1A]/70">
+                          <span className="shrink-0">ミーティングID：</span>
+                          <CopyableText value={event.zoom_meeting_id} label="ミーティングID" />
                         </p>
                       )}
                       {event.zoom_passcode && (
-                        <p className="mt-0.5 text-xs text-[#1A1A1A]/70">
-                          パスコード：<span className="font-mono font-medium text-[#1A1A1A]">{event.zoom_passcode}</span>
+                        <p className="mt-0.5 flex items-center gap-1 text-xs text-[#1A1A1A]/70">
+                          <span className="shrink-0">パスコード：</span>
+                          <CopyableText value={event.zoom_passcode} label="パスコード" />
                         </p>
                       )}
                     </div>

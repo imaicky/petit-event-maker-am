@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { broadcastLineMessage, pushLineMessage, pushFlexMessage, buildBookingNotifyText, buildBookingConfirmationFlex, buildWaitlistNotifyText, buildWaitlistConfirmationFlex } from "@/lib/line";
 import { sendBatchEmails } from "@/lib/email";
 import { wrapInHtml } from "@/lib/email-templates";
+import { logPaymentEvent } from "@/lib/payment-audit";
 
 // ─── Validation ──────────────────────────────────────────────
 
@@ -26,7 +27,19 @@ const bookingSchema = z.object({
     .optional()
     .or(z.literal("")),
   passcode: z.string().optional(),
+  payment_method: z.enum(['stripe', 'bank', 'onsite', 'custom']).optional(),
 });
+
+// Default deadline rule: min(申込日 + 7日, 開催日 - 3日).
+// Override with event.payment_deadline_days if provided.
+function calculateBankDeadline(eventStart: string, deadlineDaysOverride: number | null | undefined): Date {
+  const now = Date.now();
+  const eventTs = new Date(eventStart).getTime();
+  const days = deadlineDaysOverride && deadlineDaysOverride > 0 ? deadlineDaysOverride : 7;
+  const fromBooking = now + days * 24 * 60 * 60 * 1000;
+  const beforeEvent = eventTs - 3 * 24 * 60 * 60 * 1000;
+  return new Date(Math.min(fromBooking, beforeEvent));
+}
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -137,7 +150,7 @@ export async function POST(
     // 1. Fetch event
     const { data: ev, error: evErr } = await admin
       .from("events")
-      .select("id, capacity, is_published, price, payment_method")
+      .select("id, capacity, is_published, price, payment_method, payment_methods, payment_deadline_days, booking_deadline, datetime, bank_account_number, bank_account_holder, payment_info, payment_link")
       .eq("id", eventId)
       .single();
     if (evErr || !ev) {
@@ -146,6 +159,22 @@ export async function POST(
     }
     if (!ev.is_published) {
       return NextResponse.json({ error: "このイベントは現在受付中ではありません" }, { status: 410 });
+    }
+    // Booking deadline: explicit cutoff overrides event start time.
+    const deadline = (ev as { booking_deadline?: string | null }).booking_deadline ?? null;
+    const eventStart = (ev as { datetime?: string }).datetime ?? null;
+    const now = Date.now();
+    if (deadline && now > new Date(deadline).getTime()) {
+      return NextResponse.json(
+        { error: "申し込み締め切りを過ぎています" },
+        { status: 410 }
+      );
+    }
+    if (!deadline && eventStart && now > new Date(eventStart).getTime()) {
+      return NextResponse.json(
+        { error: "このイベントは既に終了しています" },
+        { status: 410 }
+      );
     }
 
     // 2. Check capacity
@@ -167,9 +196,69 @@ export async function POST(
       return NextResponse.json({ error: "このメールアドレスは既にお申し込み済みです" }, { status: 409 });
     }
 
-    // 4. Insert booking (waitlisted if full)
+    // 4. Determine effective payment method for this booking.
+    // Filter out methods whose required event-level fields aren't populated
+    // (e.g. event has 'bank' enabled but no account info — booker would get
+    // a useless email with "—" everywhere).
+    type PM = 'stripe' | 'bank' | 'onsite' | 'custom';
+    const evFull = ev as Record<string, unknown>;
+    const isMethodConfigured = (m: PM): boolean => {
+      if (m === 'bank') {
+        return !!(evFull.bank_account_number && evFull.bank_account_holder);
+      }
+      // stripe — assume creator has Stripe set up; checkout endpoint will error
+      // gracefully if not. onsite/custom always allowed (custom info optional).
+      return true;
+    };
+    const rawAllowed: PM[] = (() => {
+      const arr = (ev as Record<string, unknown>).payment_methods as string[] | null;
+      if (Array.isArray(arr) && arr.length > 0) return arr.filter((m): m is PM => ['stripe','bank','onsite','custom'].includes(m));
+      const single = (ev as Record<string, unknown>).payment_method as string | null;
+      return single ? [single as PM] : [];
+    })();
+    const allowedMethods: PM[] = rawAllowed.filter(isMethodConfigured);
+
+    let chosenMethod: PM | null = null;
+    if ((ev.price ?? 0) > 0) {
+      if (data.payment_method && allowedMethods.includes(data.payment_method as PM)) {
+        chosenMethod = data.payment_method as PM;
+      } else if (allowedMethods.length === 1) {
+        chosenMethod = allowedMethods[0];
+      } else if (rawAllowed.length === 0) {
+        // Truly legacy event with no payment_methods array — fall back to Stripe.
+        chosenMethod = 'stripe';
+      } else if (allowedMethods.length === 0) {
+        // Event has methods configured at the array level but none are
+        // actually usable (e.g. only 'bank' enabled but bank info empty).
+        return NextResponse.json(
+          {
+            error: "決済方法の設定が不完全です。主催者にお問い合わせください。",
+          },
+          { status: 503 }
+        );
+      } else {
+        return NextResponse.json(
+          { error: "決済方法を選択してください" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // 5. Insert booking (waitlisted if full)
     const bookingStatus = isFull ? "waitlisted" : "confirmed";
-    const isPaid = (ev.price ?? 0) > 0 && ((ev as Record<string, unknown>).payment_method ?? 'stripe') === 'stripe';
+    const isPaid = chosenMethod === 'stripe';
+    const isPendingBank = chosenMethod === 'bank' && bookingStatus === "confirmed";
+    let paymentStatus: "pending" | "paid" | "none" | "refunded" | "failed" = "none";
+    if (isPaid) paymentStatus = "pending"; // Stripe — becomes 'paid' after checkout
+    else if (isPendingBank) paymentStatus = "pending"; // bank — becomes 'paid' after manual confirm
+
+    const paymentDeadline = isPendingBank
+      ? calculateBankDeadline(
+          (ev as { datetime: string }).datetime,
+          (ev as { payment_deadline_days?: number | null }).payment_deadline_days ?? null
+        ).toISOString()
+      : null;
+
     const { data: inserted, error: insErr } = await admin
       .from("bookings")
       .insert({
@@ -179,7 +268,9 @@ export async function POST(
         guest_email: data.guest_email,
         guest_phone: data.guest_phone || null,
         status: bookingStatus,
-        payment_status: isPaid ? "pending" : "none",
+        payment_status: paymentStatus,
+        payment_method: chosenMethod,
+        payment_deadline: paymentDeadline,
       })
       .select()
       .single();
@@ -190,10 +281,24 @@ export async function POST(
     }
     booking = inserted as BookingRow;
 
+    // Audit log: booking created (with payment expectations if any)
+    if (chosenMethod) {
+      await logPaymentEvent({
+        bookingId: booking.id,
+        eventId,
+        type: "created",
+        nextStatus: paymentStatus,
+        paymentMethod: chosenMethod,
+        amount: ev.price ?? null,
+        actor: user?.id ?? "guest",
+        metadata: { booking_status: bookingStatus, payment_deadline: paymentDeadline },
+      });
+    }
+
     // Fetch event details for notifications (use admin client for reliability)
     const { data: event } = await admin
       .from("events")
-      .select("id, title, datetime, location, location_type, online_url, zoom_meeting_id, zoom_passcode, location_url, capacity, price, creator_id, is_published")
+      .select("id, title, datetime, location, location_type, online_url, zoom_meeting_id, zoom_passcode, location_url, capacity, price, creator_id, is_published, bank_name, bank_branch, bank_account_type, bank_account_number, bank_account_holder, bank_note")
       .eq("id", eventId)
       .single();
 
@@ -233,8 +338,13 @@ export async function POST(
       const zoomPasscode = (event as Record<string, unknown>).zoom_passcode as string | null;
       const locationUrl = (event as Record<string, unknown>).location_url as string | null;
 
-      // Build online meeting info: Zoom ID/Passcode takes priority over online_url
+      // Build online meeting info: Zoom ID/Passcode takes priority over online_url.
+      // When the booking is bank-transfer pending, withhold Zoom credentials —
+      // they're sent after the organiser confirms payment.
       function buildOnlineLines(): string {
+        if (chosenMethod === 'bank') {
+          return "■ オンライン参加情報：入金確認後にメールでお知らせします";
+        }
         if (zoomMeetingId) {
           let lines = `■ ZoomミーティングID：${zoomMeetingId}`;
           if (zoomPasscode) lines += `\n■ Zoomパスコード：${zoomPasscode}`;
@@ -243,6 +353,29 @@ export async function POST(
         if (onlineUrl) return `■ オンラインURL：${onlineUrl}`;
         return "■ オンライン（URLは後日お知らせします）";
       }
+
+      // Bank transfer instructions for the email body
+      const bankSection = chosenMethod === 'bank' && paymentDeadline
+        ? (() => {
+            const ev2 = event as Record<string, unknown>;
+            const lines = [
+              "",
+              "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+              "💴 お振込みのお願い",
+              `■ 振込先銀行：${ev2.bank_name ?? "—"}`,
+              `■ 支店：${ev2.bank_branch ?? "—"}`,
+              `■ 口座種別：${ev2.bank_account_type ?? "普通"}`,
+              `■ 口座番号：${ev2.bank_account_number ?? "—"}`,
+              `■ 口座名義：${ev2.bank_account_holder ?? "—"}`,
+              `■ 振込金額：${priceStr}`,
+              `■ 振込期限：${formatDatetime(paymentDeadline)} まで`,
+              ev2.bank_note ? `■ 注意事項：${ev2.bank_note}` : null,
+              "※ 入金確認後、参加情報（オンライン参加URLなど）をメールでお送りします",
+              "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            ].filter((s): s is string => s !== null);
+            return lines.join("\n");
+          })()
+        : "";
 
       let locationLines = `■ 場所：${event.location ?? "未定"}`;
       if (locationType === "online") {
@@ -298,33 +431,42 @@ ${event.title} へのお申し込みが完了しました。
 ${locationLines}
 ■ 参加費：${priceStr}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+${bankSection}
 ご不明な点は主催者までお問い合わせください。
 当日のご参加を心よりお待ちしております。
 ${lineSection}
 プチイベント作成くん`;
 
-      supabase
-        .from("notifications")
-        .insert({
-          recipient_email: data.guest_email,
-          type: isWaitlisted ? "waitlist_confirmation" : "booking_confirmation",
-          subject: guestSubject,
-          body: guestBody,
-        })
-        .then(({ error }) => {
-          if (error) console.error("[book] guest notification insert error:", error);
-        });
+      // For Stripe-confirmed bookings, skip the immediate email — the user is
+      // about to be redirected to checkout. The Stripe webhook sends the
+      // participant info email after payment is actually confirmed, so the
+      // Zoom credentials never go out before the money does.
+      // Waitlisted Stripe bookings still get an email (no payment redirect).
+      const skipImmediateEmail =
+        chosenMethod === "stripe" && bookingStatus === "confirmed";
 
-      // Send confirmation email via Resend (async, non-blocking)
-      if (process.env.RESEND_API_KEY) {
-        sendBatchEmails({
-          to: [data.guest_email],
-          subject: guestSubject,
-          html: wrapInHtml(guestBody, event.title),
-        }).catch((err) => {
-          console.error("[book] Resend confirmation email error:", err);
-        });
+      if (!skipImmediateEmail) {
+        supabase
+          .from("notifications")
+          .insert({
+            recipient_email: data.guest_email,
+            type: isWaitlisted ? "waitlist_confirmation" : "booking_confirmation",
+            subject: guestSubject,
+            body: guestBody,
+          })
+          .then(({ error }) => {
+            if (error) console.error("[book] guest notification insert error:", error);
+          });
+
+        if (process.env.RESEND_API_KEY) {
+          sendBatchEmails({
+            to: [data.guest_email],
+            subject: guestSubject,
+            html: wrapInHtml(guestBody, event.title),
+          }).catch((err) => {
+            console.error("[book] Resend confirmation email error:", err);
+          });
+        }
       }
 
       // Also notify the creator if they have an email (uses admin client to bypass RLS)
@@ -474,11 +616,12 @@ ${lineSection}
     return NextResponse.json(
       {
         booking,
-        redirect: `/events/${eventId}/thanks?name=${encodeURIComponent(data.guest_name)}&email=${encodeURIComponent(data.guest_email)}${waitlistedParam}`,
+        redirect: `/events/${eventId}/thanks?booking_id=${encodeURIComponent(booking.id)}&name=${encodeURIComponent(data.guest_name)}&email=${encodeURIComponent(data.guest_email)}${waitlistedParam}`,
         line_friend_url: lineFriendUrl,
+        // Only Stripe needs an immediate redirect to a checkout flow
         requires_payment: isPaid && !isFull,
         booking_id: booking.id,
-        payment_method: (ev as Record<string, unknown>).payment_method ?? ((ev.price ?? 0) > 0 ? 'stripe' : null),
+        payment_method: chosenMethod,
       },
       { status: 201 }
     );

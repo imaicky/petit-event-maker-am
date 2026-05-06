@@ -27,6 +27,7 @@ import {
   Shield,
   Copy,
   CreditCard,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/header";
@@ -660,16 +661,16 @@ export default function DashboardPage() {
           .order("created_at", { ascending: false });
 
         if (sharedEventsData) {
-          const { data: sharedBookingsData } = await supabase
-            .from("bookings")
-            .select("event_id")
-            .in("event_id", sharedEventIds)
-            .eq("status", "confirmed");
-
-          const sharedCountMap: Record<string, number> = {};
-          for (const b of sharedBookingsData ?? []) {
-            sharedCountMap[b.event_id] = (sharedCountMap[b.event_id] ?? 0) + 1;
-          }
+          // Bookings RLS hides other people's rows from co-admins, so fetch
+          // counts via the server endpoint that uses the service role.
+          const sharedCountMap: Record<string, number> = await fetch("/api/booking-counts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ event_ids: sharedEventIds }),
+          })
+            .then((r) => (r.ok ? r.json() : { counts: {} }))
+            .then((j) => j.counts ?? {})
+            .catch(() => ({}));
 
           sharedEnriched = sharedEventsData.map((e) => ({
             ...e,
@@ -690,7 +691,7 @@ export default function DashboardPage() {
 
       if (menusData) {
         const menuIds = menusData.map((m) => m.id);
-        let menuCountMap: Record<string, number> = {};
+        const menuCountMap: Record<string, number> = {};
         if (menuIds.length > 0) {
           const { data: menuBookingsData } = await supabase
             .from("menu_bookings")
@@ -733,23 +734,23 @@ export default function DashboardPage() {
       // Exclude own events
       const otherEvents = allEventsData.filter((e) => e.creator_id !== user.id);
 
-      // Fetch booking counts
+      // Fetch booking counts via server endpoint (super-admin gets RLS bypass).
       const otherIds = otherEvents.map((e) => e.id);
       let countMap: Record<string, number> = {};
       if (otherIds.length > 0) {
-        const { data: bookingsData } = await supabase
-          .from("bookings")
-          .select("event_id")
-          .in("event_id", otherIds)
-          .eq("status", "confirmed");
-        for (const b of bookingsData ?? []) {
-          countMap[b.event_id] = (countMap[b.event_id] ?? 0) + 1;
-        }
+        countMap = await fetch("/api/booking-counts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ event_ids: otherIds }),
+        })
+          .then((r) => (r.ok ? r.json() : { counts: {} }))
+          .then((j) => j.counts ?? {})
+          .catch(() => ({}));
       }
 
       // Get creator emails via auth admin or profiles
       const creatorIds = [...new Set(otherEvents.map((e) => e.creator_id).filter((id): id is string => id !== null))];
-      let emailMap: Record<string, string> = {};
+      const emailMap: Record<string, string> = {};
       if (creatorIds.length > 0) {
         const { data: profilesData } = await supabase
           .from("profiles")
@@ -978,13 +979,23 @@ export default function DashboardPage() {
                 >
                   あなたのイベント
                 </h2>
-                <Link
-                  href="/events/new"
-                  className="text-xs text-[#1A1A1A] hover:underline flex items-center gap-0.5"
-                >
-                  <Plus className="h-3 w-3" />
-                  新規作成
-                </Link>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => fetchEvents(true)}
+                    disabled={eventsLoading}
+                    className="text-xs text-[#999999] hover:text-[#1A1A1A] hover:underline flex items-center gap-0.5 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`h-3 w-3 ${eventsLoading ? "animate-spin" : ""}`} />
+                    最新化
+                  </button>
+                  <Link
+                    href="/events/new"
+                    className="text-xs text-[#1A1A1A] hover:underline flex items-center gap-0.5"
+                  >
+                    <Plus className="h-3 w-3" />
+                    新規作成
+                  </Link>
+                </div>
               </div>
 
               {events.length === 0 ? (
@@ -1049,13 +1060,23 @@ export default function DashboardPage() {
                       他のユーザーのイベントを表示
                     </button>
                   ) : (
-                    <button
-                      onClick={() => setShowAllEvents(false)}
-                      className="text-xs text-[#999999] hover:underline flex items-center gap-0.5"
-                    >
-                      <EyeOff className="h-3 w-3" />
-                      閉じる
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => fetchAllEvents()}
+                        disabled={allEventsLoading}
+                        className="text-xs text-[#1A1A1A] hover:underline flex items-center gap-0.5 disabled:opacity-50"
+                      >
+                        <RefreshCw className={`h-3 w-3 ${allEventsLoading ? "animate-spin" : ""}`} />
+                        最新化
+                      </button>
+                      <button
+                        onClick={() => setShowAllEvents(false)}
+                        className="text-xs text-[#999999] hover:underline flex items-center gap-0.5"
+                      >
+                        <EyeOff className="h-3 w-3" />
+                        閉じる
+                      </button>
+                    </div>
                   )}
                 </div>
 

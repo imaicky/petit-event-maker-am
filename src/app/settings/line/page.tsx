@@ -128,23 +128,25 @@ export default function LineSettingsPage() {
   }, [authLoading, user, router]);
 
   // Check admin status and fetch user list
+  const refreshAdminUsers = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/users", { cache: "no-store" });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.isAdmin) {
+          setIsAdmin(true);
+          setAdminUsers(json.users ?? []);
+        }
+      }
+    } catch {
+      // not admin, ignore
+    }
+  }, []);
+
   useEffect(() => {
     if (!user) return;
-    (async () => {
-      try {
-        const res = await fetch("/api/admin/users");
-        if (res.ok) {
-          const json = await res.json();
-          if (json.isAdmin) {
-            setIsAdmin(true);
-            setAdminUsers(json.users ?? []);
-          }
-        }
-      } catch {
-        // not admin, ignore
-      }
-    })();
-  }, [user]);
+    refreshAdminUsers();
+  }, [user, refreshAdminUsers]);
 
   // Fetch existing LINE account
   const fetchLineAccount = useCallback(async () => {
@@ -234,6 +236,8 @@ export default function LineSettingsPage() {
       setToken("");
       setSecret("");
       showSuccess("LINE公式アカウントを連携しました");
+      // Refresh the admin user list so the picker reflects the new linked status
+      refreshAdminUsers();
     } catch {
       setErrorMsg("接続に失敗しました。もう一度お試しください。");
     } finally {
@@ -260,6 +264,7 @@ export default function LineSettingsPage() {
       setFollowers([]);
       setOwnerLineUserId(null);
       showSuccess("LINE連携を解除しました");
+      refreshAdminUsers();
     } catch {
       setErrorMsg("解除に失敗しました。もう一度お試しください。");
     } finally {

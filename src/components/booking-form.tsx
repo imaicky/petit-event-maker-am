@@ -41,6 +41,13 @@ const bookingSchema = z.object({
 
 type BookingFormValues = z.infer<typeof bookingSchema>;
 
+const PAYMENT_METHOD_META: Record<"stripe" | "bank" | "onsite" | "custom", { label: string; desc: string }> = {
+  stripe: { label: "クレジットカード（Stripe）", desc: "安全な決済画面に移動します" },
+  bank: { label: "銀行振込", desc: "振込先と期限をメールでお送りします" },
+  onsite: { label: "現地払い", desc: "当日会場でお支払い" },
+  custom: { label: "その他のお支払い", desc: "主催者の案内に従って" },
+};
+
 interface BookingFormProps {
   eventId: string;
   eventTitle: string;
@@ -49,9 +56,14 @@ interface BookingFormProps {
   remainingSpots: number;
   isLimited?: boolean;
   passcodeVerified?: boolean;
+  /** Legacy single payment method (kept for backward compat). */
   paymentMethod?: string | null;
+  /** Multi-payment-methods (preferred). */
+  paymentMethods?: string[] | null;
   paymentInfo?: string | null;
   paymentLink?: string | null;
+  /** Booking is closed because the deadline has passed or the event has started */
+  isClosed?: boolean;
   className?: string;
 }
 
@@ -74,10 +86,26 @@ export function BookingForm({
   isLimited,
   passcodeVerified,
   paymentMethod,
+  paymentMethods,
   paymentInfo,
   paymentLink,
+  isClosed,
   className,
 }: BookingFormProps) {
+  // Resolve list of allowed methods. Prefer the multi-select array, fall back
+  // to the legacy single method.
+  const availableMethods: ("stripe" | "bank" | "onsite" | "custom")[] =
+    paymentMethods && paymentMethods.length > 0
+      ? (paymentMethods.filter((m): m is "stripe" | "bank" | "onsite" | "custom" =>
+          ["stripe", "bank", "onsite", "custom"].includes(m)
+        ))
+      : paymentMethod
+      ? [paymentMethod as "stripe" | "bank" | "onsite" | "custom"]
+      : [];
+
+  const [selectedMethod, setSelectedMethod] = useState<"stripe" | "bank" | "onsite" | "custom" | null>(
+    availableMethods.length === 1 ? availableMethods[0] : null
+  );
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
   const [lineModal, setLineModal] = useState<{
@@ -96,11 +124,18 @@ export function BookingForm({
 
   const onSubmit = async (data: BookingFormValues) => {
     setServerError(null);
+    if (price > 0 && availableMethods.length > 1 && !selectedMethod) {
+      setServerError("お支払い方法を選択してください");
+      return;
+    }
     try {
       const res = await fetch(`/api/events/${eventId}/book`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          payment_method: price > 0 ? selectedMethod ?? availableMethods[0] : undefined,
+        }),
       });
 
       const json = await res.json();
@@ -123,7 +158,7 @@ export function BookingForm({
           });
           const stripeJson = await stripeRes.json();
           if (stripeRes.ok && stripeJson.url) {
-            window.location.href = stripeJson.url;
+            window.location.assign(stripeJson.url);
             return;
           }
           // Stripe checkout failed — cancel the pending booking to clean up
@@ -154,9 +189,12 @@ export function BookingForm({
         }
       }
 
+      const bookingIdParam = json.booking_id
+        ? `&booking_id=${encodeURIComponent(json.booking_id)}`
+        : "";
       const redirectUrl =
         json.redirect ??
-        `/events/${eventId}/thanks?name=${encodeURIComponent(data.guest_name)}&email=${encodeURIComponent(data.guest_email)}`;
+        `/events/${eventId}/thanks?name=${encodeURIComponent(data.guest_name)}&email=${encodeURIComponent(data.guest_email)}${bookingIdParam}`;
 
       // Show LINE friend modal if URL is available, otherwise redirect immediately
       if (json.line_friend_url) {
@@ -178,6 +216,19 @@ export function BookingForm({
 
   const inputBase =
     "h-11 rounded-xl border-[#E5E5E5] bg-white pl-10 transition-colors focus-visible:border-[#1A1A1A] focus-visible:ring-[#1A1A1A]/20";
+
+  // Booking deadline passed (or event already started) — surface a clear notice
+  // and do not render the form. The CTA on the page is also hidden.
+  if (isClosed) {
+    return (
+      <div className={cn("rounded-2xl border border-[#E5E5E5] bg-white p-6 text-center", className)}>
+        <p className="text-base font-bold text-[#1A1A1A]">受付終了</p>
+        <p className="mt-1 text-xs text-[#999999]">
+          このイベントの申し込み受付は終了しました。
+        </p>
+      </div>
+    );
+  }
 
   return (
     <form
@@ -326,22 +377,69 @@ export function BookingForm({
         </div>
       )}
 
-      {/* Payment info for paid events */}
-      {price > 0 && !isFull && (paymentMethod ?? 'stripe') === 'stripe' && (
+      {/* Payment method picker (paid events with multiple methods) */}
+      {price > 0 && !isFull && availableMethods.length > 1 && (
+        <div className="space-y-2 rounded-xl border border-[#E5E5E5] bg-white p-4">
+          <p className="text-sm font-medium text-[#1A1A1A]">お支払い方法</p>
+          <div className="grid gap-2">
+            {availableMethods.map((m) => {
+              const meta = PAYMENT_METHOD_META[m];
+              const checked = selectedMethod === m;
+              return (
+                <label
+                  key={m}
+                  className={cn(
+                    "flex cursor-pointer items-center gap-3 rounded-lg border-2 p-3 transition-all",
+                    checked
+                      ? "border-[#1A1A1A] bg-[#F7F7F7]"
+                      : "border-[#E5E5E5] bg-white hover:border-[#1A1A1A]/40"
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="payment_method"
+                    value={m}
+                    checked={checked}
+                    onChange={() => setSelectedMethod(m)}
+                    className="h-4 w-4 accent-[#1A1A1A]"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className={cn("text-sm font-medium", checked ? "text-[#1A1A1A]" : "text-[#666666]")}>
+                      {meta.label}
+                    </p>
+                    <p className="text-[11px] text-[#999999]">{meta.desc}</p>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Payment info for paid events — uses selectedMethod */}
+      {price > 0 && !isFull && (selectedMethod ?? availableMethods[0] ?? 'stripe') === 'stripe' && (
         <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3">
           <p className="text-xs text-blue-700">
             Stripeの安全な決済画面に移動します。クレジットカードで決済できます。
           </p>
         </div>
       )}
-      {price > 0 && !isFull && paymentMethod === 'onsite' && (
+      {price > 0 && !isFull && selectedMethod === 'bank' && (
+        <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3">
+          <p className="text-xs text-emerald-800">
+            銀行振込先と振込期限を申込み完了メールでお送りします。<br />
+            <span className="font-medium">入金確認後にオンライン参加情報などをお知らせ</span>します。
+          </p>
+        </div>
+      )}
+      {price > 0 && !isFull && selectedMethod === 'onsite' && (
         <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3">
           <p className="text-xs text-amber-700">
             参加費は当日、現地にてお支払いください。
           </p>
         </div>
       )}
-      {price > 0 && !isFull && paymentMethod === 'custom' && (
+      {price > 0 && !isFull && selectedMethod === 'custom' && (
         <div className="rounded-xl bg-gray-50 border border-gray-200 px-4 py-3 space-y-1.5">
           {paymentInfo && (
             <p className="text-xs text-gray-700 whitespace-pre-line">{paymentInfo}</p>
@@ -377,11 +475,11 @@ export function BookingForm({
         {isSubmitting ? (
           <span className="flex items-center justify-center gap-2">
             <Loader2 className="h-5 w-5 animate-spin" />
-            <span>{price > 0 && !isFull && (paymentMethod ?? 'stripe') === 'stripe' ? "決済ページへ移動中..." : "送信中..."}</span>
+            <span>{price > 0 && !isFull && (selectedMethod ?? availableMethods[0] ?? 'stripe') === 'stripe' ? "決済ページへ移動中..." : "送信中..."}</span>
           </span>
         ) : isFull ? (
           "キャンセル待ちに登録"
-        ) : price > 0 && (paymentMethod ?? 'stripe') === 'stripe' ? (
+        ) : price > 0 && (selectedMethod ?? availableMethods[0] ?? 'stripe') === 'stripe' ? (
           "決済に進む"
         ) : (
           "参加を申し込む"

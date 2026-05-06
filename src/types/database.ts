@@ -90,8 +90,17 @@ export type Database = {
           reminder_24h_sent: boolean
           reminder_2h_sent: boolean
           payment_method: string | null
+          payment_methods: string[] | null
           payment_link: string | null
           payment_info: string | null
+          payment_deadline_days: number | null
+          bank_name: string | null
+          bank_branch: string | null
+          bank_account_type: string | null
+          bank_account_number: string | null
+          bank_account_holder: string | null
+          bank_note: string | null
+          booking_deadline: string | null
           created_at: string
           updated_at: string
         }
@@ -125,8 +134,17 @@ export type Database = {
           reminder_24h_sent?: boolean
           reminder_2h_sent?: boolean
           payment_method?: string | null
+          payment_methods?: string[] | null
           payment_link?: string | null
           payment_info?: string | null
+          payment_deadline_days?: number | null
+          bank_name?: string | null
+          bank_branch?: string | null
+          bank_account_type?: string | null
+          bank_account_number?: string | null
+          bank_account_holder?: string | null
+          bank_note?: string | null
+          booking_deadline?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -160,8 +178,17 @@ export type Database = {
           reminder_24h_sent?: boolean
           reminder_2h_sent?: boolean
           payment_method?: string | null
+          payment_methods?: string[] | null
           payment_link?: string | null
           payment_info?: string | null
+          payment_deadline_days?: number | null
+          bank_name?: string | null
+          bank_branch?: string | null
+          bank_account_type?: string | null
+          bank_account_number?: string | null
+          bank_account_holder?: string | null
+          bank_note?: string | null
+          booking_deadline?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -187,6 +214,9 @@ export type Database = {
           attended: boolean | null
           stripe_session_id: string | null
           payment_status: 'none' | 'pending' | 'paid' | 'failed' | 'refunded'
+          payment_method: string | null
+          payment_deadline: string | null
+          payment_reminded_at: string | null
           created_at: string
         }
         Insert: {
@@ -200,6 +230,9 @@ export type Database = {
           attended?: boolean | null
           stripe_session_id?: string | null
           payment_status?: 'none' | 'pending' | 'paid' | 'failed' | 'refunded'
+          payment_method?: string | null
+          payment_deadline?: string | null
+          payment_reminded_at?: string | null
           created_at?: string
         }
         Update: {
@@ -213,6 +246,9 @@ export type Database = {
           attended?: boolean | null
           stripe_session_id?: string | null
           payment_status?: 'none' | 'pending' | 'paid' | 'failed' | 'refunded'
+          payment_method?: string | null
+          payment_deadline?: string | null
+          payment_reminded_at?: string | null
           created_at?: string
         }
         Relationships: [
@@ -741,6 +777,51 @@ export type Database = {
             referencedColumns: ['id']
           }
         ]
+      }
+      payment_events: {
+        Row: {
+          id: string
+          booking_id: string
+          event_id: string
+          type: string
+          prev_status: string | null
+          next_status: string | null
+          payment_method: string | null
+          amount: number | null
+          actor: string | null
+          note: string | null
+          metadata: Record<string, unknown> | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          booking_id: string
+          event_id: string
+          type: string
+          prev_status?: string | null
+          next_status?: string | null
+          payment_method?: string | null
+          amount?: number | null
+          actor?: string | null
+          note?: string | null
+          metadata?: Record<string, unknown> | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          booking_id?: string
+          event_id?: string
+          type?: string
+          prev_status?: string | null
+          next_status?: string | null
+          payment_method?: string | null
+          amount?: number | null
+          actor?: string | null
+          note?: string | null
+          metadata?: Record<string, unknown> | null
+          created_at?: string
+        }
+        Relationships: []
       }
     }
     Views: Record<string, never>

@@ -18,10 +18,7 @@ export function EventAdminBar({ eventId, bookingCount }: EventAdminBarProps) {
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    if (isLoading || !user) {
-      setChecked(true);
-      return;
-    }
+    if (isLoading || !user) return;
 
     async function check() {
       const supabase = createClient();
@@ -64,6 +61,7 @@ export function EventAdminBar({ eventId, bookingCount }: EventAdminBarProps) {
     check();
   }, [user, isLoading, eventId]);
 
+  if (isLoading || !user) return null;
   if (!checked || !canManage) return null;
 
   return (

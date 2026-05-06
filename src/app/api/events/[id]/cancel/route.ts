@@ -13,6 +13,7 @@ import {
 import { sendBatchEmails } from "@/lib/email";
 import { wrapInHtml } from "@/lib/email-templates";
 import { getStripeForCreator } from "@/lib/stripe";
+import { logPaymentEvent } from "@/lib/payment-audit";
 
 // ─── Validation ──────────────────────────────────────────────
 
@@ -138,6 +139,17 @@ export async function POST(
       );
     }
 
+    // Audit log: cancellation
+    await logPaymentEvent({
+      bookingId: booking_id,
+      eventId,
+      type: "cancelled",
+      prevStatus: booking.payment_status ?? null,
+      paymentMethod: (booking as { payment_method?: string | null }).payment_method ?? null,
+      actor: "user_or_organizer",
+      note: `Booking status: ${booking.status} → cancelled`,
+    });
+
     // ─── Stripe refund / session expiration ──────────────────────────────────────
     const stripe = await getStripeForCreator(event.creator_id);
     if (booking.stripe_session_id && stripe) {
@@ -198,7 +210,7 @@ export async function POST(
         // Get the oldest waitlisted booking (FIFO)
         const { data: nextInLine } = await admin
           .from("bookings")
-          .select("id, user_id, guest_name, guest_email")
+          .select("id, user_id, guest_name, guest_email, payment_method")
           .eq("event_id", eventId)
           .eq("status", "waitlisted")
           .order("created_at", { ascending: true })
@@ -206,9 +218,36 @@ export async function POST(
           .maybeSingle();
 
         if (nextInLine) {
+          // For bank-transfer waitlist promotions, the original booking row
+          // had payment_status='none' and payment_deadline=null because they
+          // weren't expected to pay yet. When they get promoted to confirmed
+          // we have to start the bank-payment clock so the cron picks them up.
+          const isBankPromotion =
+            (nextInLine as { payment_method?: string | null }).payment_method === "bank";
+          const updatePayload: Record<string, unknown> = { status: "confirmed" };
+          if (isBankPromotion) {
+            updatePayload.payment_status = "pending";
+            // Recompute deadline using event-level config
+            const { data: ev2 } = await admin
+              .from("events")
+              .select("datetime, payment_deadline_days")
+              .eq("id", eventId)
+              .single();
+            if (ev2) {
+              const days =
+                (ev2 as { payment_deadline_days?: number | null }).payment_deadline_days || 7;
+              const eventTs = new Date((ev2 as { datetime: string }).datetime).getTime();
+              const fromBooking = Date.now() + days * 24 * 60 * 60 * 1000;
+              const beforeEvent = eventTs - 3 * 24 * 60 * 60 * 1000;
+              updatePayload.payment_deadline = new Date(
+                Math.min(fromBooking, beforeEvent)
+              ).toISOString();
+              updatePayload.payment_reminded_at = null;
+            }
+          }
           const { error: promoteError } = await admin
             .from("bookings")
-            .update({ status: "confirmed" })
+            .update(updatePayload)
             .eq("id", nextInLine.id)
             .eq("status", "waitlisted"); // guard against race
 

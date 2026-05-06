@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, Lock, ArrowRight, Eye, EyeOff, CheckCircle2 } from "lucide-react";
+import { Mail, Lock, ArrowRight, Eye, EyeOff, CheckCircle2, MailCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -18,17 +18,19 @@ interface LoginDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-type Mode = "login" | "signup" | "reset" | "reset-sent";
+type Mode = "login" | "signup" | "reset" | "reset-sent" | "signup-sent" | "needs-confirmation";
 
 export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
-  const { signInWithPassword, signUpWithPassword, signInWithLINE, resetPassword } = useAuth();
+  const { signInWithPassword, signUpWithPassword, signInWithLINE, resetPassword, resendConfirmationEmail } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [mode, setMode] = useState<Mode>("login");
   const [loading, setLoading] = useState(false);
   const [lineLoading, setLineLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,28 +55,64 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
       return;
     }
 
-    const result =
-      mode === "signup"
-        ? await signUpWithPassword(email.trim(), password)
-        : await signInWithPassword(email.trim(), password);
+    if (mode === "signup") {
+      const result = await signUpWithPassword(email.trim(), password);
+      setLoading(false);
 
+      if (result.error) {
+        if (result.error.includes("already registered")) {
+          setError("このメールアドレスは既に登録されています。ログインしてください。");
+          setMode("login");
+        } else if (result.error.includes("Password should be at least")) {
+          setError("パスワードは6文字以上にしてください");
+        } else {
+          setError(result.error);
+        }
+        return;
+      }
+
+      // Either Supabase requires email confirmation or returned no session
+      if (result.needsEmailConfirmation) {
+        setMode("signup-sent");
+        return;
+      }
+      handleClose(false);
+      return;
+    }
+
+    // Login mode
+    const result = await signInWithPassword(email.trim(), password);
     setLoading(false);
 
     if (result.error) {
-      if (result.error.includes("Invalid login credentials")) {
+      const msg = result.error.toLowerCase();
+      if (msg.includes("email not confirmed") || result.code === "email_not_confirmed") {
+        setMode("needs-confirmation");
+      } else if (msg.includes("invalid login credentials")) {
         setError(
           "メールアドレスまたはパスワードが正しくありません。初めての方は「新規登録」をお試しください。"
         );
-      } else if (result.error.includes("already registered")) {
-        setError("このメールアドレスは既に登録されています。ログインしてください。");
-        setMode("login");
-      } else if (result.error.includes("Password should be at least")) {
+      } else if (msg.includes("password should be at least")) {
         setError("パスワードは6文字以上にしてください");
       } else {
         setError(result.error);
       }
     } else {
       handleClose(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (!email.trim()) return;
+    setResendLoading(true);
+    setError(null);
+    setInfo(null);
+    const result = await resendConfirmationEmail(email.trim());
+    setResendLoading(false);
+    if (result.error) {
+      setError(result.error);
+    } else {
+      setInfo("確認メールを再送信しました。受信箱をご確認ください。");
     }
   };
 
@@ -94,6 +132,7 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
         setEmail("");
         setPassword("");
         setError(null);
+        setInfo(null);
         setShowPassword(false);
         setLineLoading(false);
         setMode("login");
@@ -105,8 +144,108 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
   const switchMode = (newMode: Mode) => {
     setMode(newMode);
     setError(null);
+    setInfo(null);
     setPassword("");
   };
+
+  // Sign-up confirmation email sent screen
+  if (mode === "signup-sent") {
+    return (
+      <Dialog open={open} onOpenChange={handleClose}>
+        <DialogContent className="sm:max-w-md rounded-2xl border-[#E5E5E5]">
+          <div className="flex flex-col items-center gap-4 py-6 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#F2F2F2]">
+              <MailCheck className="h-7 w-7 text-[#1A1A1A]" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-[#1A1A1A]">
+                確認メールを送信しました
+              </h3>
+              <p className="mt-2 text-sm text-[#999999] leading-relaxed">
+                <span className="font-medium text-[#1A1A1A]">{email}</span>
+                <br />
+                に届いたリンクをクリックすると、登録が完了します。
+              </p>
+              <p className="mt-3 text-xs text-[#999999]">
+                数分待っても届かない場合は、迷惑メールフォルダもご確認ください。
+              </p>
+            </div>
+            {info && (
+              <p className="text-xs text-[#16a34a] px-1">{info}</p>
+            )}
+            {error && <p className="text-xs text-[#DC2626] px-1">{error}</p>}
+            <div className="flex flex-col gap-2 w-full">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleResend}
+                disabled={resendLoading}
+                className="rounded-full border-[#E5E5E5]"
+              >
+                {resendLoading ? "送信中..." : "確認メールを再送信"}
+              </Button>
+              <Button
+                variant="outline"
+                className="rounded-full border-[#E5E5E5]"
+                onClick={() => handleClose(false)}
+              >
+                閉じる
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  // Existing user tried to login but email not yet confirmed
+  if (mode === "needs-confirmation") {
+    return (
+      <Dialog open={open} onOpenChange={handleClose}>
+        <DialogContent className="sm:max-w-md rounded-2xl border-[#E5E5E5]">
+          <div className="flex flex-col items-center gap-4 py-6 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#FEF3C7]">
+              <MailCheck className="h-7 w-7 text-[#B45309]" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-[#1A1A1A]">
+                メールアドレスの確認が必要です
+              </h3>
+              <p className="mt-2 text-sm text-[#999999] leading-relaxed">
+                <span className="font-medium text-[#1A1A1A]">{email}</span>
+                <br />
+                に送信した確認メールのリンクをクリックして、登録を完了してください。
+              </p>
+              <p className="mt-3 text-xs text-[#999999]">
+                メールが届いていない場合は、再送信ボタンを押してください。迷惑メールフォルダもご確認ください。
+              </p>
+            </div>
+            {info && (
+              <p className="text-xs text-[#16a34a] px-1">{info}</p>
+            )}
+            {error && <p className="text-xs text-[#DC2626] px-1">{error}</p>}
+            <div className="flex flex-col gap-2 w-full">
+              <Button
+                type="button"
+                onClick={handleResend}
+                disabled={resendLoading}
+                className="rounded-full bg-[#1A1A1A] text-white hover:bg-[#111111]"
+              >
+                {resendLoading ? "送信中..." : "確認メールを再送信"}
+              </Button>
+              <Button
+                variant="outline"
+                className="rounded-full border-[#E5E5E5]"
+                onClick={() => switchMode("login")}
+              >
+                ログイン画面に戻る
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   // Reset email sent confirmation
   if (mode === "reset-sent") {
@@ -140,13 +279,14 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
     );
   }
 
-  const titles: Record<Exclude<Mode, "reset-sent">, { title: string; desc: string }> = {
+  const titles: Record<"login" | "signup" | "reset", { title: string; desc: string }> = {
     login: { title: "ログイン", desc: "メールアドレスとパスワードでログイン" },
     signup: { title: "新規登録", desc: "メールアドレスとパスワードで登録" },
     reset: { title: "パスワード再設定", desc: "パスワード再設定メールを送信します" },
   };
 
-  const { title, desc } = titles[mode];
+  const formMode = mode as "login" | "signup" | "reset";
+  const { title, desc } = titles[formMode];
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>

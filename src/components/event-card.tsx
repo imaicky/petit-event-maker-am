@@ -1,7 +1,9 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Calendar, MapPin, User, Video } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AverageRatingBadge } from "@/components/average-rating-badge";
+import { SoldOutStamp } from "@/components/sold-out-stamp";
 
 export interface EventCardProps {
   id: string;
@@ -82,11 +84,12 @@ export function EventCard({
       {/* Image area with shine effect */}
       <div className="shine-on-hover relative h-44 w-full overflow-hidden bg-[#F2F2F2]">
         {image_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={image_url}
             alt={title}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
           <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-gradient-to-br from-[#FAFAFA] via-[#F2F2F2] to-[#E0E0E0]">
@@ -116,6 +119,13 @@ export function EventCard({
 
         {/* Gradient overlay - enhanced */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-black/5 to-transparent" />
+
+        {/* 満員御礼 stamp — bottom-right corner */}
+        {isFull && capacity > 0 && (
+          <div className="pointer-events-none absolute bottom-2 right-2 z-[1]">
+            <SoldOutStamp size="sm" rotateDeg={-12} />
+          </div>
+        )}
 
         {/* Category badge - frosted glass */}
         {category && (

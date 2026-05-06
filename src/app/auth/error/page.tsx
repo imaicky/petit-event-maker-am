@@ -1,26 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function AuthErrorPage() {
-  const [errorInfo, setErrorInfo] = useState<{
+  const [errorInfo] = useState<{
     error: string;
     description: string;
-  } | null>(null);
-
-  useEffect(() => {
-    // Parse error from URL hash fragment
+  } | null>(() => {
+    if (typeof window === "undefined") return null;
     const hash = window.location.hash.slice(1);
     const params = new URLSearchParams(hash);
     const error = params.get("error_code") || params.get("error") || "unknown";
     const description =
       params.get("error_description")?.replace(/\+/g, " ") ||
       "ログイン中にエラーが発生しました";
-    setErrorInfo({ error, description });
-  }, []);
+    return { error, description };
+  });
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-[#FAFAFA] px-4">

@@ -14,6 +14,7 @@ const createEventSchema = z.object({
     .max(100, "タイトルは100文字以内で入力してください"),
   description: z.string().min(1, "説明を入力してください"),
   datetime: z.string().min(1, "日時を入力してください"),
+  booking_deadline: z.string().optional().nullable(),
   location: z.string().optional().nullable(),
   location_type: z.enum(["physical", "online", "hybrid"]).optional().default("physical"),
   online_url: z.string().url("有効なURLを入力してください").optional().nullable(),
@@ -31,9 +32,17 @@ const createEventSchema = z.object({
   teacher_bio: z.string().optional().nullable(),
   category: z.string().optional().nullable(),
   price_note: z.string().max(100).optional().nullable(),
-  payment_method: z.enum(['stripe', 'onsite', 'custom']).optional().default('stripe'),
+  payment_method: z.enum(['stripe', 'bank', 'onsite', 'custom']).optional().default('stripe'),
+  payment_methods: z.array(z.enum(['stripe', 'bank', 'onsite', 'custom'])).optional(),
   payment_link: z.string().url().optional().nullable(),
   payment_info: z.string().max(500).optional().nullable(),
+  payment_deadline_days: z.coerce.number().int().min(1).max(60).optional().nullable(),
+  bank_name: z.string().max(100).optional().nullable(),
+  bank_branch: z.string().max(100).optional().nullable(),
+  bank_account_type: z.string().max(20).optional().nullable(),
+  bank_account_number: z.string().max(50).optional().nullable(),
+  bank_account_holder: z.string().max(100).optional().nullable(),
+  bank_note: z.string().max(500).optional().nullable(),
   is_limited: z.boolean().optional().default(false),
   limited_passcode: z.string().max(50).optional().nullable(),
   slug: z
@@ -49,7 +58,53 @@ const createEventSchema = z.object({
     return true;
   },
   { message: "場所を入力してください", path: ["location"] }
+).refine(
+  (data) => {
+    // If bank is in payment_methods, account number + holder must be filled
+    if (data.payment_methods?.includes('bank')) {
+      return !!(data.bank_account_number && data.bank_account_holder);
+    }
+    return true;
+  },
+  { message: "銀行振込を有効化する場合は口座番号と口座名義を入力してください", path: ["bank_account_number"] }
 );
+
+// Drafts only require a title — everything else is optional so the user can
+// save a half-finished form and come back later. is_published is forced to false.
+const draftEventSchema = z.object({
+  title: z.string().min(1, "タイトルを入力してください").max(100, "タイトルは100文字以内で入力してください"),
+  description: z.string().optional().nullable(),
+  datetime: z.string().optional().nullable(),
+  booking_deadline: z.string().optional().nullable(),
+  location: z.string().optional().nullable(),
+  location_type: z.enum(["physical", "online", "hybrid"]).optional().default("physical"),
+  online_url: z.string().optional().nullable(),
+  zoom_meeting_id: z.string().max(50).optional().nullable(),
+  zoom_passcode: z.string().max(50).optional().nullable(),
+  location_url: z.string().optional().nullable(),
+  capacity: z.coerce.number().int().min(0).max(10000).optional().nullable(),
+  price: z.coerce.number().int().min(0).optional().default(0),
+  image_url: z.union([z.string().url(), z.literal("")]).optional().nullable(),
+  teacher_name: z.string().optional().nullable(),
+  teacher_bio: z.string().optional().nullable(),
+  category: z.string().optional().nullable(),
+  price_note: z.string().max(100).optional().nullable(),
+  payment_method: z.enum(['stripe', 'bank', 'onsite', 'custom']).optional(),
+  payment_methods: z.array(z.enum(['stripe', 'bank', 'onsite', 'custom'])).optional(),
+  payment_link: z.string().optional().nullable(),
+  payment_info: z.string().max(500).optional().nullable(),
+  payment_deadline_days: z.coerce.number().int().min(1).max(60).optional().nullable(),
+  bank_name: z.string().max(100).optional().nullable(),
+  bank_branch: z.string().max(100).optional().nullable(),
+  bank_account_type: z.string().max(20).optional().nullable(),
+  bank_account_number: z.string().max(50).optional().nullable(),
+  bank_account_holder: z.string().max(100).optional().nullable(),
+  bank_note: z.string().max(500).optional().nullable(),
+  is_limited: z.boolean().optional().default(false),
+  limited_passcode: z.string().max(50).optional().nullable(),
+  slug: z.string().optional(),
+  save_as_draft: z.literal(true),
+});
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -109,6 +164,76 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+    const isDraft = body?.save_as_draft === true;
+
+    if (isDraft) {
+      const parsedDraft = draftEventSchema.safeParse(body);
+      if (!parsedDraft.success) {
+        return NextResponse.json(
+          {
+            error: "入力内容に誤りがあります",
+            details: parsedDraft.error.flatten().fieldErrors,
+          },
+          { status: 400 }
+        );
+      }
+      const d = parsedDraft.data;
+      const slug = d.slug ?? generateSlug(d.title);
+      const short_code = generateShortCode();
+      // Datetime is NOT NULL in DB; use a far-future placeholder so the draft
+      // doesn't accidentally appear as a past event before the user picks one.
+      const placeholderDatetime = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+      const { data: draftEvent, error: draftErr } = await supabase
+        .from("events")
+        .insert({
+          creator_id: user.id,
+          title: d.title,
+          description: d.description ?? "",
+          datetime: d.datetime || placeholderDatetime,
+          booking_deadline: d.booking_deadline || null,
+          location: d.location || null,
+          location_type: d.location_type ?? "physical",
+          online_url: d.online_url || null,
+          zoom_meeting_id: d.zoom_meeting_id || null,
+          zoom_passcode: d.zoom_passcode || null,
+          location_url: d.location_url || null,
+          capacity: d.capacity ?? 0,
+          price: d.price ?? 0,
+          image_url: d.image_url || null,
+          teacher_name: d.teacher_name || null,
+          teacher_bio: d.teacher_bio || null,
+          category: d.category || null,
+          price_note: d.price_note || null,
+          payment_method: null,
+          payment_methods: d.payment_methods && d.payment_methods.length > 0 ? d.payment_methods : null,
+          payment_link: null,
+          payment_info: null,
+          payment_deadline_days: d.payment_deadline_days ?? null,
+          bank_name: d.bank_name || null,
+          bank_branch: d.bank_branch || null,
+          bank_account_type: d.bank_account_type || null,
+          bank_account_number: d.bank_account_number || null,
+          bank_account_holder: d.bank_account_holder || null,
+          bank_note: d.bank_note || null,
+          is_limited: d.is_limited ?? false,
+          limited_passcode: d.is_limited ? (d.limited_passcode || null) : null,
+          slug,
+          short_code,
+          is_published: false,
+        } as never)
+        .select()
+        .single();
+      if (draftErr) {
+        console.error("[POST /api/events draft] Supabase error:", draftErr);
+        return NextResponse.json(
+          { error: "下書きの保存に失敗しました" },
+          { status: 500 }
+        );
+      }
+      return NextResponse.json({ event: { ...draftEvent, booking_count: 0 } }, { status: 201 });
+    }
+
     const parsed = createEventSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
@@ -131,6 +256,7 @@ export async function POST(request: NextRequest) {
         title: data.title,
         description: data.description,
         datetime: data.datetime,
+        booking_deadline: data.booking_deadline || null,
         location: data.location || null,
         location_type: data.location_type ?? "physical",
         online_url: data.online_url || null,
@@ -145,8 +271,22 @@ export async function POST(request: NextRequest) {
         category: data.category || null,
         price_note: data.price_note || null,
         payment_method: data.price > 0 ? (data.payment_method || 'stripe') : null,
-        payment_link: data.price > 0 && data.payment_method === 'custom' ? (data.payment_link || null) : null,
-        payment_info: data.price > 0 && data.payment_method === 'custom' ? (data.payment_info || null) : null,
+        payment_methods: data.price > 0 && data.payment_methods && data.payment_methods.length > 0
+          ? data.payment_methods
+          : null,
+        payment_link: data.price > 0 && (data.payment_methods?.includes('custom') || data.payment_method === 'custom')
+          ? (data.payment_link || null)
+          : null,
+        payment_info: data.price > 0 && (data.payment_methods?.includes('custom') || data.payment_method === 'custom')
+          ? (data.payment_info || null)
+          : null,
+        payment_deadline_days: data.payment_deadline_days ?? null,
+        bank_name: data.payment_methods?.includes('bank') ? (data.bank_name || null) : null,
+        bank_branch: data.payment_methods?.includes('bank') ? (data.bank_branch || null) : null,
+        bank_account_type: data.payment_methods?.includes('bank') ? (data.bank_account_type || null) : null,
+        bank_account_number: data.payment_methods?.includes('bank') ? (data.bank_account_number || null) : null,
+        bank_account_holder: data.payment_methods?.includes('bank') ? (data.bank_account_holder || null) : null,
+        bank_note: data.payment_methods?.includes('bank') ? (data.bank_note || null) : null,
         is_limited: data.is_limited ?? false,
         limited_passcode: data.is_limited ? (data.limited_passcode || null) : null,
         slug,
@@ -226,10 +366,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("events")
-      .select(`
-        *,
-        booking_count:bookings(count)
-      `)
+      .select("*")
       .eq("is_published", true)
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
@@ -251,12 +388,41 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Flatten the aggregate count from the join
+    // Resolve confirmed booking counts in one admin query (RLS would otherwise
+    // hide other people's bookings and return 0 to the public).
+    const eventIds = (events ?? []).map((e) => (e as { id: string }).id);
+    const countMap = new Map<string, number>();
+    if (eventIds.length > 0 && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const admin = createAdminClient();
+      const { data: confirmedRows } = await admin
+        .from("bookings")
+        .select("event_id")
+        .in("event_id", eventIds)
+        .eq("status", "confirmed");
+      for (const row of confirmedRows ?? []) {
+        const eid = (row as { event_id: string }).event_id;
+        countMap.set(eid, (countMap.get(eid) ?? 0) + 1);
+      }
+    }
+
+    // Strip sensitive fields (zoom credentials, online URL, limited passcode) — these are
+    // only revealed after booking via the thanks page / confirmation email.
     const normalised = (events ?? []).map((e) => {
-      const count = Array.isArray(e.booking_count)
-        ? (e.booking_count[0] as { count: number } | undefined)?.count ?? 0
-        : (e.booking_count as unknown as number) ?? 0;
-      return { ...e, booking_count: Number(count) };
+      const count = countMap.get((e as { id: string }).id) ?? 0;
+      const {
+        limited_passcode: _lp,
+        zoom_meeting_id: _zid,
+        zoom_passcode: _zpc,
+        online_url: _ou,
+        bank_name: _bn,
+        bank_branch: _bb,
+        bank_account_type: _bat,
+        bank_account_number: _ban,
+        bank_account_holder: _bah,
+        bank_note: _bnt,
+        ...safe
+      } = e as Record<string, unknown>;
+      return { ...safe, booking_count: Number(count) };
     });
 
     return NextResponse.json({ events: normalised });

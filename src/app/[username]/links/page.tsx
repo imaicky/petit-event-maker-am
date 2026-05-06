@@ -116,7 +116,7 @@ export default async function LinksPage({
 
   // Fetch booking counts
   const eventIds = events.map((e) => e.id);
-  let bookingCountMap: Record<string, number> = {};
+  const bookingCountMap: Record<string, number> = {};
   if (eventIds.length > 0) {
     const { data: bookingsData } = await supabase
       .from("bookings")

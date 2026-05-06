@@ -342,7 +342,39 @@ export default function AttendeesPage() {
       ? Math.min((confirmedCount / capacity) * 100, 100)
       : 0;
   const attendedCount = bookings.filter((b) => b.attended === true).length;
-  const isPaidEvent = (event.price ?? 0) > 0 && ((event as Record<string, unknown>).payment_method ?? 'stripe') === 'stripe';
+  const isPaidEvent = (event.price ?? 0) > 0;
+
+  async function confirmPayment(bookingId: string) {
+    if (!confirm("入金を確認済みにしますか？\n参加情報（オンライン参加URL等）が自動でメール送信されます。")) return;
+    try {
+      const res = await fetch(`/api/events/${eventId}/bookings/${bookingId}/confirm-payment`, {
+        method: "POST",
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(json.error || "入金確認に失敗しました");
+        return;
+      }
+      // Refresh bookings list
+      window.location.reload();
+    } catch {
+      alert("ネットワークエラーが発生しました");
+    }
+  }
+
+  function ConfirmPaymentButton({ booking }: { booking: Booking }) {
+    const isBank = (booking as { payment_method?: string | null }).payment_method === "bank";
+    if (!isBank || booking.payment_status !== "pending") return null;
+    return (
+      <button
+        type="button"
+        onClick={() => confirmPayment(booking.id)}
+        className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
+      >
+        💴 入金確認
+      </button>
+    );
+  }
 
   function PaymentBadge({ status }: { status: string | null | undefined }) {
     if (!isPaidEvent) return null;
@@ -590,6 +622,7 @@ export default function AttendeesPage() {
                         {booking.guest_name}
                       </span>
                       <PaymentBadge status={booking.payment_status} />
+                      <ConfirmPaymentButton booking={booking} />
                     </div>
                     <span className="flex items-center gap-1 text-xs text-[#999999]">
                       <Clock className="h-3 w-3" />
@@ -650,6 +683,7 @@ export default function AttendeesPage() {
                   <span className="text-[13px] font-medium text-[#1A1A1A] truncate min-w-0 flex items-center gap-1.5">
                     {booking.guest_name}
                     <PaymentBadge status={booking.payment_status} />
+                    <ConfirmPaymentButton booking={booking} />
                   </span>
                   <span className="flex items-center gap-1 text-[13px] text-[#999999] min-w-0 truncate">
                     <Mail className="h-3 w-3 shrink-0" />

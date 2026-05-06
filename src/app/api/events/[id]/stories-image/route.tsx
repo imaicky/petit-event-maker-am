@@ -1,6 +1,5 @@
 import { ImageResponse } from "next/og";
 import { NextRequest } from "next/server";
-import { CATEGORY_ICONS } from "@/lib/constants";
 
 export const runtime = "edge";
 
@@ -15,6 +14,13 @@ interface EventData {
   price: number;
   booking_count: number;
   category?: string;
+  image_url?: string | null;
+}
+
+function getTitleFontSize(title: string): number {
+  if (title.length <= 15) return 72;
+  if (title.length <= 30) return 58;
+  return 48;
 }
 
 export async function GET(
@@ -44,7 +50,8 @@ export async function GET(
   }
 
   const title = event.title;
-  const categoryIcon = CATEGORY_ICONS[event.category ?? ""] ?? "🎉";
+  const titleFontSize = getTitleFontSize(title);
+
   const dateStr = new Date(event.datetime).toLocaleDateString("ja-JP", {
     year: "numeric",
     month: "long",
@@ -57,11 +64,14 @@ export async function GET(
     minute: "2-digit",
     timeZone: "Asia/Tokyo",
   });
+
   const priceStr =
     event.price === 0
       ? "無料"
       : `¥${event.price.toLocaleString("ja-JP")}`;
   const remaining = event.capacity - event.booking_count;
+
+  const hasImage = !!event.image_url;
 
   const response = new ImageResponse(
     (
@@ -70,100 +80,128 @@ export async function GET(
           width: "100%",
           height: "100%",
           display: "flex",
-          flexDirection: "column",
-          background: "#FAFAFA",
-          fontFamily: "sans-serif",
           position: "relative",
           overflow: "hidden",
+          fontFamily: "sans-serif",
+          ...(hasImage
+            ? {}
+            : {
+                background:
+                  "linear-gradient(160deg, #1A1A1A 0%, #2D2D2D 30%, #1A1A1A 70%, #333333 100%)",
+              }),
         }}
       >
-        {/* Background decorations */}
-        <div
-          style={{
-            position: "absolute",
-            top: -120,
-            right: -120,
-            width: 500,
-            height: 500,
-            borderRadius: "50%",
-            background: "rgba(26, 26, 26, 0.04)",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            bottom: -80,
-            left: -80,
-            width: 350,
-            height: 350,
-            borderRadius: "50%",
-            background: "rgba(64, 64, 64, 0.04)",
-          }}
-        />
+        {/* Background image (when available) */}
+        {hasImage && (
+          <img
+            src={event.image_url!}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+            }}
+          />
+        )}
 
-        {/* Top accent bar */}
-        <div
-          style={{
-            height: 12,
-            background: "linear-gradient(90deg, #1A1A1A 0%, #888888 100%)",
-            width: "100%",
-          }}
-        />
-
-        {/* Main content */}
-        <div
-          style={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-            alignItems: "center",
-            padding: "80px 72px",
-            gap: 48,
-          }}
-        >
-          {/* Category icon */}
+        {/* Gradient overlay for image */}
+        {hasImage && (
           <div
             style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              background:
+                "linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.1) 30%, rgba(0,0,0,0.4) 60%, rgba(0,0,0,0.75) 100%)",
+            }}
+          />
+        )}
+
+        {/* Decorative circles for no-image background */}
+        {!hasImage && (
+          <div
+            style={{
+              position: "absolute",
+              top: -100,
+              right: -100,
+              width: 400,
+              height: 400,
+              borderRadius: "50%",
+              background: "rgba(255,255,255,0.03)",
+              display: "flex",
+            }}
+          />
+        )}
+        {!hasImage && (
+          <div
+            style={{
+              position: "absolute",
+              bottom: -60,
+              left: -60,
+              width: 300,
+              height: 300,
+              borderRadius: "50%",
+              background: "rgba(255,255,255,0.02)",
+              display: "flex",
+            }}
+          />
+        )}
+
+        {/* Content layer */}
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "120px 72px 100px",
+          }}
+        >
+          {/* Brand badge (top) */}
+          <div
+            style={{
+              position: "absolute",
+              top: 80,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              width: 120,
-              height: 120,
-              borderRadius: 32,
-              background: "#F2F2F2",
-              fontSize: 64,
+              background: "rgba(255,255,255,0.15)",
+              borderRadius: 30,
+              padding: "12px 28px",
             }}
           >
-            {categoryIcon}
-          </div>
-
-          {/* Category label */}
-          {event.category && (
-            <div
+            <span
               style={{
-                display: "flex",
-                background: "#1A1A1A",
-                color: "#FFFFFF",
-                borderRadius: 24,
-                padding: "12px 32px",
-                fontSize: 28,
+                fontSize: 24,
                 fontWeight: 600,
+                color: "rgba(255,255,255,0.85)",
+                letterSpacing: "0.05em",
               }}
             >
-              {event.category}
-            </div>
-          )}
+              プチイベント作成くん
+            </span>
+          </div>
 
           {/* Title */}
           <div
             style={{
-              fontSize: title.length > 20 ? 56 : 68,
+              display: "flex",
+              fontSize: titleFontSize,
               fontWeight: 900,
-              color: "#1A1A1A",
-              lineHeight: 1.3,
+              color: "#FFFFFF",
+              lineHeight: 1.35,
               textAlign: "center",
-              maxWidth: 900,
+              maxWidth: 920,
+              textShadow: "0 2px 16px rgba(0,0,0,0.5)",
             }}
           >
             {title}
@@ -173,139 +211,81 @@ export async function GET(
           <div
             style={{
               width: 80,
-              height: 4,
+              height: 3,
               borderRadius: 2,
-              background: "#1A1A1A",
+              background: "rgba(255,255,255,0.6)",
+              marginTop: 48,
+              marginBottom: 48,
             }}
           />
 
-          {/* Meta info */}
+          {/* Date */}
           <div
             style={{
               display: "flex",
-              flexDirection: "column",
-              gap: 24,
-              alignItems: "center",
-            }}
-          >
-            {/* Date */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 16,
-                background: "#FFFFFF",
-                border: "3px solid #E5E5E5",
-                borderRadius: 20,
-                padding: "16px 32px",
-              }}
-            >
-              <span style={{ fontSize: 32 }}>📅</span>
-              <span
-                style={{
-                  fontSize: 28,
-                  fontWeight: 700,
-                  color: "#1A1A1A",
-                }}
-              >
-                {dateStr} {timeStr}〜
-              </span>
-            </div>
-
-            {/* Location */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 16,
-                background: "#FFFFFF",
-                border: "3px solid #E5E5E5",
-                borderRadius: 20,
-                padding: "16px 32px",
-              }}
-            >
-              <span style={{ fontSize: 32 }}>📍</span>
-              <span
-                style={{
-                  fontSize: 28,
-                  fontWeight: 700,
-                  color: "#1A1A1A",
-                }}
-              >
-                {event.location}
-              </span>
-            </div>
-
-            {/* Price & spots */}
-            <div style={{ display: "flex", gap: 16 }}>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  background: "#1A1A1A",
-                  borderRadius: 20,
-                  padding: "16px 36px",
-                  fontSize: 36,
-                  fontWeight: 900,
-                  color: "#FFFFFF",
-                }}
-              >
-                {priceStr}
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  background: remaining <= 0 ? "#1A1A1A" : "#404040",
-                  borderRadius: 20,
-                  padding: "16px 36px",
-                  fontSize: 28,
-                  fontWeight: 700,
-                  color: "#FFFFFF",
-                }}
-              >
-                {remaining <= 0
-                  ? "満員"
-                  : `定員${event.capacity}名`}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom brand bar */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 12,
-            padding: "32px 0 48px",
-          }}
-        >
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 12,
-              background: "#1A1A1A",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 22,
-              color: "#FFFFFF",
-            }}
-          >
-            🎉
-          </div>
-          <span
-            style={{
-              fontSize: 24,
+              fontSize: 34,
               fontWeight: 700,
-              color: "#999999",
+              color: "#FFFFFF",
+              textShadow: "0 1px 8px rgba(0,0,0,0.4)",
             }}
           >
-            プチイベント作成くん
-          </span>
+            {dateStr} {timeStr}〜
+          </div>
+
+          {/* Location */}
+          {event.location && (
+            <div
+              style={{
+                display: "flex",
+                fontSize: 30,
+                fontWeight: 500,
+                color: "rgba(255,255,255,0.85)",
+                marginTop: 20,
+                textShadow: "0 1px 8px rgba(0,0,0,0.4)",
+              }}
+            >
+              {event.location}
+            </div>
+          )}
+
+          {/* Badges (bottom) */}
+          <div
+            style={{
+              position: "absolute",
+              bottom: 100,
+              display: "flex",
+              gap: 16,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                background: "rgba(255,255,255,0.15)",
+                borderRadius: 24,
+                padding: "14px 32px",
+                fontSize: 30,
+                fontWeight: 700,
+                color: "#FFFFFF",
+              }}
+            >
+              {priceStr}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                background: "rgba(255,255,255,0.15)",
+                borderRadius: 24,
+                padding: "14px 32px",
+                fontSize: 28,
+                fontWeight: 600,
+                color: "#FFFFFF",
+              }}
+            >
+              {remaining <= 0 ? "満員" : `定員${event.capacity}名`}
+            </div>
+          </div>
         </div>
       </div>
     ),

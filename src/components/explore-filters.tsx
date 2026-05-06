@@ -9,6 +9,10 @@ interface ExploreFiltersProps {
   initialCategory: string;
   initialArea: string;
   initialSort: string;
+  initialType: string;
+  initialView?: string;
+  initialMonth?: string;
+  initialDate?: string;
 }
 
 export function ExploreFilters({
@@ -16,6 +20,10 @@ export function ExploreFilters({
   initialCategory,
   initialArea,
   initialSort,
+  initialType,
+  initialView,
+  initialMonth,
+  initialDate,
 }: ExploreFiltersProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -28,6 +36,10 @@ export function ExploreFilters({
         ...(initialCategory ? { category: initialCategory } : {}),
         ...(initialArea ? { area: initialArea } : {}),
         ...(initialSort !== "new" ? { sort: initialSort } : {}),
+        ...(initialType ? { type: initialType } : {}),
+        ...(initialView ? { view: initialView } : {}),
+        ...(initialMonth ? { month: initialMonth } : {}),
+        ...(initialDate ? { date: initialDate } : {}),
         ...updates,
       });
       // Remove empty values
@@ -38,7 +50,7 @@ export function ExploreFilters({
         router.push(`${pathname}?${params.toString()}`);
       });
     },
-    [router, pathname, initialQ, initialCategory, initialArea, initialSort]
+    [router, pathname, initialQ, initialCategory, initialArea, initialSort, initialType, initialView, initialMonth, initialDate]
   );
 
   return (

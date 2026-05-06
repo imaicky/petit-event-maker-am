@@ -118,7 +118,7 @@ export default async function TeacherProfilePage({
 
   // Fetch booking counts for all events
   const allEventIds = allRawEvents.map((e) => e.id);
-  let bookingCountMap: Record<string, number> = {};
+  const bookingCountMap: Record<string, number> = {};
   if (allEventIds.length > 0) {
     const { data: bookingsData } = await supabase
       .from("bookings")
@@ -178,7 +178,7 @@ export default async function TeacherProfilePage({
 
   const menusRaw: Menu[] = menusData ?? [];
   const menuIds = menusRaw.map((m) => m.id);
-  let menuBookingCountMap: Record<string, number> = {};
+  const menuBookingCountMap: Record<string, number> = {};
   if (menuIds.length > 0) {
     const { data: menuBookingsData } = await admin
       .from("menu_bookings")

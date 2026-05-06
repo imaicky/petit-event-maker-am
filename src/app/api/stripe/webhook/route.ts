@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getActiveWebhookSecrets } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendPaymentConfirmationEmail } from "@/lib/payment-confirmation-email";
+import { notifyOrganizerPayment } from "@/lib/organizer-payment-notification";
+import { logPaymentEvent } from "@/lib/payment-audit";
 import Stripe from "stripe";
 
 export async function POST(request: NextRequest) {
@@ -54,18 +57,42 @@ export async function POST(request: NextRequest) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
         const bookingId = session.metadata?.booking_id;
-        if (!bookingId) break;
+        const eventId = session.metadata?.event_id;
+        if (!bookingId || !eventId) break;
 
         // Only mark as paid if Stripe confirms payment was received
         if (session.payment_status === "paid") {
+          // Read current state for audit log + idempotency
+          const { data: prev } = await admin
+            .from("bookings")
+            .select("payment_status")
+            .eq("id", bookingId)
+            .single();
+          const wasAlreadyPaid = (prev as { payment_status?: string } | null)?.payment_status === "paid";
+
           const { error } = await admin
             .from("bookings")
             .update({ payment_status: "paid" })
             .eq("id", bookingId);
           if (error) {
             console.error("[Stripe Webhook] DB update error (paid):", error);
-          } else {
-            console.log(`[Stripe Webhook] Booking ${bookingId} marked as paid`);
+            break;
+          }
+          console.log(`[Stripe Webhook] Booking ${bookingId} marked as paid`);
+
+          if (!wasAlreadyPaid) {
+            await logPaymentEvent({
+              bookingId, eventId, type: "paid",
+              prevStatus: "pending", nextStatus: "paid",
+              paymentMethod: "stripe",
+              amount: session.amount_total ?? null,
+              actor: "stripe_webhook",
+              metadata: { session_id: session.id, payment_intent: session.payment_intent ?? null },
+            });
+            // Send the participant info email now that payment is confirmed
+            await sendPaymentConfirmationEmail({ bookingId, source: "stripe" });
+            // Notify the organizer
+            await notifyOrganizerPayment({ bookingId, source: "stripe", amount: session.amount_total ?? null });
           }
         }
         break;
@@ -74,7 +101,15 @@ export async function POST(request: NextRequest) {
       case "checkout.session.async_payment_succeeded": {
         const session = event.data.object as Stripe.Checkout.Session;
         const bookingId = session.metadata?.booking_id;
-        if (!bookingId) break;
+        const eventId = session.metadata?.event_id;
+        if (!bookingId || !eventId) break;
+
+        const { data: prev } = await admin
+          .from("bookings")
+          .select("payment_status")
+          .eq("id", bookingId)
+          .single();
+        const wasAlreadyPaid = (prev as { payment_status?: string } | null)?.payment_status === "paid";
 
         const { error } = await admin
           .from("bookings")
@@ -82,8 +117,21 @@ export async function POST(request: NextRequest) {
           .eq("id", bookingId);
         if (error) {
           console.error("[Stripe Webhook] DB update error (async_paid):", error);
-        } else {
-          console.log(`[Stripe Webhook] Booking ${bookingId} async payment succeeded`);
+          break;
+        }
+        console.log(`[Stripe Webhook] Booking ${bookingId} async payment succeeded`);
+
+        if (!wasAlreadyPaid) {
+          await logPaymentEvent({
+            bookingId, eventId, type: "paid",
+            prevStatus: "pending", nextStatus: "paid",
+            paymentMethod: "stripe",
+            amount: session.amount_total ?? null,
+            actor: "stripe_webhook",
+            metadata: { session_id: session.id, async: true },
+          });
+          await sendPaymentConfirmationEmail({ bookingId, source: "stripe" });
+          await notifyOrganizerPayment({ bookingId, source: "stripe", amount: session.amount_total ?? null });
         }
         break;
       }
@@ -91,40 +139,48 @@ export async function POST(request: NextRequest) {
       case "checkout.session.async_payment_failed": {
         const session = event.data.object as Stripe.Checkout.Session;
         const bookingId = session.metadata?.booking_id;
-        if (!bookingId) break;
+        const eventId = session.metadata?.event_id;
+        if (!bookingId || !eventId) break;
 
         const { error } = await admin
           .from("bookings")
-          .update({
-            payment_status: "failed",
-            status: "cancelled",
-          })
+          .update({ payment_status: "failed", status: "cancelled" })
           .eq("id", bookingId);
         if (error) {
           console.error("[Stripe Webhook] DB update error (async_failed):", error);
-        } else {
-          console.log(`[Stripe Webhook] Booking ${bookingId} async payment failed`);
+          break;
         }
+        console.log(`[Stripe Webhook] Booking ${bookingId} async payment failed`);
+        await logPaymentEvent({
+          bookingId, eventId, type: "failed",
+          prevStatus: "pending", nextStatus: "failed",
+          paymentMethod: "stripe", actor: "stripe_webhook",
+          metadata: { session_id: session.id },
+        });
         break;
       }
 
       case "checkout.session.expired": {
         const session = event.data.object as Stripe.Checkout.Session;
         const bookingId = session.metadata?.booking_id;
-        if (!bookingId) break;
+        const eventId = session.metadata?.event_id;
+        if (!bookingId || !eventId) break;
 
         const { error } = await admin
           .from("bookings")
-          .update({
-            payment_status: "failed",
-            status: "cancelled",
-          })
+          .update({ payment_status: "failed", status: "cancelled" })
           .eq("id", bookingId);
         if (error) {
           console.error("[Stripe Webhook] DB update error (expired):", error);
-        } else {
-          console.log(`[Stripe Webhook] Booking ${bookingId} session expired`);
+          break;
         }
+        console.log(`[Stripe Webhook] Booking ${bookingId} session expired`);
+        await logPaymentEvent({
+          bookingId, eventId, type: "checkout_expired",
+          prevStatus: "pending", nextStatus: "failed",
+          paymentMethod: "stripe", actor: "stripe_webhook",
+          metadata: { session_id: session.id },
+        });
         break;
       }
 
@@ -149,6 +205,13 @@ export async function POST(request: NextRequest) {
 
           // Full refund: mark as refunded. Partial refund: keep as paid (log only)
           const isFullRefund = charge.amount_captured === charge.amount_refunded;
+          // Resolve event_id for audit trail
+          const { data: bk } = await admin
+            .from("bookings")
+            .select("event_id")
+            .eq("id", bookingId)
+            .single();
+          const eventId = (bk as { event_id?: string } | null)?.event_id;
           if (isFullRefund) {
             const { error } = await admin
               .from("bookings")
@@ -158,12 +221,32 @@ export async function POST(request: NextRequest) {
               console.error("[Stripe Webhook] DB update error (refunded):", error);
             } else {
               console.log(`[Stripe Webhook] Booking ${bookingId} fully refunded`);
+              if (eventId) {
+                await logPaymentEvent({
+                  bookingId, eventId, type: "refunded",
+                  prevStatus: "paid", nextStatus: "refunded",
+                  paymentMethod: "stripe",
+                  amount: charge.amount_refunded,
+                  actor: "stripe_webhook",
+                  metadata: { charge_id: charge.id },
+                });
+              }
             }
           } else {
             console.log(
               `[Stripe Webhook] Booking ${bookingId} partially refunded ` +
               `(${charge.amount_refunded}/${charge.amount_captured})`
             );
+            if (eventId) {
+              await logPaymentEvent({
+                bookingId, eventId, type: "refunded",
+                paymentMethod: "stripe",
+                amount: charge.amount_refunded,
+                actor: "stripe_webhook",
+                note: "partial_refund",
+                metadata: { charge_id: charge.id, captured: charge.amount_captured },
+              });
+            }
           }
         } catch (err) {
           console.error("[Stripe Webhook] Error processing refund:", err);

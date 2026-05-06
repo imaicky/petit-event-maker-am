@@ -8,9 +8,17 @@ interface ShareButtonProps {
   title: string;
   /** Visual variant */
   variant?: "overlay" | "inline";
+  /**
+   * Optional pre-formatted message body. When provided, LINE / X / copy will
+   * share this text (with URL appended) instead of the default "title + URL".
+   * Used by the "告知文付きでシェア" button on event detail pages.
+   */
+  message?: string;
+  /** Override the inline button label (defaults to "シェア"). */
+  label?: string;
 }
 
-export function ShareButton({ url, title, variant = "overlay" }: ShareButtonProps) {
+export function ShareButton({ url, title, variant = "overlay", message, label }: ShareButtonProps) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -27,13 +35,18 @@ export function ShareButton({ url, title, variant = "overlay" }: ShareButtonProp
     return () => document.removeEventListener("mousedown", handleClick);
   }, [open]);
 
-  const shareText = `${title}\n${url}`;
+  const isRich = !!message;
+  const shareText = isRich ? `${message}\n\n${url}` : `${title}\n${url}`;
+  const copyTarget = isRich ? shareText : url;
+  const copyLabel = isRich ? "告知文をコピー" : "URLをコピー";
 
   async function handleShare() {
     // Mobile: use Web Share API if available
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
-        await navigator.share({ title, url });
+        await navigator.share(
+          isRich ? { title, text: message, url } : { title, url }
+        );
         return;
       } catch {
         // User cancelled or API not available, fall through to popover
@@ -45,13 +58,13 @@ export function ShareButton({ url, title, variant = "overlay" }: ShareButtonProp
 
   async function handleCopy() {
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(copyTarget);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // Fallback
       const textarea = document.createElement("textarea");
-      textarea.value = url;
+      textarea.value = copyTarget;
       textarea.style.position = "fixed";
       textarea.style.opacity = "0";
       document.body.appendChild(textarea);
@@ -118,7 +131,7 @@ export function ShareButton({ url, title, variant = "overlay" }: ShareButtonProp
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F2F2F2] text-[#1A1A1A]">
                 {copied ? <Check className="h-4 w-4 text-[#404040]" /> : <Copy className="h-4 w-4" />}
               </span>
-              {copied ? "コピーしました!" : "URLをコピー"}
+              {copied ? "コピーしました!" : copyLabel}
             </button>
           </div>
         )}
@@ -132,11 +145,11 @@ export function ShareButton({ url, title, variant = "overlay" }: ShareButtonProp
       <button
         type="button"
         onClick={handleShare}
-        aria-label="シェアする"
+        aria-label={label ?? "シェアする"}
         className="flex h-9 items-center gap-1.5 rounded-full border border-[#E5E5E5] bg-white px-3 text-sm font-medium text-[#1A1A1A] shadow-sm transition-all hover:border-[#1A1A1A]/30 hover:bg-[#F7F7F7] active:scale-95"
       >
         <Share2 className="h-3.5 w-3.5" />
-        シェア
+        {label ?? "シェア"}
       </button>
 
       {open && (
@@ -173,7 +186,7 @@ export function ShareButton({ url, title, variant = "overlay" }: ShareButtonProp
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F2F2F2] text-[#1A1A1A]">
               {copied ? <Check className="h-4 w-4 text-[#404040]" /> : <Copy className="h-4 w-4" />}
             </span>
-            {copied ? "コピーしました!" : "URLをコピー"}
+            {copied ? "コピーしました!" : copyLabel}
           </button>
         </div>
       )}

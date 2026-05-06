@@ -1,7 +1,9 @@
+import Image from "next/image";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import type { Metadata, ResolvingMetadata } from "next";
-import { Calendar, MapPin, Users, JapaneseYen, ChevronRight, Shield, Video } from "lucide-react";
+import { Calendar, MapPin, Users, JapaneseYen, ChevronRight, Shield, Video, Lock } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -10,6 +12,8 @@ import { ReviewCard, type Review } from "@/components/review-card";
 import { ReviewSection } from "@/components/review-section";
 import { ShareButton } from "@/components/share-button";
 import { StoriesDownloadButton } from "@/components/stories-download-button";
+import { ResendConfirmation } from "@/components/resend-confirmation";
+import { SoldOutStamp } from "@/components/sold-out-stamp";
 import { LineSchedulePrompt } from "@/components/line-schedule-prompt";
 import { EventAdminBar } from "@/components/event-admin-bar";
 import { PasscodeGate, PasscodeAutoUnlock } from "@/components/passcode-gate";
@@ -29,6 +33,7 @@ interface EventData {
   zoom_meeting_id?: string | null;
   zoom_passcode?: string | null;
   location_url?: string | null;
+  booking_deadline?: string | null;
   capacity: number;
   price: number;
   /** booking_count is returned by the API (computed via subquery) */
@@ -43,6 +48,7 @@ interface EventData {
   short_code?: string | null;
   line_friend_url?: string | null;
   payment_method?: string | null;
+  payment_methods?: string[] | null;
   payment_link?: string | null;
   payment_info?: string | null;
 }
@@ -223,10 +229,20 @@ function formatTime(datetimeStr: string): string {
 function SpotsBadge({
   remaining,
   capacity,
+  isClosed,
 }: {
   remaining: number;
   capacity: number;
+  isClosed?: boolean;
 }) {
+  if (isClosed) {
+    return (
+      <Badge className="bg-[#999999] px-3 py-1 text-sm text-white">
+        受付終了
+      </Badge>
+    );
+  }
+
   if (remaining <= 0) {
     return (
       <Badge className="bg-[#FF8C00] px-3 py-1 text-sm text-white">
@@ -350,11 +366,37 @@ export default async function EventPage({ params, searchParams }: EventPageProps
   // ─── Full event view (unlocked or non-limited) ─────────────────────────────
   const remaining = event.capacity - event.booking_count;
   const isPast = new Date(event.datetime) < new Date();
+  const isSoldOut = event.capacity > 0 && event.booking_count >= event.capacity;
+  const isPastDeadline = !!event.booking_deadline && new Date(event.booking_deadline) < new Date();
+  const isClosed = isPast || isPastDeadline;
   const showReviews = reviews.length > 0 || isPast;
   const locationType = event.location_type || "physical";
   const shareUrl = event.short_code
     ? `${baseUrl}/e/${event.short_code}`
     : `${baseUrl}/events/${id}`;
+
+  // Build announcement text for "告知文付きでシェア".
+  const announcementMessage = (() => {
+    const placeLabel =
+      locationType === "online"
+        ? "オンライン開催"
+        : locationType === "hybrid"
+        ? `${event.location ?? ""}（オンライン併用）`
+        : event.location ?? "場所未定";
+    const priceLabel = event.price === 0 ? "無料" : `¥${event.price.toLocaleString("ja-JP")}`;
+    const desc = (event.description ?? "").trim();
+    return [
+      `📣 ${event.title}`,
+      "",
+      `📅 ${formatDate(event.datetime)} ${formatTime(event.datetime)}〜`,
+      `📍 ${placeLabel}`,
+      `💴 ${priceLabel}`,
+      desc ? "" : null,
+      desc || null,
+    ]
+      .filter((s): s is string => s !== null)
+      .join("\n");
+  })();
 
   return (
     <main className="min-h-dvh bg-[#FAFAFA]" style={{ fontFamily: "var(--font-zen-maru)" }}>
@@ -368,13 +410,13 @@ export default async function EventPage({ params, searchParams }: EventPageProps
       <div className="sticky top-0 z-20 border-b border-[#E5E5E5]/60 glass">
         <div className="mx-auto max-w-5xl px-4 py-3">
           <nav aria-label="パンくずリスト" className="animate-slide-in-left flex items-center gap-1.5 text-sm">
-            <a href="/" className="text-[#1A1A1A] hover:underline shrink-0 transition-colors hover:text-[#111111]">
+            <Link href="/" className="text-[#1A1A1A] hover:underline shrink-0 transition-colors hover:text-[#111111]">
               ホーム
-            </a>
+            </Link>
             <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#999999]" />
-            <a href="/explore" className="text-[#1A1A1A] hover:underline shrink-0 transition-colors hover:text-[#111111]">
+            <Link href="/explore" className="text-[#1A1A1A] hover:underline shrink-0 transition-colors hover:text-[#111111]">
               イベントを探す
-            </a>
+            </Link>
             <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#999999]" />
             <span className="truncate text-[#999999]">{event.title}</span>
           </nav>
@@ -387,12 +429,15 @@ export default async function EventPage({ params, searchParams }: EventPageProps
       {/* Hero Image — full width */}
       <div className="relative w-full overflow-hidden bg-gradient-to-br from-[#F2F2F2] via-[#EDEDED] to-[#E0E0E0]">
         {event.image_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={event.image_url}
             alt={event.title}
-            className="w-full object-contain"
+            width={1200}
+            height={630}
+            sizes="100vw"
+            className="w-full h-auto object-contain"
             style={{ minHeight: "240px" }}
+            priority
           />
         ) : (
           <div className="flex h-[320px] w-full items-center justify-center sm:h-[420px]">
@@ -404,6 +449,13 @@ export default async function EventPage({ params, searchParams }: EventPageProps
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 via-50% via-black/5 to-transparent" />
         {/* Side vignette */}
         <div className="absolute inset-0 bg-gradient-to-r from-black/20 via-transparent to-black/20" />
+
+        {/* 満員御礼 stamp — bottom-right placement, stylishly tilted */}
+        {isSoldOut && (
+          <div className="pointer-events-none absolute bottom-6 right-6 z-10 sm:bottom-10 sm:right-10 animate-fade-in-up delay-200">
+            <SoldOutStamp size="md" rotateDeg={-12} />
+          </div>
+        )}
 
         {/* Floating category badge */}
         {event.category && (
@@ -441,7 +493,7 @@ export default async function EventPage({ params, searchParams }: EventPageProps
           <article>
             {/* Spots badge */}
             <div className="mb-6 animate-fade-in-up delay-100">
-              <SpotsBadge remaining={remaining} capacity={event.capacity} />
+              <SpotsBadge remaining={remaining} capacity={event.capacity} isClosed={isClosed} />
             </div>
 
             {/* Event meta grid */}
@@ -453,6 +505,11 @@ export default async function EventPage({ params, searchParams }: EventPageProps
                 <p className="text-sm text-[#555555]">
                   {formatTime(event.datetime)}〜
                 </p>
+                {event.booking_deadline && (
+                  <p className={`mt-1 text-xs ${isPastDeadline ? "text-[#999999]" : "text-[#FF8C00] font-medium"}`}>
+                    {isPastDeadline ? "受付終了" : `申し込み締め切り：${formatDate(event.booking_deadline)} ${formatTime(event.booking_deadline)}`}
+                  </p>
+                )}
               </MetaCell>
 
               {(locationType === "physical" || locationType === "hybrid") && (
@@ -483,20 +540,10 @@ export default async function EventPage({ params, searchParams }: EventPageProps
               {(locationType === "online" || locationType === "hybrid") && (
                 <MetaCell icon={Video} label="オンライン" delay="delay-200">
                   <p className="mt-0.5 text-sm font-semibold text-[#1A1A1A]">オンライン開催</p>
-                  {event.zoom_meeting_id ? (
-                    <div className="mt-1 space-y-0.5">
-                      <p className="text-xs text-[#555555]">
-                        ID：<span className="font-mono font-medium">{event.zoom_meeting_id}</span>
-                      </p>
-                      {event.zoom_passcode && (
-                        <p className="text-xs text-[#555555]">
-                          パスコード：<span className="font-mono font-medium">{event.zoom_passcode}</span>
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-[#999999] italic">お申し込み後にURLをお知らせします</p>
-                  )}
+                  <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-[#F2F2F2] px-2 py-0.5 text-[11px] font-medium text-[#555555]">
+                    <Lock className="h-2.5 w-2.5" />
+                    申し込み後に参加情報を解錠
+                  </span>
                 </MetaCell>
               )}
 
@@ -576,9 +623,21 @@ export default async function EventPage({ params, searchParams }: EventPageProps
             </section>
 
             {/* Share & Stories actions */}
-            <div className="mb-8 flex flex-wrap gap-2 animate-fade-in-up delay-200">
-              <ShareButton url={shareUrl} title={event.title} variant="inline" />
+            <div className="mb-4 flex flex-wrap gap-2 animate-fade-in-up delay-200">
+              <ShareButton url={shareUrl} title={event.title} variant="inline" label="URLをシェア" />
+              <ShareButton
+                url={shareUrl}
+                title={event.title}
+                variant="inline"
+                message={announcementMessage}
+                label="告知文付きでシェア"
+              />
               <StoriesDownloadButton eventId={id} eventTitle={event.title} />
+            </div>
+
+            {/* Resend confirmation email */}
+            <div className="mb-8 animate-fade-in-up delay-200">
+              <ResendConfirmation eventId={id} />
             </div>
 
             {/* Teacher profile */}
@@ -706,8 +765,10 @@ export default async function EventPage({ params, searchParams }: EventPageProps
                   isLimited={event.is_limited}
                   passcodeVerified={isLimited}
                   paymentMethod={event.payment_method}
+                  paymentMethods={event.payment_methods}
                   paymentInfo={event.payment_info}
                   paymentLink={event.payment_link}
+                  isClosed={isClosed}
                 />
               </div>
             </section>
@@ -731,7 +792,7 @@ export default async function EventPage({ params, searchParams }: EventPageProps
                     <p className="mt-1 text-xs text-[#999999]">{event.price_note}</p>
                   )}
                 </div>
-                <SpotsBadge remaining={remaining} capacity={event.capacity} />
+                <SpotsBadge remaining={remaining} capacity={event.capacity} isClosed={isClosed} />
               </div>
               <Separator className="mb-5" />
               <BookingForm
@@ -764,16 +825,22 @@ export default async function EventPage({ params, searchParams }: EventPageProps
                 : `¥${event.price.toLocaleString("ja-JP")}`}
             </p>
           </div>
-          <a
-            href="#booking-form"
-            className={`shine-on-hover shrink-0 rounded-xl px-6 py-3 text-sm font-bold text-white transition-all duration-200 ${
-              remaining <= 0
-                ? "bg-gradient-to-r from-[#FF8C00] to-[#E67700] shadow-lg shadow-[#FF8C00]/30 hover:from-[#E67700] hover:to-[#CC6A00] hover:shadow-xl active:scale-95"
-                : "bg-gradient-to-r from-[#E8590C] to-[#D9480F] shadow-lg shadow-[#E8590C]/30 hover:from-[#D9480F] hover:to-[#C92A2A] hover:shadow-xl active:scale-95"
-            }`}
-          >
-            {remaining <= 0 ? "キャンセル待ち" : "申し込む"}
-          </a>
+          {isClosed ? (
+            <span className="shrink-0 rounded-xl bg-[#999999] px-6 py-3 text-sm font-bold text-white">
+              受付終了
+            </span>
+          ) : (
+            <a
+              href="#booking-form"
+              className={`shine-on-hover shrink-0 rounded-xl px-6 py-3 text-sm font-bold text-white transition-all duration-200 ${
+                remaining <= 0
+                  ? "bg-gradient-to-r from-[#FF8C00] to-[#E67700] shadow-lg shadow-[#FF8C00]/30 hover:from-[#E67700] hover:to-[#CC6A00] hover:shadow-xl active:scale-95"
+                  : "bg-gradient-to-r from-[#E8590C] to-[#D9480F] shadow-lg shadow-[#E8590C]/30 hover:from-[#D9480F] hover:to-[#C92A2A] hover:shadow-xl active:scale-95"
+              }`}
+            >
+              {remaining <= 0 ? "キャンセル待ち" : "申し込む"}
+            </a>
+          )}
         </div>
       </div>
 

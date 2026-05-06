@@ -62,14 +62,47 @@ export function fillTemplate(
 }
 
 /**
- * Build a reminder email HTML for attendees
+ * Build a reminder email HTML for attendees.
+ * For online/hybrid events the join info (Zoom ID + passcode, or fallback URL)
+ * is included so attendees don't have to dig up their original confirmation email.
  */
 export function buildReminderEmailHtml(
   eventTitle: string,
   dateStr: string,
   location: string,
-  timeLabel: string
+  timeLabel: string,
+  online?: {
+    locationType?: string | null;
+    onlineUrl?: string | null;
+    zoomMeetingId?: string | null;
+    zoomPasscode?: string | null;
+  }
 ): string {
+  const locationType = online?.locationType ?? "physical";
+  const onlineUrl = online?.onlineUrl ?? null;
+  const zoomMeetingId = online?.zoomMeetingId ?? null;
+  const zoomPasscode = online?.zoomPasscode ?? null;
+
+  function buildOnlineLines(): string {
+    if (zoomMeetingId) {
+      let lines = `■ ZoomミーティングID：${zoomMeetingId}`;
+      if (zoomPasscode) lines += `\n■ Zoomパスコード：${zoomPasscode}`;
+      if (onlineUrl) lines += `\n■ 参加URL：${onlineUrl}`;
+      return lines;
+    }
+    if (onlineUrl) return `■ 参加URL：${onlineUrl}`;
+    return "";
+  }
+
+  let locationLines = `■ 場所：${location}`;
+  if (locationType === "online") {
+    const onlineInfo = buildOnlineLines();
+    locationLines = onlineInfo || "■ 場所：オンライン";
+  } else if (locationType === "hybrid") {
+    const onlineInfo = buildOnlineLines();
+    if (onlineInfo) locationLines += `\n${onlineInfo}`;
+  }
+
   const body = `いつもありがとうございます。
 
 ${eventTitle}の開催が近づいてまいりました。
@@ -78,7 +111,7 @@ ${eventTitle}の開催が近づいてまいりました。
 ■ ${timeLabel}
 ■ イベント：${eventTitle}
 ■ 日時：${dateStr}
-■ 場所：${location}
+${locationLines}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 当日お会いできることを楽しみにしております。

@@ -36,6 +36,7 @@ import { TEMPLATES, type EventTemplate } from "@/lib/templates";
 import { useAuth } from "@/components/auth-provider";
 import { LoginDialog } from "@/components/login-dialog";
 import { ImageUpload } from "@/components/image-upload";
+import { PaymentMethodsField, type PaymentMethod } from "@/components/payment-methods-field";
 
 // ─── Schema ────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,7 @@ const createEventBaseSchema = z.object({
     .max(100, "100文字以内で入力してください"),
   description: z.string().min(1, "説明を入力してください"),
   datetime: z.string().min(1, "日時を入力してください"),
+  booking_deadline: z.string().optional(),
   location: z.string().optional(),
   location_type: z.enum(["physical", "online", "hybrid"]),
   online_url: z.string().optional(),
@@ -62,9 +64,17 @@ const createEventBaseSchema = z.object({
     .refine((v) => !isNaN(Number(v)) && Number(v) >= 0, "0円以上にしてください"),
   image_url: z.union([z.string().url("有効なURLを入力してください"), z.literal("")]).optional(),
   price_note: z.string().max(100).optional(),
-  payment_method: z.enum(['stripe', 'onsite', 'custom']).optional(),
+  payment_method: z.enum(['stripe', 'bank', 'onsite', 'custom']).optional(),
+  payment_methods: z.array(z.enum(['stripe', 'bank', 'onsite', 'custom'])).optional(),
   payment_link: z.string().optional(),
   payment_info: z.string().max(500).optional(),
+  payment_deadline_days: z.string().optional(),
+  bank_name: z.string().max(100).optional(),
+  bank_branch: z.string().max(100).optional(),
+  bank_account_type: z.string().max(20).optional(),
+  bank_account_number: z.string().max(50).optional(),
+  bank_account_holder: z.string().max(100).optional(),
+  bank_note: z.string().max(500).optional(),
   is_limited: z.boolean().optional(),
   limited_passcode: z.string().max(50).optional(),
   teacher_name: z.string().optional(),
@@ -97,6 +107,7 @@ interface CreateEventPayload {
   title: string;
   description: string;
   datetime: string;
+  booking_deadline?: string;
   location?: string;
   location_type: string;
   online_url?: string;
@@ -108,8 +119,16 @@ interface CreateEventPayload {
   image_url?: string;
   price_note?: string;
   payment_method?: string;
+  payment_methods?: string[];
   payment_link?: string;
   payment_info?: string;
+  payment_deadline_days?: number;
+  bank_name?: string;
+  bank_branch?: string;
+  bank_account_type?: string;
+  bank_account_number?: string;
+  bank_account_holder?: string;
+  bank_note?: string;
   is_limited?: boolean;
   limited_passcode?: string;
   teacher_name?: string;
@@ -492,6 +511,9 @@ function NewEventPageInner() {
     reset,
     watch,
     setValue,
+    getValues,
+    trigger,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<CreateEventFormValues>({
     resolver: zodResolver(createEventSchema),
@@ -500,8 +522,12 @@ function NewEventPageInner() {
       price: "0",
       location_type: "physical",
       payment_method: "stripe",
+      payment_methods: ["stripe"],
+      bank_account_type: "普通",
     },
   });
+
+  const [savingDraft, setSavingDraft] = useState(false);
 
   const watchedValues = watch();
 
@@ -531,8 +557,16 @@ function NewEventPageInner() {
           image_url: ev.image_url ?? "",
           price_note: ev.price_note ?? "",
           payment_method: ev.payment_method ?? "stripe",
+          payment_methods: (ev.payment_methods as PaymentMethod[] | null) ?? (ev.payment_method ? [ev.payment_method as PaymentMethod] : ["stripe"]),
           payment_link: ev.payment_link ?? "",
           payment_info: ev.payment_info ?? "",
+          payment_deadline_days: ev.payment_deadline_days ? String(ev.payment_deadline_days) : "",
+          bank_name: ev.bank_name ?? "",
+          bank_branch: ev.bank_branch ?? "",
+          bank_account_type: ev.bank_account_type ?? "普通",
+          bank_account_number: ev.bank_account_number ?? "",
+          bank_account_holder: ev.bank_account_holder ?? "",
+          bank_note: ev.bank_note ?? "",
           is_limited: ev.is_limited ?? false,
           limited_passcode: ev.limited_passcode ?? "",
           teacher_name: ev.teacher_name ?? "",
@@ -554,6 +588,71 @@ function NewEventPageInner() {
     });
   };
 
+  const saveDraft = async () => {
+    if (!user) {
+      setShowLoginDialog(true);
+      return;
+    }
+    setServerError(null);
+    // Drafts only require a title — fail early with an inline error if missing
+    const ok = await trigger("title");
+    if (!ok) {
+      setError("title", { message: "下書き保存にはタイトルが必要です" });
+      return;
+    }
+    const data = getValues();
+    setSavingDraft(true);
+    try {
+      const res = await fetch("/api/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          save_as_draft: true,
+          title: data.title,
+          description: data.description || undefined,
+          datetime: data.datetime ? new Date(data.datetime).toISOString() : undefined,
+          booking_deadline: data.booking_deadline ? new Date(data.booking_deadline).toISOString() : undefined,
+          location: data.location || undefined,
+          location_type: data.location_type ?? "physical",
+          online_url: data.online_url || undefined,
+          zoom_meeting_id: data.zoom_meeting_id || undefined,
+          zoom_passcode: data.zoom_passcode || undefined,
+          location_url: data.location_url || undefined,
+          capacity: data.capacity ? Number(data.capacity) : undefined,
+          price: data.price ? Number(data.price) : 0,
+          image_url: data.image_url || undefined,
+          price_note: data.price_note || undefined,
+          payment_methods: data.payment_methods,
+          payment_deadline_days: data.payment_deadline_days ? Number(data.payment_deadline_days) : undefined,
+          bank_name: data.bank_name || undefined,
+          bank_branch: data.bank_branch || undefined,
+          bank_account_type: data.bank_account_type || undefined,
+          bank_account_number: data.bank_account_number || undefined,
+          bank_account_holder: data.bank_account_holder || undefined,
+          bank_note: data.bank_note || undefined,
+          is_limited: data.is_limited || false,
+          limited_passcode: data.is_limited ? data.limited_passcode : undefined,
+          teacher_name: data.teacher_name,
+          teacher_bio: data.teacher_bio,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        if (res.status === 401) {
+          setShowLoginDialog(true);
+          return;
+        }
+        setServerError(json.error ?? "下書きの保存に失敗しました");
+        return;
+      }
+      router.push(`/events/${json.event.id}/edit?draft_saved=1`);
+    } catch {
+      setServerError("ネットワークエラーが発生しました。もう一度お試しください。");
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
   const onSubmit = async (data: CreateEventFormValues) => {
     if (!user) {
       setShowLoginDialog(true);
@@ -566,6 +665,7 @@ function NewEventPageInner() {
       title: data.title,
       description: data.description,
       datetime: new Date(data.datetime).toISOString(),
+      booking_deadline: data.booking_deadline ? new Date(data.booking_deadline).toISOString() : undefined,
       location: data.location || undefined,
       location_type: data.location_type ?? "physical",
       online_url: data.online_url || undefined,
@@ -577,8 +677,22 @@ function NewEventPageInner() {
       image_url: data.image_url || undefined,
       price_note: data.price_note || undefined,
       payment_method: Number(data.price) > 0 ? (data.payment_method || 'stripe') : undefined,
-      payment_link: data.payment_method === 'custom' ? (data.payment_link || undefined) : undefined,
-      payment_info: data.payment_method === 'custom' ? (data.payment_info || undefined) : undefined,
+      payment_methods: Number(data.price) > 0 && data.payment_methods && data.payment_methods.length > 0
+        ? data.payment_methods
+        : undefined,
+      payment_link: (data.payment_methods?.includes('custom') || data.payment_method === 'custom')
+        ? (data.payment_link || undefined)
+        : undefined,
+      payment_info: (data.payment_methods?.includes('custom') || data.payment_method === 'custom')
+        ? (data.payment_info || undefined)
+        : undefined,
+      payment_deadline_days: data.payment_deadline_days ? Number(data.payment_deadline_days) : undefined,
+      bank_name: data.payment_methods?.includes('bank') ? (data.bank_name || undefined) : undefined,
+      bank_branch: data.payment_methods?.includes('bank') ? (data.bank_branch || undefined) : undefined,
+      bank_account_type: data.payment_methods?.includes('bank') ? (data.bank_account_type || undefined) : undefined,
+      bank_account_number: data.payment_methods?.includes('bank') ? (data.bank_account_number || undefined) : undefined,
+      bank_account_holder: data.payment_methods?.includes('bank') ? (data.bank_account_holder || undefined) : undefined,
+      bank_note: data.payment_methods?.includes('bank') ? (data.bank_note || undefined) : undefined,
       is_limited: data.is_limited || false,
       limited_passcode: data.is_limited ? (data.limited_passcode || undefined) : undefined,
       teacher_name: data.teacher_name,
@@ -742,6 +856,20 @@ function NewEventPageInner() {
                     <FieldError message={errors.datetime?.message} />
                   </FieldWrapper>
 
+                  <FieldWrapper
+                    label="申し込み締め切り"
+                    hint="未指定の場合は開催開始時刻まで受付可能"
+                  >
+                    <div className="relative">
+                      <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#999999]" />
+                      <Input
+                        type="datetime-local"
+                        {...register("booking_deadline")}
+                        className={inputWithIconCls}
+                      />
+                    </div>
+                  </FieldWrapper>
+
                   <FieldWrapper label="開催形式" required>
                     <div className="flex gap-2">
                       {([
@@ -903,68 +1031,19 @@ function NewEventPageInner() {
                     />
                   </FieldWrapper>
 
-                  {/* Payment method selector (only when price > 0) */}
+                  {/* Payment methods selector (only when price > 0) — multi-select */}
                   {Number(watchedValues.price) > 0 && (
-                    <div className="space-y-3">
-                      <FieldWrapper label="集金方法" required hint="参加費の受け取り方法を選択してください">
-                        <div className="grid gap-2 sm:grid-cols-3">
-                          {([
-                            { value: "stripe" as const, label: "Stripe決済", icon: CreditCard, desc: "クレジットカード" },
-                            { value: "onsite" as const, label: "現地払い", icon: Banknote, desc: "当日会場でお支払い" },
-                            { value: "custom" as const, label: "カスタム案内", icon: FileText, desc: "PayPay・振込など" },
-                          ]).map((opt) => {
-                            const isSelected = (watchedValues.payment_method ?? 'stripe') === opt.value;
-                            return (
-                              <button
-                                key={opt.value}
-                                type="button"
-                                onClick={() => setValue("payment_method", opt.value, { shouldDirty: true })}
-                                className={`flex items-center gap-2.5 rounded-xl border-2 p-3 text-left transition-all ${
-                                  isSelected
-                                    ? "border-[#1A1A1A] bg-[#F7F7F7]"
-                                    : "border-[#E5E5E5] bg-white hover:border-[#1A1A1A]/40"
-                                }`}
-                              >
-                                <opt.icon className={`h-4 w-4 shrink-0 ${isSelected ? "text-[#1A1A1A]" : "text-[#999999]"}`} />
-                                <div>
-                                  <p className={`text-sm font-medium ${isSelected ? "text-[#1A1A1A]" : "text-[#666666]"}`}>{opt.label}</p>
-                                  <p className="text-[10px] text-[#999999]">{opt.desc}</p>
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </FieldWrapper>
-
-                      {watchedValues.payment_method === 'stripe' && (
-                        <p className="text-xs text-[#999999]">
-                          <a href="/settings/stripe" target="_blank" rel="noopener noreferrer" className="text-[#635BFF] underline underline-offset-2 hover:no-underline">Stripe連携</a>が必要です
-                        </p>
-                      )}
-
-                      {watchedValues.payment_method === 'custom' && (
-                        <div className="space-y-3 rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-4">
-                          <FieldWrapper label="お支払い案内文" optional hint="PayPayや振込先など、参加者に表示する案内を入力">
-                            <Textarea
-                              placeholder="例：PayPayで以下のアカウントにお支払いください。&#10;アカウント：@example"
-                              rows={3}
-                              {...register("payment_info")}
-                              className="rounded-xl border-[#E5E5E5] transition-colors focus-visible:border-[#1A1A1A] focus-visible:ring-[#1A1A1A]/20"
-                            />
-                          </FieldWrapper>
-                          <FieldWrapper label="お支払いリンク" optional hint="PayPayリンクや振込先ページのURL">
-                            <div className="relative">
-                              <ExternalLink className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
-                              <Input
-                                placeholder="例：https://pay.paypay.ne.jp/..."
-                                {...register("payment_link")}
-                                className={inputWithIconCls}
-                              />
-                            </div>
-                          </FieldWrapper>
-                        </div>
-                      )}
-                    </div>
+                    <PaymentMethodsField
+                      methods={watchedValues.payment_methods ?? (watchedValues.payment_method ? [watchedValues.payment_method as 'stripe'|'bank'|'onsite'|'custom'] : ['stripe'])}
+                      onChange={(methods) => {
+                        setValue("payment_methods", methods, { shouldDirty: true });
+                        if (methods.length > 0) setValue("payment_method", methods[0], { shouldDirty: true });
+                      }}
+                      register={register}
+                      values={watchedValues}
+                      inputCls={inputCls}
+                      inputWithIconCls={inputWithIconCls}
+                    />
                   )}
 
                   <Separator />
@@ -1056,20 +1135,38 @@ function NewEventPageInner() {
               )}
 
               {/* Submit */}
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                className="h-12 w-full rounded-xl bg-[#1A1A1A] text-base font-bold text-white shadow-sm hover:bg-[#111111] disabled:opacity-60"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    作成中...
-                  </>
-                ) : (
-                  "イベントページを作成する"
-                )}
-              </Button>
+              <div className="space-y-2">
+                <Button
+                  type="submit"
+                  disabled={isSubmitting || savingDraft}
+                  className="h-12 w-full rounded-xl bg-[#1A1A1A] text-base font-bold text-white shadow-sm hover:bg-[#111111] disabled:opacity-60"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      作成中...
+                    </>
+                  ) : (
+                    "イベントページを作成する"
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={saveDraft}
+                  disabled={isSubmitting || savingDraft}
+                  variant="outline"
+                  className="h-11 w-full rounded-xl border-[#E5E5E5] bg-white text-sm font-medium text-[#1A1A1A] hover:bg-[#F7F7F7] disabled:opacity-60"
+                >
+                  {savingDraft ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      保存中...
+                    </>
+                  ) : (
+                    "下書きとして保存（あとで編集）"
+                  )}
+                </Button>
+              </div>
             </form>
           </div>
 

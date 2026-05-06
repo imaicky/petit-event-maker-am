@@ -6,7 +6,9 @@ import {
   DM_Sans,
 } from "next/font/google";
 import "./globals.css";
+import { Suspense } from "react";
 import { AuthProvider } from "@/components/auth-provider";
+import { PostHogProvider } from "@/components/posthog-provider";
 
 const notoSerifJP = Noto_Serif_JP({
   variable: "--font-zen-maru",
@@ -50,8 +52,12 @@ export default function RootLayout({
       className={`${notoSerifJP.variable} ${josefinSans.variable} ${notoSansJP.variable} ${dmSans.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-          <AuthProvider>{children}</AuthProvider>
-        </body>
+        <AuthProvider>
+          <Suspense fallback={null}>
+            <PostHogProvider>{children}</PostHogProvider>
+          </Suspense>
+        </AuthProvider>
+      </body>
     </html>
   );
 }

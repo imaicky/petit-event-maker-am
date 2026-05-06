@@ -43,6 +43,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ImageUpload } from "@/components/image-upload";
+import { PaymentMethodsField } from "@/components/payment-methods-field";
 import { useAuth } from "@/components/auth-provider";
 import { createClient } from "@/lib/supabase/client";
 
@@ -55,6 +56,7 @@ const editEventBaseSchema = z.object({
     .max(100, "100文字以内で入力してください"),
   description: z.string().min(1, "説明を入力してください"),
   datetime: z.string().min(1, "日時を入力してください"),
+  booking_deadline: z.string().optional(),
   location: z.string().optional(),
   location_type: z.enum(["physical", "online", "hybrid"]),
   online_url: z.string().optional(),
@@ -79,9 +81,17 @@ const editEventBaseSchema = z.object({
     .union([z.string().url("有効なURLを入力してください"), z.literal("")])
     .optional(),
   price_note: z.string().max(100).optional(),
-  payment_method: z.enum(['stripe', 'onsite', 'custom']).optional(),
+  payment_method: z.enum(['stripe', 'bank', 'onsite', 'custom']).optional(),
+  payment_methods: z.array(z.enum(['stripe', 'bank', 'onsite', 'custom'])).optional(),
   payment_link: z.string().optional(),
   payment_info: z.string().max(500).optional(),
+  payment_deadline_days: z.string().optional(),
+  bank_name: z.string().max(100).optional(),
+  bank_branch: z.string().max(100).optional(),
+  bank_account_type: z.string().max(20).optional(),
+  bank_account_number: z.string().max(50).optional(),
+  bank_account_holder: z.string().max(100).optional(),
+  bank_note: z.string().max(500).optional(),
   is_limited: z.boolean().optional(),
   limited_passcode: z.string().max(50).optional(),
   teacher_name: z.string().optional(),
@@ -460,7 +470,7 @@ export default function EditEventPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const eventId = params.id;
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -478,6 +488,9 @@ export default function EditEventPage() {
     reset,
     watch,
     setValue,
+    getValues,
+    trigger,
+    setError,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<EditEventFormValues>({
     resolver: zodResolver(editEventSchema),
@@ -485,15 +498,22 @@ export default function EditEventPage() {
       location_type: "physical",
     },
   });
+  const [savingDraft, setSavingDraft] = useState(false);
 
   const watchedLocationType = watch("location_type");
   const watchedIsLimited = watch("is_limited");
   const watchedPrice = watch("price");
   const watchedPaymentMethod = watch("payment_method");
+  const watchedValues = watch();
 
   // ── Load existing event ───────────────────────────────────────────────────
 
   useEffect(() => {
+    // Wait for auth context to finish loading; otherwise `user` is null on
+    // first render and every permission branch below fails, causing a
+    // false "no permission" screen for legitimate creators / admins.
+    if (authLoading) return;
+
     async function fetchEvent() {
       try {
         const res = await fetch(`/api/events/${eventId}`);
@@ -504,19 +524,24 @@ export default function EditEventPage() {
         const json = await res.json();
         const event = json.event;
 
-        let datetimeLocal = "";
-        try {
-          const d = new Date(event.datetime);
-          const pad = (n: number) => String(n).padStart(2, "0");
-          datetimeLocal = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-        } catch {
-          datetimeLocal = event.datetime;
-        }
+        const toLocal = (iso?: string | null): string => {
+          if (!iso) return "";
+          try {
+            const d = new Date(iso);
+            const pad = (n: number) => String(n).padStart(2, "0");
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+          } catch {
+            return iso;
+          }
+        };
+        const datetimeLocal = toLocal(event.datetime);
+        const deadlineLocal = toLocal(event.booking_deadline);
 
         reset({
           title: event.title ?? "",
           description: event.description ?? "",
           datetime: datetimeLocal,
+          booking_deadline: deadlineLocal,
           location: event.location ?? "",
           location_type: event.location_type ?? "physical",
           online_url: event.online_url ?? "",
@@ -528,8 +553,17 @@ export default function EditEventPage() {
           image_url: event.image_url ?? "",
           price_note: event.price_note ?? "",
           payment_method: event.payment_method ?? "stripe",
+          payment_methods: (event.payment_methods as ("stripe"|"bank"|"onsite"|"custom")[] | null) ??
+            (event.payment_method ? [event.payment_method as "stripe"|"bank"|"onsite"|"custom"] : ["stripe"]),
           payment_link: event.payment_link ?? "",
           payment_info: event.payment_info ?? "",
+          payment_deadline_days: event.payment_deadline_days ? String(event.payment_deadline_days) : "",
+          bank_name: event.bank_name ?? "",
+          bank_branch: event.bank_branch ?? "",
+          bank_account_type: event.bank_account_type ?? "普通",
+          bank_account_number: event.bank_account_number ?? "",
+          bank_account_holder: event.bank_account_holder ?? "",
+          bank_note: event.bank_note ?? "",
           is_limited: event.is_limited ?? false,
           limited_passcode: event.limited_passcode ?? "",
           teacher_name: event.teacher_name ?? "",
@@ -567,7 +601,68 @@ export default function EditEventPage() {
     }
 
     fetchEvent();
-  }, [eventId, reset]);
+  }, [eventId, reset, user, authLoading]);
+
+  // ── Draft Save ─────────────────────────────────────────────────────────────
+
+  const saveDraft = async () => {
+    setServerError(null);
+    setSaveSuccess(false);
+    const ok = await trigger("title");
+    if (!ok) {
+      setError("title", { message: "下書き保存にはタイトルが必要です" });
+      return;
+    }
+    const data = getValues();
+    setSavingDraft(true);
+    try {
+      const res = await fetch(`/api/events/${eventId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          save_as_draft: true,
+          title: data.title,
+          description: data.description || undefined,
+          datetime: data.datetime ? new Date(data.datetime).toISOString() : undefined,
+          booking_deadline: data.booking_deadline ? new Date(data.booking_deadline).toISOString() : null,
+          location: data.location || undefined,
+          location_type: data.location_type ?? "physical",
+          online_url: data.online_url || undefined,
+          zoom_meeting_id: data.zoom_meeting_id || undefined,
+          zoom_passcode: data.zoom_passcode || undefined,
+          location_url: data.location_url || undefined,
+          capacity: data.capacity ? Number(data.capacity) : undefined,
+          price: data.price ? Number(data.price) : 0,
+          image_url: data.image_url || undefined,
+          price_note: data.price_note || undefined,
+          payment_methods: data.payment_methods,
+          payment_deadline_days: data.payment_deadline_days ? Number(data.payment_deadline_days) : undefined,
+          bank_name: data.bank_name || undefined,
+          bank_branch: data.bank_branch || undefined,
+          bank_account_type: data.bank_account_type || undefined,
+          bank_account_number: data.bank_account_number || undefined,
+          bank_account_holder: data.bank_account_holder || undefined,
+          bank_note: data.bank_note || undefined,
+          is_limited: data.is_limited || false,
+          limited_passcode: data.is_limited ? data.limited_passcode : undefined,
+          teacher_name: data.teacher_name,
+          teacher_bio: data.teacher_bio,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setServerError(json.error ?? "下書きの保存に失敗しました");
+        return;
+      }
+      setIsPublished(false);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch {
+      setServerError("ネットワークエラーが発生しました。もう一度お試しください。");
+    } finally {
+      setSavingDraft(false);
+    }
+  };
 
   // ── Submit ────────────────────────────────────────────────────────────────
 
@@ -579,6 +674,7 @@ export default function EditEventPage() {
       title: data.title,
       description: data.description,
       datetime: new Date(data.datetime).toISOString(),
+      booking_deadline: data.booking_deadline ? new Date(data.booking_deadline).toISOString() : null,
       location: data.location || undefined,
       location_type: data.location_type ?? "physical",
       online_url: data.online_url || undefined,
@@ -590,8 +686,22 @@ export default function EditEventPage() {
       image_url: data.image_url || undefined,
       price_note: data.price_note || undefined,
       payment_method: Number(data.price) > 0 ? (data.payment_method || 'stripe') : undefined,
-      payment_link: data.payment_method === 'custom' ? (data.payment_link || undefined) : undefined,
-      payment_info: data.payment_method === 'custom' ? (data.payment_info || undefined) : undefined,
+      payment_methods: Number(data.price) > 0 && data.payment_methods && data.payment_methods.length > 0
+        ? data.payment_methods
+        : undefined,
+      payment_link: (data.payment_methods?.includes('custom') || data.payment_method === 'custom')
+        ? (data.payment_link || undefined)
+        : undefined,
+      payment_info: (data.payment_methods?.includes('custom') || data.payment_method === 'custom')
+        ? (data.payment_info || undefined)
+        : undefined,
+      payment_deadline_days: data.payment_deadline_days ? Number(data.payment_deadline_days) : undefined,
+      bank_name: data.payment_methods?.includes('bank') ? (data.bank_name || undefined) : undefined,
+      bank_branch: data.payment_methods?.includes('bank') ? (data.bank_branch || undefined) : undefined,
+      bank_account_type: data.payment_methods?.includes('bank') ? (data.bank_account_type || undefined) : undefined,
+      bank_account_number: data.payment_methods?.includes('bank') ? (data.bank_account_number || undefined) : undefined,
+      bank_account_holder: data.payment_methods?.includes('bank') ? (data.bank_account_holder || undefined) : undefined,
+      bank_note: data.payment_methods?.includes('bank') ? (data.bank_note || undefined) : undefined,
       is_limited: data.is_limited || false,
       limited_passcode: data.is_limited ? (data.limited_passcode || undefined) : undefined,
       teacher_name: data.teacher_name,
@@ -812,6 +922,20 @@ export default function EditEventPage() {
                   <FieldError message={errors.datetime?.message} />
                 </FieldWrapper>
 
+                <FieldWrapper
+                  label="申し込み締め切り"
+                  hint="未指定の場合は開催開始時刻まで受付可能"
+                >
+                  <div className="relative">
+                    <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#999999]" />
+                    <Input
+                      type="datetime-local"
+                      {...register("booking_deadline")}
+                      className={inputWithIconCls}
+                    />
+                  </div>
+                </FieldWrapper>
+
                 <FieldWrapper label="開催形式" required>
                   <div className="flex gap-2">
                     {([
@@ -968,68 +1092,19 @@ export default function EditEventPage() {
                   />
                 </FieldWrapper>
 
-                {/* Payment method selector (only when price > 0) */}
+                {/* Payment methods selector — multi-select */}
                 {Number(watchedPrice) > 0 && (
-                  <div className="space-y-3">
-                    <FieldWrapper label="集金方法" required hint="参加費の受け取り方法を選択してください">
-                      <div className="grid gap-2 sm:grid-cols-3">
-                        {([
-                          { value: "stripe" as const, label: "Stripe決済", icon: CreditCard, desc: "クレジットカード" },
-                          { value: "onsite" as const, label: "現地払い", icon: Banknote, desc: "当日会場でお支払い" },
-                          { value: "custom" as const, label: "カスタム案内", icon: FileText, desc: "PayPay・振込など" },
-                        ]).map((opt) => {
-                          const isSelected = (watchedPaymentMethod ?? 'stripe') === opt.value;
-                          return (
-                            <button
-                              key={opt.value}
-                              type="button"
-                              onClick={() => setValue("payment_method", opt.value, { shouldDirty: true })}
-                              className={`flex items-center gap-2.5 rounded-xl border-2 p-3 text-left transition-all ${
-                                isSelected
-                                  ? "border-[#1A1A1A] bg-[#F7F7F7]"
-                                  : "border-[#E5E5E5] bg-white hover:border-[#1A1A1A]/40"
-                              }`}
-                            >
-                              <opt.icon className={`h-4 w-4 shrink-0 ${isSelected ? "text-[#1A1A1A]" : "text-[#999999]"}`} />
-                              <div>
-                                <p className={`text-sm font-medium ${isSelected ? "text-[#1A1A1A]" : "text-[#666666]"}`}>{opt.label}</p>
-                                <p className="text-[10px] text-[#999999]">{opt.desc}</p>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </FieldWrapper>
-
-                    {watchedPaymentMethod === 'stripe' && (
-                      <p className="text-xs text-[#999999]">
-                        <a href="/settings/stripe" target="_blank" rel="noopener noreferrer" className="text-[#635BFF] underline underline-offset-2 hover:no-underline">Stripe連携</a>が必要です
-                      </p>
-                    )}
-
-                    {watchedPaymentMethod === 'custom' && (
-                      <div className="space-y-3 rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-4">
-                        <FieldWrapper label="お支払い案内文" optional hint="PayPayや振込先など、参加者に表示する案内を入力">
-                          <Textarea
-                            placeholder="例：PayPayで以下のアカウントにお支払いください。&#10;アカウント：@example"
-                            rows={3}
-                            {...register("payment_info")}
-                            className="rounded-xl border-[#E5E5E5] focus-visible:border-[#1A1A1A] focus-visible:ring-[#1A1A1A]/20 bg-[#FAFAFA] resize-none"
-                          />
-                        </FieldWrapper>
-                        <FieldWrapper label="お支払いリンク" optional hint="PayPayリンクや振込先ページのURL">
-                          <div className="relative">
-                            <ExternalLink className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
-                            <Input
-                              placeholder="例：https://pay.paypay.ne.jp/..."
-                              {...register("payment_link")}
-                              className={inputWithIconCls}
-                            />
-                          </div>
-                        </FieldWrapper>
-                      </div>
-                    )}
-                  </div>
+                  <PaymentMethodsField
+                    methods={watchedValues.payment_methods ?? (watchedPaymentMethod ? [watchedPaymentMethod] : ['stripe'])}
+                    onChange={(methods) => {
+                      setValue("payment_methods", methods, { shouldDirty: true });
+                      if (methods.length > 0) setValue("payment_method", methods[0], { shouldDirty: true });
+                    }}
+                    register={register}
+                    values={watchedValues}
+                    inputCls={inputCls}
+                    inputWithIconCls={inputWithIconCls}
+                  />
                 )}
               </div>
             </FormSection>
@@ -1116,21 +1191,39 @@ export default function EditEventPage() {
               </div>
             )}
 
-            {/* Save button */}
-            <Button
-              type="submit"
-              disabled={isSubmitting || !isDirty}
-              className="h-12 w-full rounded-xl bg-[#1A1A1A] text-base font-bold text-white hover:bg-[#111111] disabled:opacity-60 gap-2 shadow-sm"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  保存中...
-                </>
-              ) : (
-                "変更を保存する"
-              )}
-            </Button>
+            {/* Save buttons */}
+            <div className="space-y-2">
+              <Button
+                type="submit"
+                disabled={isSubmitting || savingDraft || !isDirty}
+                className="h-12 w-full rounded-xl bg-[#1A1A1A] text-base font-bold text-white hover:bg-[#111111] disabled:opacity-60 gap-2 shadow-sm"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    保存中...
+                  </>
+                ) : (
+                  "変更を保存する"
+                )}
+              </Button>
+              <Button
+                type="button"
+                onClick={saveDraft}
+                disabled={isSubmitting || savingDraft}
+                variant="outline"
+                className="h-11 w-full rounded-xl border-[#E5E5E5] bg-white text-sm font-medium text-[#1A1A1A] hover:bg-[#F7F7F7] disabled:opacity-60"
+              >
+                {savingDraft ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    保存中...
+                  </>
+                ) : (
+                  "下書きとして保存（非公開）"
+                )}
+              </Button>
+            </div>
 
             {/* Mobile preview link */}
             <a

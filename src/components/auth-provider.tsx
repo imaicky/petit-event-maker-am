@@ -21,13 +21,14 @@ interface AuthContextValue {
   signInWithPassword: (
     email: string,
     password: string
-  ) => Promise<{ error: string | null }>;
+  ) => Promise<{ error: string | null; code?: string }>;
   signUpWithPassword: (
     email: string,
     password: string
-  ) => Promise<{ error: string | null }>;
+  ) => Promise<{ error: string | null; needsEmailConfirmation?: boolean }>;
   signInWithLINE: () => Promise<{ error: string | null }>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
+  resendConfirmationEmail: (email: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -39,6 +40,7 @@ export const AuthContext = createContext<AuthContextValue>({
   signUpWithPassword: async () => ({ error: null }),
   signInWithLINE: async () => ({ error: null }),
   resetPassword: async () => ({ error: null }),
+  resendConfirmationEmail: async () => ({ error: null }),
   signOut: async () => {},
 });
 
@@ -107,12 +109,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     async (
       email: string,
       password: string
-    ): Promise<{ error: string | null }> => {
+    ): Promise<{ error: string | null; code?: string }> => {
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
-      if (error) return { error: error.message };
+      if (error) return { error: error.message, code: error.code };
       return { error: null };
     },
     [supabase]
@@ -122,10 +124,31 @@ export function AuthProvider({ children }: AuthProviderProps) {
     async (
       email: string,
       password: string
-    ): Promise<{ error: string | null }> => {
-      const { error } = await supabase.auth.signUp({
+    ): Promise<{ error: string | null; needsEmailConfirmation?: boolean }> => {
+      const callbackUrl = `${window.location.origin}/api/auth/callback?next=/dashboard`;
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: callbackUrl,
+        },
+      });
+      if (error) return { error: error.message };
+      // Supabase returns user with empty identities array when email confirmation is required
+      const needsEmailConfirmation =
+        !!data.user && (data.user.identities?.length ?? 0) === 0;
+      return { error: null, needsEmailConfirmation: needsEmailConfirmation || !data.session };
+    },
+    [supabase]
+  );
+
+  const resendConfirmationEmail = useCallback(
+    async (email: string): Promise<{ error: string | null }> => {
+      const callbackUrl = `${window.location.origin}/api/auth/callback?next=/dashboard`;
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email,
+        options: { emailRedirectTo: callbackUrl },
       });
       if (error) return { error: error.message };
       return { error: null };
@@ -176,6 +199,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         signUpWithPassword,
         signInWithLINE,
         resetPassword,
+        resendConfirmationEmail,
         signOut,
       }}
     >

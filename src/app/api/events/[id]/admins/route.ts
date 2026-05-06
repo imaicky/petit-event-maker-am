@@ -162,7 +162,7 @@ export async function GET(
       .map((a) => a.user_id)
       .filter(Boolean) as string[];
 
-    let profileMap: Record<string, { display_name: string | null; avatar_url: string | null }> = {};
+    const profileMap: Record<string, { display_name: string | null; avatar_url: string | null }> = {};
     if (userIds.length > 0) {
       const { data: profiles } = await admin
         .from("profiles")

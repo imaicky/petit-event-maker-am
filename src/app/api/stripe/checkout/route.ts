@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     // Fetch event details (include creator_id for per-creator Stripe)
     const { data: event, error: eventErr } = await admin
       .from("events")
-      .select("id, title, price, image_url, creator_id, payment_method")
+      .select("id, title, price, image_url, creator_id, payment_method, payment_methods")
       .eq("id", event_id)
       .single();
 
@@ -36,7 +36,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if ((event as Record<string, unknown>).payment_method && (event as Record<string, unknown>).payment_method !== 'stripe') {
+    // Allow Stripe checkout if 'stripe' is in the multi-method array OR the
+    // legacy single field equals 'stripe'. Old events created before the
+    // multi-method migration only have payment_method set.
+    const evMethods = (event as Record<string, unknown>).payment_methods as string[] | null;
+    const evSingle = (event as Record<string, unknown>).payment_method as string | null;
+    const stripeAllowed =
+      (Array.isArray(evMethods) && evMethods.includes("stripe")) ||
+      (!evMethods && evSingle === "stripe");
+    if (!stripeAllowed) {
       return NextResponse.json(
         { error: "This event does not use Stripe" },
         { status: 400 }
@@ -115,7 +123,7 @@ export async function POST(request: NextRequest) {
           booking_id,
           event_id,
         },
-        success_url: `${baseUrl}/events/${event_id}/thanks?name=${encodeURIComponent(booking.guest_name)}&email=${encodeURIComponent(booking.guest_email)}&session_id={CHECKOUT_SESSION_ID}`,
+        success_url: `${baseUrl}/events/${event_id}/thanks?booking_id=${encodeURIComponent(booking_id)}&name=${encodeURIComponent(booking.guest_name)}&email=${encodeURIComponent(booking.guest_email)}&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${baseUrl}/events/${event_id}?payment_cancelled=1`,
       },
       {

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Search, SlidersHorizontal, Sparkles } from "lucide-react";
+import { Search, SlidersHorizontal, Sparkles, LayoutList, CalendarDays } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
 import type { EventWithBookingCount } from "@/types/database";
@@ -8,6 +8,7 @@ import { CATEGORY_ICONS } from "@/lib/constants";
 import { EventCard } from "@/components/event-card";
 import { ExploreFilters } from "@/components/explore-filters";
 import { TrendingEvents } from "@/components/trending-events";
+import { EventCalendar } from "@/components/event-calendar";
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
@@ -112,7 +113,8 @@ function filterEvents(
   events: EventWithBookingCount[],
   query: string,
   category: string,
-  area: string
+  area: string,
+  locationType: string
 ): EventWithBookingCount[] {
   const q = query.toLowerCase().trim();
   const cat = category.trim();
@@ -120,6 +122,7 @@ function filterEvents(
 
   return events.filter((e) => {
     if (cat && e.category !== cat) return false;
+    if (locationType && e.location_type !== locationType) return false;
     if (ar && !(e.location ?? "").toLowerCase().includes(ar)) return false;
     if (q) {
       return (
@@ -160,19 +163,50 @@ interface ExplorePageProps {
     category?: string;
     area?: string;
     sort?: string;
+    type?: string;
+    view?: string;
+    month?: string;
+    date?: string;
   }>;
 }
 
 export const dynamic = "force-dynamic";
 
 export default async function ExplorePage({ searchParams }: ExplorePageProps) {
-  const { q = "", category = "", area = "", sort = "new" } = await searchParams;
+  const { q = "", category = "", area = "", sort = "new", type = "", view = "", month = "", date = "" } = await searchParams;
 
   const allEvents = await getPublishedEvents();
   const reviewAggs = await getReviewAggregations(allEvents.map((e) => e.id));
-  const filtered = filterEvents(allEvents, q, category, area);
-  const sorted = sortEvents(filtered, sort, reviewAggs);
-  const isFiltered = !!(q || category || area);
+  const filtered = filterEvents(allEvents, q, category, area, type);
+  let sorted = sortEvents(filtered, sort, reviewAggs);
+
+  // Date filter (from calendar click)
+  if (date) {
+    sorted = sorted.filter((e) => {
+      const eventDate = new Date(e.datetime).toLocaleDateString("en-CA", { timeZone: "Asia/Tokyo" });
+      return eventDate === date;
+    });
+  }
+
+  const isFiltered = !!(q || category || area || type || date);
+  const isCalendarView = view === "calendar";
+
+  // Calendar: compute current month + event counts by date
+  const now = new Date();
+  const calendarMonth = month || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const eventCountByDate: Record<string, number> = {};
+  for (const e of filtered) {
+    const d = new Date(e.datetime).toLocaleDateString("en-CA", { timeZone: "Asia/Tokyo" });
+    eventCountByDate[d] = (eventCountByDate[d] ?? 0) + 1;
+  }
+
+  // Base params for calendar links (preserve existing filters)
+  const calBaseParams: Record<string, string> = {};
+  if (q) calBaseParams.q = q;
+  if (category) calBaseParams.category = category;
+  if (area) calBaseParams.area = area;
+  if (sort !== "new") calBaseParams.sort = sort;
+  if (type) calBaseParams.type = type;
 
   // Category counts
   const categoryCounts: Record<string, number> = {};
@@ -181,8 +215,14 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
     if (cat) categoryCounts[cat] = (categoryCounts[cat] ?? 0) + 1;
   }
 
+  // Location type counts
+  const typeCounts: Record<string, number> = {};
+  for (const e of allEvents) {
+    const t = e.location_type ?? "physical";
+    typeCounts[t] = (typeCounts[t] ?? 0) + 1;
+  }
+
   // Trending events: top 4 by booking fill rate (upcoming only)
-  const now = new Date();
   const trendingEvents = [...allEvents]
     .filter((e) => new Date(e.datetime) >= now && (e.capacity ?? 0) > 0)
     .sort((a, b) => {
@@ -259,6 +299,10 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
                 initialCategory={category}
                 initialArea={area}
                 initialSort={sort}
+                initialType={type}
+                initialView={view}
+                initialMonth={month}
+                initialDate={date}
               />
             </div>
           </div>
@@ -283,6 +327,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
                 category: cat,
                 ...(area ? { area } : {}),
                 ...(sort !== "new" ? { sort } : {}),
+                ...(type ? { type } : {}),
               }).toString()}`;
               return (
                 <Link
@@ -305,6 +350,53 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
               );
             })}
           </div>
+
+          {/* Location type chips */}
+          <div className="mt-3 flex flex-wrap items-center gap-2 animate-fade-in">
+            <span className="text-xs text-[#999999] mr-0.5">開催形式:</span>
+            {([
+              { key: "", label: "すべて", icon: "🎯" },
+              { key: "physical", label: "対面", icon: "🏠" },
+              { key: "online", label: "オンライン", icon: "💻" },
+              { key: "hybrid", label: "ハイブリッド", icon: "🔄" },
+            ] as const).map(({ key, label, icon }) => {
+              const isActive = type === key;
+              const href = key
+                ? `/explore?${new URLSearchParams({
+                    ...(q ? { q } : {}),
+                    ...(category ? { category } : {}),
+                    ...(area ? { area } : {}),
+                    ...(sort !== "new" ? { sort } : {}),
+                    type: key,
+                  }).toString()}`
+                : `/explore?${new URLSearchParams({
+                    ...(q ? { q } : {}),
+                    ...(category ? { category } : {}),
+                    ...(area ? { area } : {}),
+                    ...(sort !== "new" ? { sort } : {}),
+                  }).toString()}`;
+              const count = key ? (typeCounts[key] ?? 0) : allEvents.length;
+              return (
+                <Link
+                  key={key || "all"}
+                  href={href}
+                  className={`inline-flex h-8 items-center gap-1 rounded-full px-3 text-xs font-medium transition-all duration-200 ${
+                    isActive
+                      ? "bg-[#1A1A1A] text-white shadow-sm scale-105"
+                      : "bg-white text-[#999999] shadow-sm ring-1 ring-[#E5E5E5] hover:ring-[#1A1A1A]/40 hover:text-[#1A1A1A] hover:scale-105 active:scale-95"
+                  }`}
+                >
+                  <span>{icon}</span>
+                  {label}
+                  {count > 0 && (
+                    <span className={`text-[10px] ${isActive ? "text-white/70" : "text-[#999999]"}`}>
+                      ({count})
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -316,7 +408,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
         )}
 
         {/* ── Area suggestion chips ── */}
-        {areaSuggestions.length > 0 && !area && (
+        {areaSuggestions.length > 0 && !area && type !== "online" && (
           <div className="mb-5 flex flex-wrap gap-1.5 animate-fade-in">
             <span className="text-xs text-[#999999] mr-1 self-center">エリア:</span>
             {areaSuggestions.map((a) => (
@@ -327,6 +419,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
                   ...(category ? { category } : {}),
                   area: a,
                   ...(sort !== "new" ? { sort } : {}),
+                  ...(type ? { type } : {}),
                 }).toString()}`}
                 className="inline-flex h-7 items-center rounded-full bg-white px-3 text-xs text-[#999999] ring-1 ring-[#E5E5E5] hover:ring-[#1A1A1A]/30 hover:text-[#1A1A1A] transition-all"
               >
@@ -336,7 +429,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
           </div>
         )}
 
-        {/* ── Results count + clear ── */}
+        {/* ── Results count + view toggle + clear ── */}
         <div className="mb-5 flex items-center justify-between animate-fade-in">
           <p className="text-sm text-[#999999]">
             {isFiltered ? (
@@ -353,21 +446,72 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
               </>
             )}
           </p>
-          {isFiltered && (
-            <Link
-              href="/explore"
-              className="group/clear relative flex items-center gap-1 overflow-hidden rounded-full bg-[#F2F2F2] px-3 py-1 text-xs font-medium text-[#1A1A1A] transition-colors hover:bg-[#E5E5E5]"
-            >
-              {/* Shine-on-hover overlay */}
-              <span
-                className="pointer-events-none absolute inset-0 -translate-x-full skew-x-[-20deg] bg-gradient-to-r from-transparent via-white/40 to-transparent transition-transform duration-500 group-hover/clear:translate-x-full"
-                aria-hidden="true"
-              />
-              <SlidersHorizontal className="relative h-3 w-3" />
-              <span className="relative">フィルターをクリア</span>
-            </Link>
-          )}
+          <div className="flex items-center gap-2">
+            {/* View toggle */}
+            <div className="flex rounded-lg border border-[#E5E5E5] overflow-hidden">
+              <Link
+                href={`/explore?${new URLSearchParams({
+                  ...(q ? { q } : {}),
+                  ...(category ? { category } : {}),
+                  ...(area ? { area } : {}),
+                  ...(sort !== "new" ? { sort } : {}),
+                  ...(type ? { type } : {}),
+                }).toString()}`}
+                className={`flex h-8 w-8 items-center justify-center transition-colors ${
+                  !isCalendarView
+                    ? "bg-[#1A1A1A] text-white"
+                    : "bg-white text-[#999999] hover:text-[#1A1A1A]"
+                }`}
+                aria-label="リスト表示"
+              >
+                <LayoutList className="h-3.5 w-3.5" />
+              </Link>
+              <Link
+                href={`/explore?${new URLSearchParams({
+                  ...(q ? { q } : {}),
+                  ...(category ? { category } : {}),
+                  ...(area ? { area } : {}),
+                  ...(sort !== "new" ? { sort } : {}),
+                  ...(type ? { type } : {}),
+                  view: "calendar",
+                }).toString()}`}
+                className={`flex h-8 w-8 items-center justify-center transition-colors ${
+                  isCalendarView
+                    ? "bg-[#1A1A1A] text-white"
+                    : "bg-white text-[#999999] hover:text-[#1A1A1A]"
+                }`}
+                aria-label="カレンダー表示"
+              >
+                <CalendarDays className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+            {isFiltered && (
+              <Link
+                href="/explore"
+                className="group/clear relative flex items-center gap-1 overflow-hidden rounded-full bg-[#F2F2F2] px-3 py-1 text-xs font-medium text-[#1A1A1A] transition-colors hover:bg-[#E5E5E5]"
+              >
+                <span
+                  className="pointer-events-none absolute inset-0 -translate-x-full skew-x-[-20deg] bg-gradient-to-r from-transparent via-white/40 to-transparent transition-transform duration-500 group-hover/clear:translate-x-full"
+                  aria-hidden="true"
+                />
+                <SlidersHorizontal className="relative h-3 w-3" />
+                <span className="relative">フィルターをクリア</span>
+              </Link>
+            )}
+          </div>
         </div>
+
+        {/* ── Calendar view ── */}
+        {isCalendarView && (
+          <div className="mb-6">
+            <EventCalendar
+              eventCountByDate={eventCountByDate}
+              selectedDate={date || undefined}
+              currentMonth={calendarMonth}
+              baseParams={calBaseParams}
+            />
+          </div>
+        )}
 
         {/* ── Event grid with staggered animations ── */}
         {sorted.length > 0 ? (
