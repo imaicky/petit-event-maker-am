@@ -72,3 +72,6 @@ logs/
 gitleaks*.json
 gitleaks*.log
 .fastembed_cache/
+
+# external reference repo (excluded from build via tsconfig)
+line-harness-oss-main/
