@@ -166,8 +166,18 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
                 <br />
                 に届いたリンクをクリックすると、登録が完了します。
               </p>
-              <p className="mt-3 text-xs text-[#999999]">
-                数分待っても届かない場合は、迷惑メールフォルダもご確認ください。
+              <div className="mt-4 rounded-xl bg-[#FFF8E1] border border-[#F4E4A8] p-3 text-left">
+                <p className="text-xs font-bold text-[#8B6914] mb-1">
+                  メールが見当たらない場合
+                </p>
+                <ul className="text-xs text-[#8B6914] leading-relaxed list-disc pl-4 space-y-0.5">
+                  <li>件名「<span className="font-medium">プチイベント作成くん</span>」で検索</li>
+                  <li>迷惑メール / プロモーションフォルダを確認</li>
+                  <li>数分待ってから再送信を試す</li>
+                </ul>
+              </div>
+              <p className="mt-3 text-xs text-[#DC2626] font-medium">
+                ※ メール内のリンクをクリックするまでログインできません
               </p>
             </div>
             {info && (
@@ -216,9 +226,16 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
                 <br />
                 に送信した確認メールのリンクをクリックして、登録を完了してください。
               </p>
-              <p className="mt-3 text-xs text-[#999999]">
-                メールが届いていない場合は、再送信ボタンを押してください。迷惑メールフォルダもご確認ください。
-              </p>
+              <div className="mt-4 rounded-xl bg-[#FFF8E1] border border-[#F4E4A8] p-3 text-left">
+                <p className="text-xs font-bold text-[#8B6914] mb-1">
+                  メールが見当たらない場合
+                </p>
+                <ul className="text-xs text-[#8B6914] leading-relaxed list-disc pl-4 space-y-0.5">
+                  <li>件名「<span className="font-medium">プチイベント作成くん</span>」で検索</li>
+                  <li>迷惑メール / プロモーションフォルダを確認</li>
+                  <li>下のボタンから再送信を試す</li>
+                </ul>
+              </div>
             </div>
             {info && (
               <p className="text-xs text-[#16a34a] px-1">{info}</p>
@@ -375,6 +392,12 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
           )}
 
           {error && <p className="text-sm text-[#DC2626] px-1">{error}</p>}
+
+          {mode === "signup" && (
+            <div className="rounded-xl bg-[#F2F7FB] border border-[#D6E4F0] p-3 text-xs text-[#1A4A6B] leading-relaxed">
+              <span className="font-bold">登録手順</span>: 登録ボタンを押すと、入力されたアドレスに確認メールをお送りします。<span className="font-bold">メール内のリンクをクリックして初めて登録完了</span>となります。
+            </div>
+          )}
 
           <Button
             type="submit"
