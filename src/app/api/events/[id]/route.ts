@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { canManageEvent } from "@/lib/check-event-access";
+import { promoteWaitlistOnCapacityIncrease } from "@/lib/waitlist-promotion";
 
 // ─── Validation ──────────────────────────────────────────────
 
@@ -449,125 +450,44 @@ export async function PUT(
       );
     }
 
-    // ── Auto-promote waitlisted bookings if capacity increased ───────────
-    // We always run this when the new capacity strictly exceeds the previous
-    // capacity. NULL old capacity (unlimited) wouldn't be increased; we only
-    // promote when there are concrete free slots opening up.
-    let promotedCount = 0;
-    const promotedNames: string[] = [];
-    const ev = event as { capacity?: number | null; is_published?: boolean } | null;
-    const newCapacity = ev?.capacity ?? null;
-    if (
-      ev?.is_published &&
-      typeof newCapacity === "number" &&
-      typeof oldCapacity === "number" &&
-      newCapacity > oldCapacity
-    ) {
-      try {
-        const { count: confirmedCount } = await admin
-          .from("bookings")
-          .select("*", { count: "exact", head: true })
-          .eq("event_id", id)
-          .eq("status", "confirmed");
+    // Auto-promote waitlisted bookings when the organizer raises the capacity.
+    // The lib helper no-ops when capacity didn't increase or the event isn't
+    // published, so we can call it unconditionally.
+    const ev = event as {
+      capacity?: number | null;
+      is_published?: boolean;
+      creator_id?: string | null;
+      title?: string;
+      datetime?: string;
+      location?: string | null;
+      location_type?: string | null;
+      online_url?: string | null;
+      zoom_meeting_id?: string | null;
+      zoom_passcode?: string | null;
+      location_url?: string | null;
+      price?: number;
+    } | null;
 
-        const slotsOpening = newCapacity - (confirmedCount ?? 0);
-        if (slotsOpening > 0) {
-          const { data: waitlist } = await admin
-            .from("bookings")
-            .select("id, guest_name, guest_email")
-            .eq("event_id", id)
-            .eq("status", "waitlisted")
-            .order("created_at", { ascending: true })
-            .limit(slotsOpening);
-
-          const toPromote = (waitlist ?? []) as Array<{
-            id: string;
-            guest_name: string;
-            guest_email: string;
-          }>;
-
-          if (toPromote.length > 0) {
-            const ids = toPromote.map((b) => b.id);
-            const { error: promoteErr } = await admin
-              .from("bookings")
-              .update({ status: "confirmed" } as never)
-              .in("id", ids);
-
-            if (promoteErr) {
-              console.error("[PUT /api/events/[id]] promote error:", promoteErr);
-            } else {
-              promotedCount = toPromote.length;
-              promotedNames.push(...toPromote.map((b) => b.guest_name));
-
-              // Look up the LINE friend URL once for all promoted bookings
-              let lineFriendUrl: string | null = null;
-              const evFull = event as { creator_id?: string | null } | null;
-              if (evFull?.creator_id) {
-                const { data: la } = await admin
-                  .from("line_accounts")
-                  .select("bot_basic_id")
-                  .eq("user_id", evFull.creator_id)
-                  .eq("is_active", true)
-                  .maybeSingle();
-                const bot = (la as { bot_basic_id?: string | null } | null)?.bot_basic_id;
-                if (bot) lineFriendUrl = `https://line.me/R/ti/p/${bot}`;
-              }
-
-              const evForEmail = event as {
-                title: string;
-                datetime: string;
-                location: string | null;
-                location_type: string | null;
-                online_url: string | null;
-                zoom_meeting_id: string | null;
-                zoom_passcode: string | null;
-                location_url: string | null;
-                price: number;
-              };
-
-              if (process.env.RESEND_API_KEY) {
-                const { sendBatchEmails } = await import("@/lib/email");
-                const { wrapInHtml } = await import("@/lib/email-templates");
-                const { buildBookingEmail } = await import("@/lib/booking-email");
-
-                await Promise.all(
-                  toPromote.map(async (b) => {
-                    const { subject, body: emailBody } = buildBookingEmail({
-                      event: evForEmail,
-                      guestName: b.guest_name,
-                      bookingId: b.id,
-                      isWaitlisted: false,
-                      isPromotedFromWaitlist: true,
-                      lineFriendUrl,
-                    });
-                    try {
-                      await sendBatchEmails({
-                        to: [b.guest_email],
-                        subject,
-                        html: wrapInHtml(emailBody, evForEmail.title),
-                      });
-                      await admin.from("notifications").insert({
-                        recipient_email: b.guest_email,
-                        type: "waitlist_promoted",
-                        subject,
-                        body: emailBody,
-                      });
-                    } catch (mailErr) {
-                      console.error(
-                        "[PUT /api/events/[id]] promote email error:",
-                        mailErr
-                      );
-                    }
-                  })
-                );
-              }
-            }
-          }
-        }
-      } catch (promoteErr) {
-        console.error("[PUT /api/events/[id]] promote block error:", promoteErr);
-      }
-    }
+    const promotion = ev?.is_published
+      ? await promoteWaitlistOnCapacityIncrease({
+          admin,
+          eventId: id,
+          event: {
+            creator_id: ev.creator_id ?? null,
+            title: ev.title ?? "",
+            datetime: ev.datetime ?? "",
+            location: ev.location ?? null,
+            location_type: ev.location_type ?? null,
+            online_url: ev.online_url ?? null,
+            zoom_meeting_id: ev.zoom_meeting_id ?? null,
+            zoom_passcode: ev.zoom_passcode ?? null,
+            location_url: ev.location_url ?? null,
+            price: ev.price ?? 0,
+          },
+          oldCapacity,
+          newCapacity: ev.capacity ?? null,
+        })
+      : { promotedCount: 0, promotedNames: [] };
 
     // Get booking count
     const { count: bookingCount } = await supabase
@@ -578,8 +498,8 @@ export async function PUT(
 
     return NextResponse.json({
       event: { ...event, booking_count: bookingCount ?? 0 },
-      promoted_count: promotedCount,
-      promoted_names: promotedNames,
+      promoted_count: promotion.promotedCount,
+      promoted_names: promotion.promotedNames,
     });
   } catch (err) {
     console.error("[PUT /api/events/[id]] Unexpected error:", err);

@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Header } from "@/components/header";
 import { useAuth } from "@/components/auth-provider";
+import { VideoEmbed } from "@/components/video-embed";
 
 type StepKey = "intro" | "channel" | "secret" | "token" | "webhook" | "done";
 
@@ -32,43 +33,6 @@ const STEPS: { key: StepKey; label: string }[] = [
 ];
 
 const SECRET_PATTERN = /^[a-f0-9]{32}$/i;
-
-const VIDEO_URL = process.env.NEXT_PUBLIC_LINE_GUIDE_VIDEO_URL || "";
-
-function getYouTubeEmbedUrl(url: string): string | null {
-  try {
-    const u = new URL(url);
-    if (u.hostname.includes("youtube.com") && u.searchParams.get("v")) {
-      return `https://www.youtube.com/embed/${u.searchParams.get("v")}`;
-    }
-    if (u.hostname === "youtu.be") {
-      return `https://www.youtube.com/embed${u.pathname}`;
-    }
-    if (u.hostname.includes("youtube.com") && u.pathname.startsWith("/embed/")) {
-      return url;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function VideoEmbed() {
-  if (!VIDEO_URL) return null;
-  const embed = getYouTubeEmbedUrl(VIDEO_URL);
-  if (!embed) return null;
-  return (
-    <div className="rounded-2xl overflow-hidden border border-[#E5E5E5] bg-black aspect-video">
-      <iframe
-        src={embed}
-        title="LINE連携ガイド動画"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowFullScreen
-        className="w-full h-full"
-      />
-    </div>
-  );
-}
 
 export default function LineWizardPage() {
   const router = useRouter();
@@ -237,7 +201,7 @@ export default function LineWizardPage() {
                 </p>
               </div>
 
-              <VideoEmbed />
+              <VideoEmbed title="LINE連携ガイド動画" />
 
               <div className="rounded-2xl border border-[#E5E5E5] bg-white p-5">
                 <h2 className="text-sm font-bold text-[#1A1A1A] mb-3">
