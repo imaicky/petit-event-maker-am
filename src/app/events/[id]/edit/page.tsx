@@ -477,6 +477,18 @@ export default function EditEventPage() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isPublished, setIsPublished] = useState(true);
+  const [originalCapacity, setOriginalCapacity] = useState<number | null>(null);
+  const [waitlistCount, setWaitlistCount] = useState(0);
+  const [pendingPayload, setPendingPayload] = useState<unknown | null>(null);
+  const [promotionPreview, setPromotionPreview] = useState<{
+    increase: number;
+    willPromote: number;
+  } | null>(null);
+  const [promotedToast, setPromotedToast] = useState<{
+    count: number;
+    names: string[];
+  } | null>(null);
+  const [promotionSubmitting, setPromotionSubmitting] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCreator, setIsCreator] = useState(false);
@@ -536,6 +548,13 @@ export default function EditEventPage() {
         };
         const datetimeLocal = toLocal(event.datetime);
         const deadlineLocal = toLocal(event.booking_deadline);
+
+        setOriginalCapacity(
+          typeof event.capacity === "number" ? event.capacity : null
+        );
+        setWaitlistCount(
+          typeof event.waitlist_count === "number" ? event.waitlist_count : 0
+        );
 
         reset({
           title: event.title ?? "",
@@ -709,6 +728,27 @@ export default function EditEventPage() {
       is_published: isPublished,
     };
 
+    // If capacity increased AND there are waitlisted bookings, ask for
+    // confirmation before promoting them. Capacity decreases or no waitlist
+    // → fall through and submit immediately.
+    const newCapacity = Number(data.capacity);
+    if (
+      isPublished &&
+      typeof originalCapacity === "number" &&
+      newCapacity > originalCapacity &&
+      waitlistCount > 0
+    ) {
+      const increase = newCapacity - originalCapacity;
+      const willPromote = Math.min(increase, waitlistCount);
+      setPendingPayload(payload);
+      setPromotionPreview({ increase, willPromote });
+      return;
+    }
+
+    await submitPayload(payload);
+  };
+
+  const submitPayload = async (payload: unknown) => {
     try {
       const res = await fetch(`/api/events/${eventId}`, {
         method: "PUT",
@@ -722,15 +762,47 @@ export default function EditEventPage() {
         return;
       }
 
-      setSaveSuccess(true);
-      setTimeout(() => {
-        router.push("/dashboard");
-      }, 1500);
+      const promotedCount = Number(json.promoted_count ?? 0);
+      const promotedNames: string[] = Array.isArray(json.promoted_names)
+        ? json.promoted_names
+        : [];
+
+      if (promotedCount > 0) {
+        // Show toast and let user read it before redirecting
+        setPromotedToast({ count: promotedCount, names: promotedNames });
+        setSaveSuccess(true);
+        setTimeout(() => {
+          router.push("/dashboard");
+        }, 4000);
+      } else {
+        setSaveSuccess(true);
+        setTimeout(() => {
+          router.push("/dashboard");
+        }, 1500);
+      }
     } catch {
       setServerError(
         "ネットワークエラーが発生しました。もう一度お試しください。"
       );
     }
+  };
+
+  const confirmPromotion = async () => {
+    if (!pendingPayload) return;
+    const payload = pendingPayload;
+    setPromotionSubmitting(true);
+    try {
+      await submitPayload(payload);
+    } finally {
+      setPromotionSubmitting(false);
+      setPendingPayload(null);
+      setPromotionPreview(null);
+    }
+  };
+
+  const cancelPromotion = () => {
+    setPendingPayload(null);
+    setPromotionPreview(null);
   };
 
   // ── Delete ────────────────────────────────────────────────────────────────
@@ -869,12 +941,31 @@ export default function EditEventPage() {
         {/* Save success banner */}
         {saveSuccess && (
           <div className="mx-auto max-w-3xl px-4 pt-4">
-            <div className="flex items-center gap-3 rounded-2xl bg-[#404040]/10 border border-[#404040]/20 px-4 py-3 animate-in fade-in-0 slide-in-from-top-2">
-              <CheckCircle2 className="h-5 w-5 text-[#404040] shrink-0" />
-              <p className="text-sm font-medium text-[#404040]">
-                保存しました。ダッシュボードに戻ります…
-              </p>
-            </div>
+            {promotedToast ? (
+              <div className="flex items-start gap-3 rounded-2xl bg-emerald-50 border border-emerald-200 px-4 py-3 animate-in fade-in-0 slide-in-from-top-2">
+                <CheckCircle2 className="h-5 w-5 text-emerald-700 shrink-0 mt-0.5" />
+                <div className="text-sm text-emerald-900 leading-relaxed">
+                  <p className="font-bold">
+                    キャンセル待ち {promotedToast.count} 名を繰り上げ・通知しました
+                  </p>
+                  {promotedToast.names.length > 0 && (
+                    <p className="mt-1 text-xs text-emerald-800/80">
+                      対象: {promotedToast.names.join("、")} さん（メールで参加確定をお知らせ済み）
+                    </p>
+                  )}
+                  <p className="mt-1 text-xs text-emerald-800/80">
+                    ダッシュボードに戻ります…
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 rounded-2xl bg-[#404040]/10 border border-[#404040]/20 px-4 py-3 animate-in fade-in-0 slide-in-from-top-2">
+                <CheckCircle2 className="h-5 w-5 text-[#404040] shrink-0" />
+                <p className="text-sm font-medium text-[#404040]">
+                  保存しました。ダッシュボードに戻ります…
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -1263,6 +1354,68 @@ export default function EditEventPage() {
           </form>
         </div>
       </main>
+
+      {/* Promotion confirmation dialog */}
+      <Dialog
+        open={!!promotionPreview}
+        onOpenChange={(open) => {
+          if (!open) cancelPromotion();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50">
+                <Users className="h-4 w-4 text-emerald-700" />
+              </div>
+              キャンセル待ちの自動繰り上げ
+            </DialogTitle>
+            <DialogDescription className="leading-relaxed pt-2">
+              定員を{" "}
+              <span className="font-bold text-[#1A1A1A]">
+                {originalCapacity ?? "?"} → {promotionPreview && originalCapacity !== null
+                  ? originalCapacity + promotionPreview.increase
+                  : "?"} 名
+              </span>{" "}
+              に増やします。
+              <br />
+              現在のキャンセル待ち <span className="font-bold text-[#1A1A1A]">{waitlistCount} 名</span>{" "}
+              のうち、申込が古い順に{" "}
+              <span className="font-bold text-emerald-700">
+                {promotionPreview?.willPromote ?? 0} 名
+              </span>{" "}
+              を自動で参加確定にし、Zoom情報・支払い案内入りのメールを送信します。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={cancelPromotion}
+              disabled={promotionSubmitting}
+              className="rounded-xl"
+            >
+              キャンセル
+            </Button>
+            <Button
+              onClick={confirmPromotion}
+              disabled={promotionSubmitting}
+              className="gap-2 rounded-xl bg-[#1A1A1A] hover:bg-[#111111] text-white"
+            >
+              {promotionSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  実行中...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-4 w-4" />
+                  繰り上げて通知する
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete confirmation dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

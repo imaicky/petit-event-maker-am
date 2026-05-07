@@ -18,6 +18,7 @@ interface BuildArgs {
   guestName: string;
   bookingId: string;
   isWaitlisted: boolean;
+  isPromotedFromWaitlist?: boolean;
   lineFriendUrl?: string | null;
 }
 
@@ -65,13 +66,16 @@ export function buildBookingEmail({
   guestName,
   bookingId,
   isWaitlisted,
+  isPromotedFromWaitlist,
   lineFriendUrl,
 }: BuildArgs): { subject: string; body: string } {
   const dateStr = formatDatetime(event.datetime);
   const priceStr = event.price === 0 ? "無料" : `¥${event.price.toLocaleString("ja-JP")}`;
   const locationLines = buildLocationLines(event);
 
-  const subject = isWaitlisted
+  const subject = isPromotedFromWaitlist
+    ? `【キャンセル待ち繰り上げ確定】${event.title}`
+    : isWaitlisted
     ? `【キャンセル待ち登録完了】${event.title}`
     : `【申し込み完了】${event.title}`;
 
@@ -79,8 +83,29 @@ export function buildBookingEmail({
     ? `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📱 LINEで予約確認・リマインドを受け取る\n以下のリンクから友だち追加してください：\n${lineFriendUrl}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
     : "";
 
-  const body = isWaitlisted
-    ? `${guestName} 様
+  let body: string;
+
+  if (isPromotedFromWaitlist) {
+    body = `${guestName} 様
+
+おめでとうございます！
+${event.title} のキャンセル待ちから繰り上がり、ご参加が確定しました。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+■ 予約番号：${bookingId}
+■ イベント：${event.title}
+■ 日時：${dateStr}
+${locationLines}
+■ 参加費：${priceStr}
+■ ステータス：参加確定
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ご都合が悪くなった場合は、お早めにキャンセルのご連絡をお願いします。
+当日のご参加を心よりお待ちしております。
+${lineSection}
+プチイベント作成くん`;
+  } else if (isWaitlisted) {
+    body = `${guestName} 様
 
 ${event.title} のキャンセル待ちに登録されました。
 
@@ -95,8 +120,9 @@ ${locationLines}
 
 空きが出た場合、自動的に予約が確定されメールでお知らせします。
 ${lineSection}
-プチイベント作成くん`
-    : `${guestName} 様
+プチイベント作成くん`;
+  } else {
+    body = `${guestName} 様
 
 ${event.title} へのお申し込みが完了しました。
 
@@ -112,6 +138,7 @@ ${locationLines}
 当日のご参加を心よりお待ちしております。
 ${lineSection}
 プチイベント作成くん`;
+  }
 
   return { subject, body };
 }
