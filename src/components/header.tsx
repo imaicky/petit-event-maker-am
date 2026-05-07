@@ -15,6 +15,7 @@ import {
   LogIn,
   Shield,
   MessageSquare,
+  HelpCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -180,6 +181,11 @@ export function Header() {
                               icon: <Settings className="h-4 w-4" />,
                               label: "プロフィール設定",
                             },
+                            {
+                              href: "/help",
+                              icon: <HelpCircle className="h-4 w-4" />,
+                              label: "使い方ガイド",
+                            },
                             ...(profile?.is_admin
                               ? [
                                   {
@@ -234,6 +240,20 @@ export function Header() {
                     }`}
                   >
                     イベントを探す
+                  </Button>
+                </Link>
+                <Link href="/help">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={`rounded-full text-sm transition-colors duration-150 gap-1.5 ${
+                      pathname === "/help"
+                        ? "bg-[#F2F2F2] text-[#1A1A1A] font-semibold"
+                        : "text-[#1A1A1A] hover:bg-[#F2F2F2] hover:text-[#1A1A1A]"
+                    }`}
+                  >
+                    <HelpCircle className="h-3.5 w-3.5" />
+                    使い方
                   </Button>
                 </Link>
                 <Button
@@ -394,6 +414,15 @@ export function Header() {
                     className="w-full rounded-full border border-[#E5E5E5] text-[#1A1A1A] hover:bg-[#F2F2F2]"
                   >
                     イベントを探す
+                  </Button>
+                </Link>
+                <Link href="/help" onClick={() => setMenuOpen(false)}>
+                  <Button
+                    variant="ghost"
+                    className="w-full rounded-full border border-[#E5E5E5] text-[#1A1A1A] hover:bg-[#F2F2F2] gap-1.5"
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                    使い方ガイド
                   </Button>
                 </Link>
                 <Button

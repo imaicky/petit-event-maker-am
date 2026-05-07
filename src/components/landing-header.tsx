@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth-provider";
 import { LoginDialog } from "@/components/login-dialog";
-import { LogIn, CalendarDays, Loader2 } from "lucide-react";
+import { LogIn, CalendarDays, Loader2, HelpCircle } from "lucide-react";
 
 export function LandingHeader() {
   const { user, isLoading } = useAuth();
@@ -41,6 +41,16 @@ export function LandingHeader() {
               className="hidden sm:inline-flex rounded-full text-[#1A1A1A] hover:text-[#1A1A1A] hover:bg-[#F2F2F2]"
             >
               イベントを探す
+            </Button>
+          </Link>
+          <Link href="/help">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="hidden sm:inline-flex rounded-full text-[#1A1A1A] hover:text-[#1A1A1A] hover:bg-[#F2F2F2] gap-1.5"
+            >
+              <HelpCircle className="h-3.5 w-3.5" />
+              使い方
             </Button>
           </Link>
 

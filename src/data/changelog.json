@@ -1,0 +1,63 @@
+{
+  "items": [
+    {
+      "date": "2026-05-07",
+      "badge": "NEW",
+      "icon": "💳",
+      "title": "Stripe 自動連携",
+      "description": "Secret Key を貼り付けるだけでオンライン決済が使えるようになりました。設定画面の手順も大幅に簡略化。",
+      "link": "/settings/stripe",
+      "linkLabel": "Stripeを設定する"
+    },
+    {
+      "date": "2026-05-06",
+      "badge": "NEW",
+      "icon": "📋",
+      "title": "集金方法セレクター",
+      "description": "Stripe・現地払い・独自案内の3択から選べる集金方法セレクターを追加。複数併用も可能です。",
+      "link": "/help#payment",
+      "linkLabel": "詳しい使い方"
+    },
+    {
+      "date": "2026-05-04",
+      "badge": "NEW",
+      "icon": "🔁",
+      "title": "確認メール再送信",
+      "description": "「メールが届かない」と参加者から問い合わせが来たら、参加者一覧から1クリックで再送できます。",
+      "link": "/help#attendees",
+      "linkLabel": "参加者管理を見る"
+    },
+    {
+      "date": "2026-05-04",
+      "badge": "NEW",
+      "icon": "⏰",
+      "title": "申込締切設定",
+      "description": "イベントごとに申込締切日時を設定できるようになりました。締切後の申込は自動でブロックされます。"
+    },
+    {
+      "date": "2026-04-30",
+      "badge": "NEW",
+      "icon": "📆",
+      "title": "イベントカレンダー表示",
+      "description": "/explore に月別カレンダー表示を追加。日付からイベントを直感的に発見できます。",
+      "link": "/explore",
+      "linkLabel": "イベントを探す"
+    },
+    {
+      "date": "2026-04-20",
+      "badge": "NEW",
+      "icon": "🎟️",
+      "title": "限定イベント・キャンセル待ち",
+      "description": "定員制の限定イベントと、満員時のキャンセル待ち機能に対応。SOLD OUT スタンプも自動表示されます。"
+    },
+    {
+      "date": "2026-04-15",
+      "badge": "NEW",
+      "icon": "💬",
+      "title": "管理者によるLINE連携代行",
+      "description": "LINE 連携が苦手なオーナー向けに、管理者が代行して連携設定できる機能を追加しました。",
+      "link": "/settings/line/guide",
+      "linkLabel": "LINE連携ガイド"
+    }
+  ]
+}

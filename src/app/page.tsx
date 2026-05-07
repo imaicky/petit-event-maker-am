@@ -6,6 +6,7 @@ import type { EventWithBookingCount } from "@/types/database";
 import { CATEGORIES } from "@/lib/templates";
 import { Footer } from "@/components/footer";
 import { LandingHeader } from "@/components/landing-header";
+import { WhatsNew } from "@/components/whats-new";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -435,6 +436,9 @@ export default async function Home() {
             </div>
           </div>
         </section>
+
+        {/* ── What's New ───────────────────────────────────────────────────── */}
+        <WhatsNew />
 
         {/* ── Features ────────────────────────────────────────────────────── */}
         <section className="w-full bg-[#FAFAFA] py-20 sm:py-24 px-6 noise-bg">

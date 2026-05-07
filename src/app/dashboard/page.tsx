@@ -133,38 +133,115 @@ function LoadingSkeleton() {
 
 // --- Empty state ------------------------------------------------------------
 
+function OnboardingStep({
+  no,
+  title,
+  desc,
+  href,
+  cta,
+  primary,
+}: {
+  no: string;
+  title: string;
+  desc: string;
+  href: string;
+  cta: string;
+  primary?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`group flex items-start gap-4 rounded-2xl border p-4 sm:p-5 text-left transition-all hover:shadow-md ${
+        primary
+          ? "border-[#1A1A1A] bg-[#1A1A1A] text-white hover:bg-[#111111]"
+          : "border-[#E5E5E5] bg-white hover:border-[#1A1A1A]/30"
+      }`}
+    >
+      <div
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-bold text-sm ${
+          primary
+            ? "bg-white text-[#1A1A1A]"
+            : "bg-[#F2F2F2] text-[#1A1A1A]"
+        }`}
+      >
+        {no}
+      </div>
+      <div className="min-w-0 flex-1">
+        <h3 className={`text-sm sm:text-base font-bold ${primary ? "text-white" : "text-[#1A1A1A]"}`}>
+          {title}
+        </h3>
+        <p
+          className={`text-xs mt-1 leading-relaxed ${
+            primary ? "text-white/80" : "text-[#666666]"
+          }`}
+        >
+          {desc}
+        </p>
+      </div>
+      <div
+        className={`flex items-center gap-1 text-xs font-bold whitespace-nowrap shrink-0 self-center ${
+          primary ? "text-white" : "text-[#1A1A1A]"
+        }`}
+      >
+        {cta}
+        <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
+      </div>
+    </Link>
+  );
+}
+
 function EmptyState({ tab }: { tab: TabKey }) {
   if (tab === "published") {
     return (
-      <div className="flex flex-col items-center justify-center py-20 px-6 text-center animate-fade-in">
-        <div className="relative mb-8">
-          <div className="flex h-24 w-24 items-center justify-center rounded-3xl bg-[#F7F7F7] animate-float">
-            <span className="text-5xl">🎉</span>
+      <div className="flex flex-col items-center py-12 px-4 text-center animate-fade-in">
+        <div className="relative mb-6">
+          <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-[#F7F7F7] animate-float">
+            <span className="text-4xl">🎉</span>
           </div>
-          <div className="absolute -top-2 -right-2 flex h-8 w-8 items-center justify-center rounded-full bg-[#1A1A1A] text-white shadow-md animate-scale-in delay-300">
-            <Plus className="h-4 w-4" />
+          <div className="absolute -top-2 -right-2 flex h-7 w-7 items-center justify-center rounded-full bg-[#1A1A1A] text-white shadow-md animate-scale-in delay-300">
+            <Plus className="h-3.5 w-3.5" />
           </div>
-          <div className="absolute -bottom-1 -left-3 h-3 w-3 rounded-full bg-[#404040]/30 animate-scale-in delay-500" />
-          <div className="absolute top-2 -right-6 h-2 w-2 rounded-full bg-[#1A1A1A]/30 animate-scale-in delay-700" />
         </div>
         <h2
           className="text-xl font-bold text-[#1A1A1A] mb-2 animate-fade-in-up delay-200"
           style={{ fontFamily: "var(--font-zen-maru)" }}
         >
-          最初のイベントを作ってみよう
+          ようこそ！3ステップで準備完了
         </h2>
-        <p className="text-sm text-[#999999] max-w-xs leading-relaxed mb-8 animate-fade-in-up delay-300">
-          30秒でイベントページが完成。
-          インスタのリンクに貼るだけで参加受付がスタートできます。
+        <p className="text-sm text-[#999999] max-w-md leading-relaxed mb-8 animate-fade-in-up delay-300">
+          順番にこなすだけで、初回イベントを公開できます。
         </p>
-        <Link href="/events/new">
-          <Button
-            size="lg"
-            className="h-12 px-8 rounded-full bg-[#1A1A1A] text-white hover:bg-[#111111] gap-2 shadow-md hover:shadow-lg transition-all animate-fade-in-up delay-500 group"
-          >
-            <Plus className="h-5 w-5 group-hover:animate-pulse-glow" />
-            はじめてのイベントを作る
-          </Button>
+
+        <div className="w-full max-w-xl grid gap-3 mb-8 animate-fade-in-up delay-500">
+          <OnboardingStep
+            no="1"
+            title="最初のイベントを作る"
+            desc="タイトル・日時・場所を入力するだけ。30秒で公開できます。"
+            href="/events/new"
+            cta="作成する"
+            primary
+          />
+          <OnboardingStep
+            no="2"
+            title="集金方法を決める（任意）"
+            desc="Stripe オンライン決済 / 現地払い / 独自案内 の3つから選択。無料イベントならスキップでOK。"
+            href="/settings/stripe"
+            cta="集金設定へ"
+          />
+          <OnboardingStep
+            no="3"
+            title="LINE 公式アカウントを連携（任意）"
+            desc="連携するとフォロワー全員にワンタップで告知＆自動リマインダー送信。"
+            href="/settings/line/guide"
+            cta="LINE連携ガイド"
+          />
+        </div>
+
+        <Link
+          href="/help"
+          className="text-xs text-[#999999] hover:text-[#1A1A1A] transition-colors underline underline-offset-4"
+        >
+          詳しい使い方ガイドを見る →
         </Link>
       </div>
     );
