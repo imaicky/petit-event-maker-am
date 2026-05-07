@@ -810,6 +810,31 @@ export default function LineSettingsPage() {
           ) : (
             /* ─── Not connected state ─── */
             <>
+              {/* Wizard CTA — recommended path for first-time setup */}
+              <Link
+                href="/settings/line/wizard"
+                className="block rounded-2xl border-2 border-[#06C755]/30 bg-gradient-to-br from-[#06C755]/10 to-[#06C755]/5 hover:from-[#06C755]/15 hover:to-[#06C755]/10 transition-colors p-5"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#06C755] text-white shrink-0">
+                    <Sparkles className="h-6 w-6" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold uppercase tracking-widest text-[#06C755] mb-1">
+                      おすすめ
+                    </p>
+                    <h2 className="text-base font-bold text-[#1A1A1A]">
+                      かんたんウィザードで連携する
+                    </h2>
+                    <p className="text-xs text-[#666666] mt-1 leading-relaxed">
+                      4ステップに分けて1問ずつ案内。
+                      貼り付けるだけで自動検証され、迷わず完了できます。
+                    </p>
+                  </div>
+                  <div className="self-center text-[#06C755]">→</div>
+                </div>
+              </Link>
+
               {/* Features preview */}
               <SectionCard title="連携するとできること">
                 <div className="space-y-3">

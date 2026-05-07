@@ -10,8 +10,46 @@ import {
   CheckCircle2,
   Smartphone,
   Info,
+  Sparkles,
 } from "lucide-react";
 import { Header } from "@/components/header";
+
+const VIDEO_URL = process.env.NEXT_PUBLIC_LINE_GUIDE_VIDEO_URL || "";
+
+function getYouTubeEmbedUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes("youtube.com") && u.searchParams.get("v")) {
+      return `https://www.youtube.com/embed/${u.searchParams.get("v")}`;
+    }
+    if (u.hostname === "youtu.be") {
+      return `https://www.youtube.com/embed${u.pathname}`;
+    }
+    if (u.hostname.includes("youtube.com") && u.pathname.startsWith("/embed/")) {
+      return url;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function VideoEmbed() {
+  if (!VIDEO_URL) return null;
+  const embed = getYouTubeEmbedUrl(VIDEO_URL);
+  if (!embed) return null;
+  return (
+    <div className="rounded-2xl overflow-hidden border border-[#E5E5E5] bg-black aspect-video mb-8">
+      <iframe
+        src={embed}
+        title="LINE連携ガイド動画"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+        className="w-full h-full"
+      />
+    </div>
+  );
+}
 
 // ─── CSS Mockup building blocks ──────────────────────────────
 
@@ -636,6 +674,30 @@ export default function LineSetupGuidePage() {
             <p className="text-sm text-[#999]">所要時間：約10〜15分</p>
           </div>
         </div>
+
+        {/* Wizard CTA */}
+        <Link
+          href="/settings/line/wizard"
+          className="block mb-8 rounded-2xl border-2 border-[#06C755]/30 bg-[#06C755]/5 hover:bg-[#06C755]/10 transition-colors p-5"
+        >
+          <div className="flex items-start gap-4">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#06C755] text-white shrink-0">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-base font-bold text-[#1A1A1A]">
+                かんたんウィザードで進める（推奨）
+              </h2>
+              <p className="text-xs text-[#666] mt-1 leading-relaxed">
+                4ステップに分けて1問ずつ案内します。各画面で貼り付けるだけで自動検証＆セットアップが完了。
+              </p>
+            </div>
+            <ChevronLeft className="h-4 w-4 text-[#06C755] rotate-180 shrink-0 mt-2.5" />
+          </div>
+        </Link>
+
+        {/* Video walkthrough */}
+        <VideoEmbed />
 
         {/* Prerequisites */}
         <div className="rounded-2xl bg-white border border-[#E5E5E5] p-6 mb-10">
