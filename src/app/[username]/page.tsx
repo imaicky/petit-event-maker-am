@@ -13,6 +13,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { AverageRatingBadge } from "@/components/average-rating-badge";
 import type { Profile, Event, Menu, SnsLinks, Review } from "@/types/database";
 import { ProfileTabs } from "./profile-tabs";
+import { FollowButton } from "@/components/follow-button";
+import { getFollowState } from "@/lib/follows";
 
 type EventWithBookings = Event & { booking_count: number };
 
@@ -203,6 +205,20 @@ export default async function TeacherProfilePage({
   );
   const sns = (profile.sns_links ?? {}) as SnsLinks;
 
+  // Fetch follow state (graceful fallback if migration not yet applied)
+  let followState = { isFollowing: false, followerCount: 0 };
+  let viewerId: string | null = null;
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    viewerId = user?.id ?? null;
+    followState = await getFollowState(profile.id);
+  } catch {
+    // follows table not yet migrated — show no count, hide button
+  }
+  const isSelf = viewerId === profile.id;
+
   return (
     <div className="min-h-dvh bg-[#FAFAFA]">
       {/* Cover / Banner */}
@@ -264,6 +280,18 @@ export default async function TeacherProfilePage({
           </p>
         )}
 
+        {/* Follow button */}
+        {!isSelf && (
+          <div className="flex justify-center mb-5">
+            <FollowButton
+              username={profile.username}
+              initialFollowing={followState.isFollowing}
+              isAuthed={Boolean(viewerId)}
+              isSelf={isSelf}
+            />
+          </div>
+        )}
+
         {/* SNS links */}
         {(sns.instagram || sns.twitter || sns.website) && (
           <div className="flex flex-wrap justify-center gap-2 mb-6">
@@ -291,16 +319,21 @@ export default async function TeacherProfilePage({
           </div>
         )}
 
-        {/* Stats bar — extended with rating */}
+        {/* Stats bar — extended with rating + followers */}
         <div className="flex justify-center gap-0 mb-10 rounded-2xl border border-[#E5E5E5] bg-white overflow-hidden">
           <div className="flex-1 text-center py-4 px-3">
-            <p className="text-xl font-bold text-[#1A1A1A]">{upcomingEvents.length + pastEvents.length}</p>
+            <p className="text-xl font-bold text-[#1A1A1A] tabular-nums">{upcomingEvents.length + pastEvents.length}</p>
             <p className="text-xs text-[#999999] mt-0.5">イベント数</p>
           </div>
           <div className="w-px bg-[#E5E5E5]" />
           <div className="flex-1 text-center py-4 px-3">
-            <p className="text-xl font-bold text-[#1A1A1A]">{totalParticipants}</p>
+            <p className="text-xl font-bold text-[#1A1A1A] tabular-nums">{totalParticipants}</p>
             <p className="text-xs text-[#999999] mt-0.5">総参加者数</p>
+          </div>
+          <div className="w-px bg-[#E5E5E5]" />
+          <div className="flex-1 text-center py-4 px-3">
+            <p className="text-xl font-bold text-[#1A1A1A] tabular-nums">{followState.followerCount}</p>
+            <p className="text-xs text-[#999999] mt-0.5">フォロワー</p>
           </div>
           {totalReviewCount > 0 && (
             <>

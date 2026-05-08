@@ -1,0 +1,312 @@
+version: "1.0.0"
+generated_at: "2026-05-08T00:00:00Z"
+source: "docs/requirements/design-requirements.md"
+project: "petit-event-maker"
+
+# ========================================
+# Aesthetic Direction
+# ========================================
+aesthetic:
+  tone: editorial-minimal
+  mood: intelligent-calm
+  personality: quietly-confident
+  one_liner: "The serious place for serious AI learners."
+  differentiation: |
+    エディトリアル誌の落ち着いた知性。AIコンテンツホルダー向けの
+    "知的サロン感"を、余白とタイポグラフィで表現する。
+
+  references:
+    - source: "The New Yorker"
+      borrow: "エディトリアルなタイポ階層、余白の使い方"
+    - source: "MIT Technology Review"
+      borrow: "情報密度と読みやすさのバランス"
+    - source: "Linear"
+      borrow: "モノクロ + 1色アクセント、明確な情報階層"
+    - source: "Anthropic 公式サイト"
+      borrow: "落ち着いた知的トーン、慎重な装飾"
+    - source: "Lu.ma"
+      borrow: "カード密度、カレンダー一体UI"
+
+  anti_patterns:
+    - "Peatix的なPOPなトーン（飲み会感）"
+    - "connpass的な無機質さ"
+    - "AI画像生成サイト風（紫グラデ、グロウ、ネオン）"
+    - "キラキラ装飾系"
+
+# ========================================
+# Color Tokens (OKLCH)
+# ========================================
+colors:
+  light:
+    background: "oklch(0.99 0 0)"      # near-white
+    foreground: "oklch(0.18 0 0)"      # near-black text
+    primary: "oklch(0.20 0 0)"         # primary buttons / headers
+    primary_foreground: "oklch(0.99 0 0)"
+    accent: "oklch(0.62 0.18 35)"      # signature terracotta
+    accent_foreground: "oklch(0.99 0 0)"
+    muted: "oklch(0.95 0 0)"           # cards / dividers
+    muted_foreground: "oklch(0.45 0 0)"
+    border: "oklch(0.90 0 0)"
+    input: "oklch(0.90 0 0)"
+    ring: "oklch(0.62 0.18 35)"
+    success: "oklch(0.62 0.13 150)"
+    warning: "oklch(0.75 0.15 80)"
+    destructive: "oklch(0.55 0.20 25)"
+    destructive_foreground: "oklch(0.99 0 0)"
+
+  dark:
+    background: "oklch(0.12 0 0)"
+    foreground: "oklch(0.96 0 0)"
+    primary: "oklch(0.96 0 0)"
+    primary_foreground: "oklch(0.12 0 0)"
+    accent: "oklch(0.70 0.18 35)"
+    accent_foreground: "oklch(0.12 0 0)"
+    muted: "oklch(0.22 0 0)"
+    muted_foreground: "oklch(0.65 0 0)"
+    border: "oklch(0.28 0 0)"
+    input: "oklch(0.28 0 0)"
+    ring: "oklch(0.70 0.18 35)"
+    success: "oklch(0.70 0.13 150)"
+    warning: "oklch(0.80 0.15 80)"
+    destructive: "oklch(0.60 0.20 25)"
+    destructive_foreground: "oklch(0.96 0 0)"
+
+  signature:
+    name: "Terracotta"
+    hex_approx: "#C26A4A"
+    rationale: |
+      Peatixの鮮やかオレンジを避けつつ温度のある一色を確保。
+      Anthropicの茶系とも適度に距離をとる。紫・青を採用しないことで
+      "AIスロップ"を回避する。
+
+  forbidden:
+    - pattern: "purple-to-blue linear gradient on white"
+      reason: "AI生成画像のクリシェ、信頼性を損なう"
+    - pattern: "neon glow"
+      reason: "知的トーンと矛盾"
+    - pattern: "pure black #000"
+      reason: "OKLCH 0.12 までに留める"
+    - pattern: "pure white #FFF"
+      reason: "OKLCH 0.99 までに留める"
+
+# ========================================
+# Typography
+# ========================================
+typography:
+  heading:
+    family: "Instrument Serif"
+    fallback_latin: "Playfair Display, Georgia, serif"
+    fallback_jp: "Noto Serif JP, 游明朝, serif"
+    weights: [400]
+    rationale: "エディトリアルなセリフで知性と落ち着きを表現"
+
+  body:
+    family: "Geist Sans"
+    fallback_latin: "system-ui, sans-serif"
+    fallback_jp: "Noto Sans JP, ヒラギノ角ゴ ProN, sans-serif"
+    weights: [400, 500, 600]
+    rationale: "可読性高くニュートラル、Inter/Robotoを避ける"
+
+  mono:
+    family: "JetBrains Mono"
+    fallback: "Geist Mono, Menlo, monospace"
+    weights: [400, 500]
+
+  scale:
+    display: { size: "3.5rem", line_height: 1.1, weight: 400, family: heading, mobile: "2.25rem" }
+    h1:      { size: "3rem",   line_height: 1.15, weight: 400, family: heading, mobile: "2rem" }
+    h2:      { size: "2.25rem", line_height: 1.2, weight: 400, family: heading, mobile: "1.75rem" }
+    h3:      { size: "1.5rem", line_height: 1.3, weight: 600, family: body }
+    h4:      { size: "1.25rem", line_height: 1.4, weight: 600, family: body }
+    body_lg: { size: "1.125rem", line_height: 1.7, weight: 400, family: body }
+    body:    { size: "1rem",    line_height: 1.7, weight: 400, family: body }
+    small:   { size: "0.875rem", line_height: 1.5, weight: 400, family: body }
+    caption: { size: "0.75rem", line_height: 1.4, weight: 500, family: body }
+
+  rules:
+    - "全見出しに text-balance を適用"
+    - "全数値要素に tabular-nums を適用（金額・参加者数・日時）"
+    - "本文の最大行長は 65ch"
+    - "text-transform: uppercase 禁止"
+    - "見出しはセリフ、本文はサンセリフ（混合運用）"
+
+  forbidden_fonts:
+    - "Inter"
+    - "Roboto"
+    - "Arial"
+    - "Helvetica Neue"
+    - "Comic Sans MS"
+
+# ========================================
+# Spacing (8px base)
+# ========================================
+spacing:
+  unit: "8px"
+  scale:
+    xs: "4px"
+    sm: "8px"
+    md: "16px"
+    lg: "24px"
+    xl: "32px"
+    "2xl": "48px"
+    "3xl": "64px"
+    "4xl": "96px"
+
+# ========================================
+# Borders & Radii
+# ========================================
+borders:
+  radius:
+    none: "0"
+    sm: "4px"     # badges, tags
+    md: "8px"     # buttons, inputs
+    lg: "12px"    # cards
+    xl: "20px"    # modals, hero images
+    full: "9999px" # avatars, pills
+  width:
+    thin: "1px"
+    medium: "2px"
+    thick: "4px"
+  rules:
+    - "過剰な角丸を避ける（AIプロダクトの"ぷっくり感"を排除）"
+
+# ========================================
+# Shadows
+# ========================================
+shadows:
+  sm: "0 1px 2px oklch(0 0 0 / 0.05)"
+  md: "0 4px 12px oklch(0 0 0 / 0.08)"
+  lg: "0 12px 32px oklch(0 0 0 / 0.12)"
+  forbidden:
+    - "shadow-glow（AIスロップ）"
+    - "強い色付きシャドウ"
+
+# ========================================
+# Components
+# ========================================
+components:
+  library: "shadcn/ui"
+  styling: "tailwindcss@v4"
+  animation: "motion/react"
+  icons: "lucide-react"
+  forms: "react-hook-form + zod"
+  date: "date-fns (ja locale)"
+  charts: "recharts" # to be confirmed
+
+  policies:
+    - "shadcn/uiを優先、なければ独自実装"
+    - "Compound Component パターンを基本"
+    - "use client は最小限、Server Component優先"
+    - "Variantsはcvaで分岐"
+
+  primary_components:
+    button:
+      variants: ["solid", "outline", "ghost", "destructive"]
+      radius: "md"
+      forbid_gradient: true
+    event_card:
+      shadow: "sm on hover only"
+      hover: "translateY(-2px)"
+      image_aspect: "4/3"
+    calendar:
+      style: "minimal grid, single accent color for events"
+    hero:
+      heading_family: "heading"
+      bg_decoration: "none"  # 装飾画像禁止
+
+# ========================================
+# Animation
+# ========================================
+animation:
+  max_duration_ms: 200
+  allowed_properties:
+    - "transform"
+    - "opacity"
+  forbidden_properties:
+    - "width"
+    - "height"
+    - "top"
+    - "left"
+    - "margin"
+    - "padding"
+
+  easing:
+    enter: "cubic-bezier(0.16, 1, 0.3, 1)"
+    exit: "cubic-bezier(0.7, 0, 0.84, 0)"
+    hover: "ease-out"
+    press: "ease-in"
+
+  durations:
+    hover_ms: 150
+    press_ms: 100
+    enter_ms: 200
+    exit_ms: 150
+
+  rules:
+    - "目的のないアニメーションは禁止"
+    - "prefers-reduced-motion に必ず対応"
+
+  forbidden:
+    - "particle backgrounds"
+    - "mouse stalkers"
+    - "heavy parallax"
+    - "scroll-driven on heavy elements"
+
+# ========================================
+# Responsive
+# ========================================
+responsive:
+  mobile_first: true
+  breakpoints:
+    sm: "640px"
+    md: "768px"
+    lg: "1024px"
+    xl: "1280px"
+    "2xl": "1536px"
+  touch_target_min: "44px"
+
+# ========================================
+# Quality Targets
+# ========================================
+quality:
+  lighthouse:
+    performance: 90
+    accessibility: 100
+    best_practices: 100
+    seo: 100
+  core_web_vitals:
+    lcp_ms: 2500
+    fcp_ms: 1800
+    cls: 0.1
+    inp_ms: 200
+    ttfb_ms: 600
+  wcag_level: "AA"
+  contrast_min: "4.5:1"
+  dark_mode: true
+  reduced_motion: true
+
+# ========================================
+# Design Anti-Patterns (NEVER)
+# ========================================
+anti_patterns:
+  fonts:
+    - "Inter / Roboto / Arial / Helvetica Neue"
+  colors:
+    - "purple-to-blue gradients on white"
+    - "neon glow"
+    - "pure black/white"
+  effects:
+    - "glow shadows"
+    - "excessive blur"
+  animation:
+    - "particles"
+    - "mouse stalkers"
+    - "meaningless motion"
+    - "duration > 200ms"
+  layout:
+    - "excessive center alignment"
+    - "decorative AI-style imagery"
+  copy:
+    - "「次世代」「革新的」自己賞賛コピー"
+  icons:
+    - "puffy 3D AI-style icons"
