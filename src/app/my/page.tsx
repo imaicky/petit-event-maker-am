@@ -100,7 +100,7 @@ export default function MyPage() {
     <div className="flex min-h-dvh flex-col bg-[#FAFAFA]">
       <Header />
 
-      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
+      <main className="mx-auto w-full max-w-4xl flex-1 px-4 sm:px-6 lg:px-8 py-8">
         {/* Page header */}
         <div className="mb-8">
           <h1

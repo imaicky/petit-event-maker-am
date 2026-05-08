@@ -409,7 +409,7 @@ export default async function EventPage({ params, searchParams }: EventPageProps
 
       {/* Breadcrumb */}
       <div className="sticky top-0 z-20 border-b border-[#E5E5E5]/60 glass">
-        <div className="mx-auto max-w-5xl px-4 py-3">
+        <div className="mx-auto max-w-6xl px-4 py-3">
           <nav aria-label="パンくずリスト" className="animate-slide-in-left flex items-center gap-1.5 text-sm">
             <Link href="/" className="text-[#1A1A1A] hover:underline shrink-0 transition-colors hover:text-[#111111]">
               ホーム
@@ -472,7 +472,7 @@ export default async function EventPage({ params, searchParams }: EventPageProps
 
         {/* Title overlay */}
         <div className="absolute bottom-0 left-0 right-0 p-6 sm:p-8">
-          <div className="mx-auto max-w-5xl">
+          <div className="mx-auto max-w-6xl">
             {event.category && (
               <Badge className="mb-3 animate-fade-in-up delay-200 glass border-white/20 text-white shadow-sm">
                 {event.category}
@@ -490,7 +490,7 @@ export default async function EventPage({ params, searchParams }: EventPageProps
         </div>
       </div>
 
-      <div className="mx-auto max-w-5xl px-4 py-8">
+      <div className="mx-auto max-w-6xl px-4 py-8">
         <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
 
           {/* ── Left: Event details ─────────────────────────────── */}

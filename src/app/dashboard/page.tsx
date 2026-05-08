@@ -123,7 +123,7 @@ function LoadingSkeleton() {
         ))}
       </div>
       {/* Card skeletons */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {[0, 1, 2].map((i) => (
           <SkeletonCard key={i} />
         ))}
@@ -928,7 +928,7 @@ export default function DashboardPage() {
     <div className="flex flex-col min-h-dvh bg-[#FAFAFA]">
       <Header />
 
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-8">
+      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div className="flex items-center gap-4">
@@ -1102,7 +1102,7 @@ export default function DashboardPage() {
                   {visibleEvents.length === 0 ? (
                     <EmptyState tab={activeTab} />
                   ) : (
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                       {visibleEvents.map((event, i) => (
                         <EventCard
                           key={event.id}
@@ -1171,7 +1171,7 @@ export default function DashboardPage() {
                 {showAllEvents && (
                   <>
                     {allEventsLoading ? (
-                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                         {[0, 1, 2].map((i) => (
                           <SkeletonCard key={i} />
                         ))}
@@ -1183,7 +1183,7 @@ export default function DashboardPage() {
                         </p>
                       </div>
                     ) : (
-                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                         {allEvents.map((event, i) => (
                           <div
                             key={event.id}
@@ -1335,7 +1335,7 @@ export default function DashboardPage() {
                   </Link>
                 </div>
               ) : (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {menus.map((menu) => {
                     const menuFillRate = menu.capacity
                       ? Math.round((menu.booking_count / menu.capacity) * 100)

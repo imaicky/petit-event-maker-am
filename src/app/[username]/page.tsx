@@ -238,7 +238,7 @@ export default async function TeacherProfilePage({
       </div>
 
       {/* Profile section */}
-      <div className="relative mx-auto max-w-3xl px-4">
+      <div className="relative mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
         {/* Avatar */}
         <div className="flex justify-center -mt-16 mb-4">
           <div className="relative">

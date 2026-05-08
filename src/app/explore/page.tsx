@@ -340,7 +340,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
 
       {/* ── Sticky header with glass morphism ── */}
       <div className="sticky top-0 z-10 border-b border-[#E5E5E5]/60 glass">
-        <div className="mx-auto max-w-5xl px-4 py-3">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3">
           <div className="flex items-center gap-3">
             <Link
               href="/"
@@ -368,7 +368,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
           aria-hidden="true"
         />
 
-        <div className="relative mx-auto max-w-5xl px-4">
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-2 flex items-center gap-2 text-[#1A1A1A] animate-fade-in">
             {/* Sparkles with pulse animation */}
             <Sparkles className="h-4 w-4 animate-pulse" />
@@ -504,7 +504,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
         </div>
       </div>
 
-      <div className="mx-auto max-w-5xl px-4 pb-12">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-12">
 
         {/* ── Trending events (only on unfiltered view) ── */}
         {!isFiltered && trendingEvents.length > 0 && (
@@ -619,7 +619,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
 
         {/* ── Event grid with staggered animations ── */}
         {sorted.length > 0 ? (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {sorted.map((event, index) => (
               <div
                 key={event.id}

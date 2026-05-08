@@ -95,7 +95,7 @@ export default async function MyHistoryPage() {
     <main className="min-h-dvh bg-[#FAFAFA]">
       <Header />
 
-      <div className="mx-auto max-w-3xl px-4 py-6">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-6">
         <Link
           href="/my"
           className="mb-4 inline-flex items-center gap-1 text-sm text-[#666666] hover:text-[#1A1A1A]"
