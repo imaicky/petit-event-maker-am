@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Search, SlidersHorizontal, Sparkles, LayoutList, CalendarDays } from "lucide-react";
+import { Search, SlidersHorizontal, Sparkles, LayoutList, CalendarDays, ChevronRight } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -597,9 +597,15 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
             )}
           </p>
           <div className="flex items-center gap-2">
-            {/* View toggle */}
-            <div className="flex rounded-lg border border-[#E5E5E5] overflow-hidden">
+            {/* View toggle — prominent pill group with text labels */}
+            <div
+              role="tablist"
+              aria-label="表示切替"
+              className="inline-flex rounded-full bg-[#F2F2F2] p-1 shadow-inner"
+            >
               <Link
+                role="tab"
+                aria-selected={!isCalendarView}
                 href={`/explore?${new URLSearchParams({
                   ...(q ? { q } : {}),
                   ...(category ? { category } : {}),
@@ -607,16 +613,18 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
                   ...(sort !== "new" ? { sort } : {}),
                   ...(type ? { type } : {}),
                 }).toString()}`}
-                className={`flex h-8 w-8 items-center justify-center transition-colors ${
+                className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
                   !isCalendarView
-                    ? "bg-[#1A1A1A] text-white"
-                    : "bg-white text-[#999999] hover:text-[#1A1A1A]"
+                    ? "bg-[#1A1A1A] text-white shadow-sm"
+                    : "text-[#666666] hover:text-[#1A1A1A]"
                 }`}
-                aria-label="リスト表示"
               >
-                <LayoutList className="h-3.5 w-3.5" />
+                <LayoutList className="h-4 w-4" />
+                <span>リスト</span>
               </Link>
               <Link
+                role="tab"
+                aria-selected={isCalendarView}
                 href={`/explore?${new URLSearchParams({
                   ...(q ? { q } : {}),
                   ...(category ? { category } : {}),
@@ -625,14 +633,14 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
                   ...(type ? { type } : {}),
                   view: "calendar",
                 }).toString()}`}
-                className={`flex h-8 w-8 items-center justify-center transition-colors ${
+                className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
                   isCalendarView
-                    ? "bg-[#1A1A1A] text-white"
-                    : "bg-white text-[#999999] hover:text-[#1A1A1A]"
+                    ? "bg-[#1A1A1A] text-white shadow-sm"
+                    : "text-[#666666] hover:text-[#1A1A1A]"
                 }`}
-                aria-label="カレンダー表示"
               >
-                <CalendarDays className="h-3.5 w-3.5" />
+                <CalendarDays className="h-4 w-4" />
+                <span>カレンダー</span>
               </Link>
             </div>
             {isFiltered && (
@@ -650,6 +658,42 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
             )}
           </div>
         </div>
+
+        {/* ── Calendar promo banner (only in list view) ── */}
+        {!isCalendarView && (
+          <Link
+            href={`/explore?${new URLSearchParams({
+              ...(q ? { q } : {}),
+              ...(category ? { category } : {}),
+              ...(area ? { area } : {}),
+              ...(sort !== "new" ? { sort } : {}),
+              ...(type ? { type } : {}),
+              view: "calendar",
+            }).toString()}`}
+            className="group/cal mb-6 flex items-center justify-between gap-4 rounded-2xl border border-[#E5E5E5] bg-gradient-to-r from-[#FFF9F5] to-white p-4 shadow-sm transition-all hover:shadow-md hover:border-[#C26A4A]/40"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#1A1A1A] text-white shadow-sm transition-transform group-hover/cal:scale-105">
+                <CalendarDays className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-[#1A1A1A]">
+                  カレンダー表示で月間スケジュールを一覧
+                </p>
+                <p className="text-xs text-[#666666] mt-0.5">
+                  日付別にイベントが並んで見やすい・連pass上位互換のレイアウト
+                </p>
+              </div>
+            </div>
+            <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-[#1A1A1A] px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-transform group-hover/cal:translate-x-0.5">
+              切替
+              <ChevronRight className="h-3.5 w-3.5" />
+            </span>
+            <span className="sm:hidden inline-flex items-center text-[#1A1A1A]">
+              <ChevronRight className="h-5 w-5" />
+            </span>
+          </Link>
+        )}
 
         {/* ── Calendar view ── */}
         {isCalendarView && (
