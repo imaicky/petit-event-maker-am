@@ -274,13 +274,59 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   const isFiltered = !!(q || category || area || type || date);
   const isCalendarView = view === "calendar";
 
-  // Calendar: compute current month + event counts by date
+  // List view excludes past events (calendar still shows them when navigating
+  // to past months). When filtering by a specific date, keep the result so
+  // the user can review events that already happened on that day.
+  const nowMs = Date.now();
+  if (!isCalendarView && !date) {
+    sorted = sorted.filter((e) => new Date(e.datetime).getTime() >= nowMs);
+  }
+
+  // Calendar: compute current month + events by date (used in calendar cells)
   const now = new Date();
   const calendarMonth = month || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const eventCountByDate: Record<string, number> = {};
+  const eventsByDate: Record<
+    string,
+    Array<{
+      id: string;
+      title: string;
+      datetime: string;
+      short_code?: string | null;
+      category?: string | null;
+      category_name?: string | null;
+      is_full?: boolean;
+      is_free?: boolean;
+      location_type?: string | null;
+    }>
+  > = {};
   for (const e of filtered) {
-    const d = new Date(e.datetime).toLocaleDateString("en-CA", { timeZone: "Asia/Tokyo" });
-    eventCountByDate[d] = (eventCountByDate[d] ?? 0) + 1;
+    const d = new Date(e.datetime).toLocaleDateString("en-CA", {
+      timeZone: "Asia/Tokyo",
+    });
+    if (!eventsByDate[d]) eventsByDate[d] = [];
+    const remaining = e.capacity ? e.capacity - e.booking_count : null;
+    const categoryName =
+      e.category_id != null && categoryNameById.has(e.category_id)
+        ? categoryNameById.get(e.category_id) ?? null
+        : null;
+    eventsByDate[d].push({
+      id: e.id,
+      title: e.title,
+      datetime: e.datetime,
+      short_code: e.short_code,
+      category: e.category,
+      category_name: categoryName,
+      is_full: remaining !== null && remaining <= 0,
+      is_free: e.price === 0,
+      location_type: e.location_type,
+    });
+  }
+  // Sort each day's list by time ascending
+  for (const list of Object.values(eventsByDate)) {
+    list.sort(
+      (a, b) =>
+        new Date(a.datetime).getTime() - new Date(b.datetime).getTime()
+    );
   }
 
   // Base params for calendar links (preserve existing filters)
@@ -609,7 +655,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
         {isCalendarView && (
           <div className="mb-6">
             <EventCalendar
-              eventCountByDate={eventCountByDate}
+              eventsByDate={eventsByDate}
               selectedDate={date || undefined}
               currentMonth={calendarMonth}
               baseParams={calBaseParams}
