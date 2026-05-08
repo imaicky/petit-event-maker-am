@@ -72,7 +72,7 @@ export function TrendingEvents({ events, reviewAggs }: TrendingEventsProps) {
                   {/* 満員御礼 stamp — center, only for upcoming sold-out (waitlist可) */}
                   {isFull && !isPast && (
                     <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center">
-                      <SoldOutStamp size="sm" rotateDeg={-10} />
+                      <SoldOutStamp size="md" rotateDeg={-10} />
                     </div>
                   )}
 
