@@ -27,6 +27,8 @@ interface AuthContextValue {
     password: string
   ) => Promise<{ error: string | null; needsEmailConfirmation?: boolean }>;
   signInWithLINE: () => Promise<{ error: string | null }>;
+  signInWithGoogle: () => Promise<{ error: string | null }>;
+  signInWithTwitter: () => Promise<{ error: string | null }>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
   resendConfirmationEmail: (email: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
@@ -39,6 +41,8 @@ export const AuthContext = createContext<AuthContextValue>({
   signInWithPassword: async () => ({ error: null }),
   signUpWithPassword: async () => ({ error: null }),
   signInWithLINE: async () => ({ error: null }),
+  signInWithGoogle: async () => ({ error: null }),
+  signInWithTwitter: async () => ({ error: null }),
   resetPassword: async () => ({ error: null }),
   resendConfirmationEmail: async () => ({ error: null }),
   signOut: async () => {},
@@ -172,6 +176,32 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return { error: null };
   }, [supabase]);
 
+  const signInWithGoogle = useCallback(async (): Promise<{
+    error: string | null;
+  }> => {
+    const currentPath = window.location.pathname + window.location.search;
+    const callbackUrl = `${window.location.origin}/api/auth/callback?next=${encodeURIComponent(currentPath)}`;
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: callbackUrl },
+    });
+    if (error) return { error: error.message };
+    return { error: null };
+  }, [supabase]);
+
+  const signInWithTwitter = useCallback(async (): Promise<{
+    error: string | null;
+  }> => {
+    const currentPath = window.location.pathname + window.location.search;
+    const callbackUrl = `${window.location.origin}/api/auth/callback?next=${encodeURIComponent(currentPath)}`;
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "twitter",
+      options: { redirectTo: callbackUrl },
+    });
+    if (error) return { error: error.message };
+    return { error: null };
+  }, [supabase]);
+
   const resetPassword = useCallback(
     async (email: string): Promise<{ error: string | null }> => {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -198,6 +228,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         signInWithPassword,
         signUpWithPassword,
         signInWithLINE,
+        signInWithGoogle,
+        signInWithTwitter,
         resetPassword,
         resendConfirmationEmail,
         signOut,

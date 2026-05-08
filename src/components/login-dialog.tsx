@@ -22,7 +22,7 @@ interface LoginDialogProps {
 type Mode = "login" | "signup" | "reset" | "reset-sent" | "signup-sent" | "needs-confirmation";
 
 export function LoginDialog({ open, onOpenChange, defaultMode = "login" }: LoginDialogProps) {
-  const { signInWithPassword, signUpWithPassword, signInWithLINE, resetPassword, resendConfirmationEmail } = useAuth();
+  const { signInWithPassword, signUpWithPassword, signInWithLINE, signInWithGoogle, signInWithTwitter, resetPassword, resendConfirmationEmail } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -127,6 +127,26 @@ export function LoginDialog({ open, onOpenChange, defaultMode = "login" }: Login
     setLineLoading(true);
     setError(null);
     const result = await signInWithLINE();
+    if (result.error) {
+      setError(result.error);
+      setLineLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setLineLoading(true);
+    setError(null);
+    const result = await signInWithGoogle();
+    if (result.error) {
+      setError(result.error);
+      setLineLoading(false);
+    }
+  };
+
+  const handleTwitterLogin = async () => {
+    setLineLoading(true);
+    setError(null);
+    const result = await signInWithTwitter();
     if (result.error) {
       setError(result.error);
       setLineLoading(false);
@@ -373,11 +393,38 @@ export function LoginDialog({ open, onOpenChange, defaultMode = "login" }: Login
 
         {mode !== "reset" && (
           <>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                onClick={handleGoogleLogin}
+                disabled={lineLoading || loading}
+                className="h-11 rounded-full bg-white border border-[#E5E5E5] text-[#1A1A1A] hover:bg-[#FAFAFA] gap-2 font-medium"
+              >
+                <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+                  <path fill="#EA4335" d="M12 5c1.617 0 3.094.595 4.243 1.578l3.157-3.158C17.45 1.555 14.842.5 12 .5 7.27.5 3.198 3.21 1.21 7.158l3.677 2.86C5.872 7.103 8.689 5 12 5z" />
+                  <path fill="#4285F4" d="M23.5 12.275c0-.85-.075-1.671-.218-2.46H12v4.654h6.45c-.282 1.483-1.115 2.737-2.36 3.575l3.617 2.81C21.86 19.04 23.5 15.93 23.5 12.275z" />
+                  <path fill="#FBBC05" d="M4.887 14.158a7.124 7.124 0 0 1-.387-2.158c0-.748.137-1.471.387-2.158L1.21 6.842A11.486 11.486 0 0 0 0 12c0 1.846.448 3.59 1.21 5.158l3.677-3z" />
+                  <path fill="#34A853" d="M12 23.5c3.24 0 5.957-1.072 7.943-2.91l-3.617-2.81c-.992.668-2.272 1.072-4.326 1.072-3.31 0-6.128-2.103-7.113-5.027l-3.677 2.86C3.198 20.79 7.27 23.5 12 23.5z" />
+                </svg>
+                <span className="text-sm">Google</span>
+              </Button>
+              <Button
+                type="button"
+                onClick={handleTwitterLogin}
+                disabled={lineLoading || loading}
+                className="h-11 rounded-full bg-[#1A1A1A] hover:bg-[#000000] text-white gap-2 font-medium"
+              >
+                <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                </svg>
+                <span className="text-sm">X (Twitter)</span>
+              </Button>
+            </div>
             <Button
               type="button"
               onClick={handleLINELogin}
               disabled={lineLoading || loading}
-              className="mt-4 w-full rounded-full h-12 text-base font-bold text-white gap-2"
+              className="mt-2 w-full rounded-full h-12 text-base font-bold text-white gap-2"
               style={{ backgroundColor: "#06C755" }}
             >
               {lineLoading ? (
