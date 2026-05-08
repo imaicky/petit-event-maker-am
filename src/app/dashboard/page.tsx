@@ -28,6 +28,7 @@ import {
   Copy,
   CreditCard,
   RefreshCw,
+  BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/header";
@@ -531,6 +532,16 @@ function EventCard({
                 {event.booking_count}
               </span>
             )}
+          </Button>
+        </Link>
+        <Link href={`/dashboard/insights/${event.id}`}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 rounded-full border-[#1A1A1A]/20 gap-1.5 text-xs font-medium text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-white transition-colors"
+          >
+            <BarChart3 className="h-3 w-3" />
+            インサイト
           </Button>
         </Link>
         <Button
