@@ -64,25 +64,33 @@ export function EventCard({
   className,
 }: EventCardProps) {
   const remaining = capacity - booked_count;
-  const isFull = remaining <= 0;
+  const isFull = capacity > 0 && remaining <= 0;
   const isLow = !isFull && remaining > 0 && remaining <= 3;
+  const isPast = new Date(datetime).getTime() < Date.now();
   const { date, time } = formatDateShort(datetime);
   const isFree = price === 0;
 
   return (
     <Link
       href={short_code ? `/e/${short_code}` : `/events/${id}`}
+      aria-label={isPast ? `${title}（終了したイベント）` : title}
       className={cn(
         "group block overflow-hidden rounded-2xl bg-white",
         "card-hover-tilt",
         "shadow-sm ring-1 ring-[#E5E5E5]/60",
         "transition-all duration-300",
         "hover:shadow-lg hover:ring-2 hover:ring-[#1A1A1A]/20",
+        isPast && "opacity-70 hover:opacity-90",
         className
       )}
     >
       {/* Image area with shine effect */}
-      <div className="shine-on-hover relative h-44 w-full overflow-hidden bg-[#F2F2F2]">
+      <div
+        className={cn(
+          "shine-on-hover relative h-44 w-full overflow-hidden bg-[#F2F2F2]",
+          isPast && "grayscale"
+        )}
+      >
         {image_url ? (
           <Image
             src={image_url}
@@ -120,10 +128,19 @@ export function EventCard({
         {/* Gradient overlay - enhanced */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-black/5 to-transparent" />
 
-        {/* 満員御礼 stamp — bottom-right corner */}
-        {isFull && capacity > 0 && (
-          <div className="pointer-events-none absolute bottom-2 right-2 z-[1]">
-            <SoldOutStamp size="sm" rotateDeg={-12} />
+        {/* 満員御礼 stamp — center, prominently shown when sold out and not past */}
+        {isFull && !isPast && (
+          <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center">
+            <SoldOutStamp size="md" rotateDeg={-10} />
+          </div>
+        )}
+
+        {/* Past event overlay */}
+        {isPast && (
+          <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center bg-black/15">
+            <span className="rounded-md bg-[#1A1A1A]/85 px-4 py-1.5 text-sm font-bold tracking-widest text-white shadow-md">
+              終了
+            </span>
           </div>
         )}
 
@@ -138,9 +155,13 @@ export function EventCard({
 
         {/* Availability badge */}
         <div className="absolute right-3 top-3">
-          {isFull ? (
-            <span className="inline-flex items-center rounded-full bg-[#1A1A1A]/80 px-2.5 py-0.5 text-xs font-medium text-white backdrop-blur-sm">
-              満員
+          {isPast ? (
+            <span className="inline-flex items-center rounded-full bg-[#666666]/80 px-2.5 py-0.5 text-xs font-medium text-white backdrop-blur-sm">
+              終了
+            </span>
+          ) : isFull ? (
+            <span className="inline-flex items-center rounded-full bg-[#B91C1C]/90 px-2.5 py-0.5 text-xs font-bold text-white backdrop-blur-sm">
+              満員御礼
             </span>
           ) : isLow ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-[#FF8C00]/90 px-2.5 py-0.5 text-xs font-bold text-white backdrop-blur-sm">

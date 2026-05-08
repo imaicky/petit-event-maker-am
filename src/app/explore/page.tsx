@@ -84,29 +84,42 @@ function sortEvents(
   reviewAggs?: Record<string, ReviewAgg>
 ): EventWithBookingCount[] {
   const now = Date.now();
+  const isPast = (e: EventWithBookingCount) =>
+    new Date(e.datetime).getTime() < now;
+
+  // Compare function for the chosen sort axis (past-bucket is handled outside)
+  let compareWithinBucket: (
+    a: EventWithBookingCount,
+    b: EventWithBookingCount
+  ) => number;
+
   if (sort === "date") {
-    return [...events].sort(
-      (a, b) =>
-        Math.abs(new Date(a.datetime).getTime() - now) -
-        Math.abs(new Date(b.datetime).getTime() - now)
-    );
-  }
-  if (sort === "popular") {
-    return [...events].sort((a, b) => b.booking_count - a.booking_count);
-  }
-  if (sort === "rating" && reviewAggs) {
-    return [...events].sort((a, b) => {
+    // Upcoming: 開催が近い順 / Past: 直近に終わったもの順
+    compareWithinBucket = (a, b) =>
+      Math.abs(new Date(a.datetime).getTime() - now) -
+      Math.abs(new Date(b.datetime).getTime() - now);
+  } else if (sort === "popular") {
+    compareWithinBucket = (a, b) => b.booking_count - a.booking_count;
+  } else if (sort === "rating" && reviewAggs) {
+    compareWithinBucket = (a, b) => {
       const aRating = reviewAggs[a.id]?.averageRating ?? 0;
       const bRating = reviewAggs[b.id]?.averageRating ?? 0;
       if (bRating !== aRating) return bRating - aRating;
       return (reviewAggs[b.id]?.reviewCount ?? 0) - (reviewAggs[a.id]?.reviewCount ?? 0);
-    });
+    };
+  } else {
+    // Default: newest (created_at desc)
+    compareWithinBucket = (a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   }
-  // Default: newest (created_at desc)
-  return [...events].sort(
-    (a, b) =>
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-  );
+
+  // Past events always go to the bottom; within each bucket use the chosen sort
+  return [...events].sort((a, b) => {
+    const aPast = isPast(a);
+    const bPast = isPast(b);
+    if (aPast !== bPast) return aPast ? 1 : -1;
+    return compareWithinBucket(a, b);
+  });
 }
 
 function filterEvents(
