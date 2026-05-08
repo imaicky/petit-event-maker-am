@@ -106,4 +106,75 @@ export const TEMPLATES: EventTemplate[] = [
     defaultPrice: 5000,
     category: "Instagram",
   },
+  // ─── AI領域テンプレート ───────────────────────────────────────────
+  {
+    id: "ai-llm-basic",
+    icon: "🤖",
+    title: "🤖 ChatGPT / Claude 入門：仕事を10倍速にする使い方",
+    description:
+      "ChatGPT・Claude などの生成AIを、仕事や日常で実用的に使いこなすための入門講座です。\n\n📌 こんな方におすすめ：\n・AIツールを使い始めたばかり\n・もっと業務効率化したい\n・プロンプトの基本を体系立てて学びたい\n\n📦 持ち物：ノートPC または スマートフォン\n💡 当日中に「自分の仕事に効くプロンプト」を3本以上作ります\n✅ 初心者向けに丁寧に解説します",
+    defaultCapacity: 12,
+    defaultPrice: 3500,
+    category: "LLM活用",
+  },
+  {
+    id: "ai-prompt-eng",
+    icon: "📝",
+    title: "📝 プロンプトエンジニアリング実践ワークショップ",
+    description:
+      "成果が出るプロンプト設計の原則と、評価・改善の方法論を実例ベースで習得します。\n\n📌 学べること：\n・Few-shot / CoT / 役割設定の使い分け\n・出力品質を測るためのevalの作り方\n・本番運用で失敗しないガードレール設計\n\n📦 持ち物：ノートPC（API キーは不要、講師側で用意）\n💡 業務シナリオに合わせて自分のプロンプトを完成させます\n✅ 中級者向け（生成AIの基本操作経験が前提）",
+    defaultCapacity: 10,
+    defaultPrice: 8000,
+    category: "プロンプトエンジニアリング",
+  },
+  {
+    id: "ai-image-gen",
+    icon: "🎨",
+    title: "🎨 Midjourney / Stable Diffusion 画像生成 体験会",
+    description:
+      "Midjourney と Stable Diffusion を使って、思い通りのビジュアルを作るためのプロンプト技法を学びます。\n\n📌 こんな方におすすめ：\n・SNS や広告のビジュアル制作にAIを使いたい\n・キャラクター・背景・素材を量産したい\n・スタイルや構図を自在にコントロールしたい\n\n📦 持ち物：ノートPC または タブレット\n💡 当日中に最低5枚、Pinterest映えするビジュアルを作ります\n✅ 初心者〜中級者対象",
+    defaultCapacity: 8,
+    defaultPrice: 4500,
+    category: "画像生成",
+  },
+  {
+    id: "ai-agent-dev",
+    icon: "⚙️",
+    title: "⚙️ AIエージェント開発ハンズオン（MCP / RAG）",
+    description:
+      "Claude / GPT を使ったAIエージェント、MCP対応ツール、RAG（検索拡張生成）の実装を体験するハンズオンです。\n\n📌 学べること：\n・MCP の基本概念とサーバ実装\n・自前データを Claude に繋ぐ RAG パイプライン\n・タスクを分解して実行するエージェントの作り方\n\n📦 持ち物：ノートPC（Node.js または Python の開発環境）\n💡 ハンズオン後、自分のローカル環境で動くエージェントが手に入ります\n✅ 開発者向け（プログラミング経験が前提）",
+    defaultCapacity: 6,
+    defaultPrice: 12000,
+    category: "AI開発・実装",
+  },
+  {
+    id: "ai-business",
+    icon: "💼",
+    title: "💼 AI×業務自動化セミナー｜ノーコードで始める",
+    description:
+      "n8n / Dify などのノーコードツールと AI を組み合わせて、業務を自動化する手法を学びます。\n\n📌 こんな方におすすめ：\n・経理・人事・営業の手作業を減らしたい\n・チームで使える AI 業務フローを作りたい\n・コードを書かずに自動化したい\n\n📦 持ち物：ノートPC\n💡 自社の業務フローを1つ自動化するワークショップ付き\n✅ 非エンジニア・マネージャー向け",
+    defaultCapacity: 15,
+    defaultPrice: 6000,
+    category: "AI×ビジネス",
+  },
+  {
+    id: "ai-creative",
+    icon: "✨",
+    title: "✨ AI×クリエイティブ｜広告コピー＆ビジュアル量産講座",
+    description:
+      "ChatGPT/Claude でコピーを、Midjourney/SD でビジュアルを、組み合わせて広告クリエイティブを量産する実践講座。\n\n📌 学べること：\n・コピーのトンマナを揃えるプロンプト技法\n・ターゲット別 A/B 案の高速作成\n・ブランドガイドラインに沿った出力制御\n\n📦 持ち物：ノートPC\n💡 自社プロダクト想定で広告セットを5本仕上げます\n✅ クリエイター・マーケター向け",
+    defaultCapacity: 10,
+    defaultPrice: 7000,
+    category: "AI×クリエイティブ",
+  },
+  {
+    id: "ai-mokumoku",
+    icon: "💻",
+    title: "💻 AI もくもく会｜各自のプロジェクトを進める",
+    description:
+      "生成AI/エージェント開発/プロンプト改善など、各自で抱えているテーマをもくもくと進める時間です。\n\n📌 こんな方におすすめ：\n・進捗が滞っているAIプロジェクトを推進したい\n・他の開発者・クリエイターと交流しつつ作業したい\n・つまずきポイントを質問しあいたい\n\n📦 持ち物：ノートPC、作業したいテーマ\n💡 終了前に簡単な成果共有タイムあり\n✅ レベル不問・テーマ自由",
+    defaultCapacity: 12,
+    defaultPrice: 1500,
+    category: "AIコミュニティ・座談会",
+  },
 ];

@@ -4,8 +4,41 @@ import { Search, SlidersHorizontal, Sparkles, LayoutList, CalendarDays } from "l
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { EventWithBookingCount } from "@/types/database";
-import { CATEGORIES } from "@/lib/templates";
+import { CATEGORIES as LEGACY_CATEGORIES } from "@/lib/templates";
 import { CATEGORY_ICONS } from "@/lib/constants";
+
+// Icons for the new taxonomy. Falls back to ✨ for unmatched.
+const NEW_CATEGORY_ICONS: Record<string, string> = {
+  "LLM活用": "🤖",
+  "画像生成": "🎨",
+  "動画生成・編集": "🎬",
+  "音声・音楽": "🎵",
+  "プロンプトエンジニアリング": "📝",
+  "AI開発・実装": "⚙️",
+  "AI×ビジネス": "💼",
+  "AI×クリエイティブ": "✨",
+  "AIコミュニティ・座談会": "💬",
+  "ライフスタイル": "🌿",
+};
+
+type DbCategory = { id: number; slug: string; name: string };
+
+async function getDbCategories(): Promise<DbCategory[]> {
+  try {
+    const supabase = await createClient();
+    const { data } = await (
+      supabase.from as unknown as (
+        t: string
+      ) => ReturnType<typeof supabase.from>
+    )("event_categories")
+      .select("id, slug, name, sort_order")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true });
+    return (data ?? []) as DbCategory[];
+  } catch {
+    return [];
+  }
+}
 import { EventCard } from "@/components/event-card";
 import { ExploreFilters } from "@/components/explore-filters";
 import { TrendingEvents } from "@/components/trending-events";
@@ -147,14 +180,22 @@ function filterEvents(
   query: string,
   category: string,
   area: string,
-  locationType: string
+  locationType: string,
+  categoryNameById?: Map<number, string>
 ): EventWithBookingCount[] {
   const q = query.toLowerCase().trim();
   const cat = category.trim();
   const ar = area.toLowerCase().trim();
 
   return events.filter((e) => {
-    if (cat && e.category !== cat) return false;
+    if (cat) {
+      // Match by either legacy text or new category_id name
+      const legacyMatch = e.category === cat;
+      const newMatch =
+        e.category_id != null &&
+        categoryNameById?.get(e.category_id) === cat;
+      if (!legacyMatch && !newMatch) return false;
+    }
     if (locationType && e.location_type !== locationType) return false;
     if (ar && !(e.location ?? "").toLowerCase().includes(ar)) return false;
     if (q) {
@@ -210,7 +251,16 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
 
   const allEvents = await getPublishedEvents();
   const reviewAggs = await getReviewAggregations(allEvents.map((e) => e.id));
-  const filtered = filterEvents(allEvents, q, category, area, type);
+  const dbCategories = await getDbCategories();
+  const categoryNameById = new Map(dbCategories.map((c) => [c.id, c.name]));
+  const filtered = filterEvents(
+    allEvents,
+    q,
+    category,
+    area,
+    type,
+    categoryNameById
+  );
   let sorted = sortEvents(filtered, sort, reviewAggs);
 
   // Date filter (from calendar click)
@@ -241,11 +291,16 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   if (sort !== "new") calBaseParams.sort = sort;
   if (type) calBaseParams.type = type;
 
-  // Category counts
+  // Category counts (count by display name; supports legacy text + new id)
   const categoryCounts: Record<string, number> = {};
   for (const e of allEvents) {
-    const cat = e.category ?? "";
-    if (cat) categoryCounts[cat] = (categoryCounts[cat] ?? 0) + 1;
+    let name: string | null = null;
+    if (e.category_id != null && categoryNameById.has(e.category_id)) {
+      name = categoryNameById.get(e.category_id) ?? null;
+    } else if (e.category) {
+      name = e.category;
+    }
+    if (name) categoryCounts[name] = (categoryCounts[name] ?? 0) + 1;
   }
 
   // Location type counts
@@ -353,35 +408,51 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
               <span className="inline-block transition-transform duration-200 group-hover/chip:scale-125 group-hover/chip:rotate-12">🎪</span>
               すべて
             </Link>
-            {CATEGORIES.map((cat, idx) => {
-              const icon = CATEGORY_ICONS[cat] ?? "✨";
-              const href = `/explore?${new URLSearchParams({
-                ...(q ? { q } : {}),
-                category: cat,
-                ...(area ? { area } : {}),
-                ...(sort !== "new" ? { sort } : {}),
-                ...(type ? { type } : {}),
-              }).toString()}`;
-              return (
-                <Link
-                  key={cat}
-                  href={href}
-                  className={`group/chip inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-sm font-medium transition-all duration-200 animate-fade-in-up ${getDelayClass(idx + 1)} ${
-                    category === cat
-                      ? "bg-[#1A1A1A] text-white shadow-sm scale-105"
-                      : "bg-white text-[#999999] shadow-sm ring-1 ring-[#E5E5E5] hover:ring-[#1A1A1A]/40 hover:text-[#1A1A1A] hover:scale-105 active:scale-95"
-                  }`}
-                >
-                  <span className="inline-block transition-transform duration-200 group-hover/chip:scale-125 group-hover/chip:rotate-12">{icon}</span>
-                  {cat}
-                  {categoryCounts[cat] != null && categoryCounts[cat] > 0 && (
-                    <span className={`ml-0.5 text-xs ${category === cat ? "text-white/70" : "text-[#999999]"}`}>
-                      ({categoryCounts[cat]})
-                    </span>
-                  )}
-                </Link>
+            {(() => {
+              // Combine new taxonomy + legacy categories for backward compat.
+              // New first (sort_order), then any legacy values that aren't already
+              // present (so existing events without category_id still surface).
+              const newNames = dbCategories.map((c) => c.name);
+              const legacyOnly = LEGACY_CATEGORIES.filter(
+                (c) => !newNames.includes(c)
               );
-            })}
+              const allChips: Array<{ name: string; count: number }> = [
+                ...newNames.map((n) => ({ name: n, count: categoryCounts[n] ?? 0 })),
+                ...legacyOnly.map((n) => ({ name: n, count: categoryCounts[n] ?? 0 })),
+              ];
+              return allChips.map((chip, idx) => {
+                const icon =
+                  NEW_CATEGORY_ICONS[chip.name] ??
+                  CATEGORY_ICONS[chip.name] ??
+                  "✨";
+                const href = `/explore?${new URLSearchParams({
+                  ...(q ? { q } : {}),
+                  category: chip.name,
+                  ...(area ? { area } : {}),
+                  ...(sort !== "new" ? { sort } : {}),
+                  ...(type ? { type } : {}),
+                }).toString()}`;
+                return (
+                  <Link
+                    key={chip.name}
+                    href={href}
+                    className={`group/chip inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-sm font-medium transition-all duration-200 animate-fade-in-up ${getDelayClass(idx + 1)} ${
+                      category === chip.name
+                        ? "bg-[#1A1A1A] text-white shadow-sm scale-105"
+                        : "bg-white text-[#999999] shadow-sm ring-1 ring-[#E5E5E5] hover:ring-[#1A1A1A]/40 hover:text-[#1A1A1A] hover:scale-105 active:scale-95"
+                    }`}
+                  >
+                    <span className="inline-block transition-transform duration-200 group-hover/chip:scale-125 group-hover/chip:rotate-12">{icon}</span>
+                    {chip.name}
+                    {chip.count > 0 && (
+                      <span className={`ml-0.5 text-xs ${category === chip.name ? "text-white/70" : "text-[#999999]"}`}>
+                        ({chip.count})
+                      </span>
+                    )}
+                  </Link>
+                );
+              });
+            })()}
           </div>
 
           {/* Location type chips */}

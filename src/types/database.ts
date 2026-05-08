@@ -73,6 +73,7 @@ export type Database = {
           is_published: boolean
           slug: string
           category: string | null
+          category_id: number | null
           teacher_name: string | null
           teacher_bio: string | null
           price_note: string | null

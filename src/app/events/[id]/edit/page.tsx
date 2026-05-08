@@ -44,6 +44,8 @@ import {
 } from "@/components/ui/dialog";
 import { ImageUpload } from "@/components/image-upload";
 import { PaymentMethodsField } from "@/components/payment-methods-field";
+import { CategoryPicker } from "@/components/category-picker";
+import { TagPicker } from "@/components/tag-picker";
 import { useAuth } from "@/components/auth-provider";
 import { createClient } from "@/lib/supabase/client";
 
@@ -511,6 +513,8 @@ export default function EditEventPage() {
     },
   });
   const [savingDraft, setSavingDraft] = useState(false);
+  const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [tagIds, setTagIds] = useState<number[]>([]);
 
   const watchedLocationType = watch("location_type");
   const watchedIsLimited = watch("is_limited");
@@ -589,6 +593,27 @@ export default function EditEventPage() {
           teacher_bio: event.teacher_bio ?? "",
         });
         setIsPublished(event.is_published ?? true);
+        setCategoryId(
+          typeof event.category_id === "number" ? event.category_id : null
+        );
+        // Load existing tag assignments
+        try {
+          const supabase = createClient();
+          const { data: assignments } = await (
+            supabase.from as unknown as (
+              t: string
+            ) => ReturnType<typeof supabase.from>
+          )("event_tag_assignments")
+            .select("tag_id")
+            .eq("event_id", eventId);
+          if (assignments) {
+            setTagIds(
+              (assignments as Array<{ tag_id: number }>).map((a) => a.tag_id)
+            );
+          }
+        } catch {
+          // graceful fallback when assignments table inaccessible
+        }
         if (user && event.creator_id === user.id) {
           setIsCreator(true);
           setCanEdit(true);
@@ -726,6 +751,8 @@ export default function EditEventPage() {
       teacher_name: data.teacher_name,
       teacher_bio: data.teacher_bio,
       is_published: isPublished,
+      category_id: categoryId ?? null,
+      tag_ids: tagIds,
     };
 
     // If capacity increased AND there are waitlisted bookings, ask for
@@ -1197,6 +1224,32 @@ export default function EditEventPage() {
                     inputWithIconCls={inputWithIconCls}
                   />
                 )}
+              </div>
+            </FormSection>
+
+            {/* Category & Tags */}
+            <FormSection title="カテゴリ・タグ">
+              <div className="space-y-5">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-[#1A1A1A]">
+                    カテゴリ
+                    <span className="ml-2 text-xs font-normal text-[#999999]">任意</span>
+                  </label>
+                  <p className="mb-3 text-xs text-[#999999]">
+                    AI領域もライフスタイル系も対応。設定すると関連イベント推薦・参加者分析の精度が上がります
+                  </p>
+                  <CategoryPicker value={categoryId} onChange={setCategoryId} />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-[#1A1A1A]">
+                    タグ
+                    <span className="ml-2 text-xs font-normal text-[#999999]">複数選択可</span>
+                  </label>
+                  <p className="mb-3 text-xs text-[#999999]">
+                    形式・対象レベル・使用ツール・トピックを選ぶと検索でヒットしやすくなります
+                  </p>
+                  <TagPicker selectedIds={tagIds} onChange={setTagIds} />
+                </div>
               </div>
             </FormSection>
 

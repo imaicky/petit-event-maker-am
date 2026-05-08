@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { canManageEvent } from "@/lib/check-event-access";
 import { getEventInsights } from "@/lib/analytics";
 import { getAudienceInsights } from "@/lib/user-history";
+import { SyllabusSuggester } from "@/components/syllabus-suggester";
 
 export const dynamic = "force-dynamic";
 
@@ -352,6 +353,9 @@ export default async function EventInsightsPage({
             </div>
           </section>
         )}
+
+        {/* Syllabus suggestions */}
+        <SyllabusSuggester eventId={eventId} />
 
         {/* Note */}
         <p className="text-xs text-[#999999]">

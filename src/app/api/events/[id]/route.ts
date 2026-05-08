@@ -46,6 +46,8 @@ const updateEventSchema = z.object({
   is_limited: z.boolean().optional().default(false),
   limited_passcode: z.string().max(50).optional().nullable(),
   is_published: z.boolean().optional(),
+  category_id: z.coerce.number().int().positive().nullable().optional(),
+  tag_ids: z.array(z.coerce.number().int().positive()).optional(),
 }).refine(
   (data) => {
     if (data.location_type === "physical" || data.location_type === "hybrid") {
@@ -434,12 +436,39 @@ export async function PUT(
           is_limited: data.is_limited ?? false,
           limited_passcode: data.is_limited ? (data.limited_passcode || null) : null,
           is_published: data.is_published,
+          category_id: data.category_id ?? null,
         } as never)
         .eq("id", id)
         .select()
         .single();
       event = result.data;
       error = result.error;
+
+      // Replace tag assignments (idempotent: delete-then-insert)
+      if (data.tag_ids !== undefined && !error) {
+        try {
+          await (
+            admin.from as unknown as (
+              t: string
+            ) => ReturnType<typeof admin.from>
+          )("event_tag_assignments")
+            .delete()
+            .eq("event_id", id);
+          if (data.tag_ids.length > 0) {
+            const rows = data.tag_ids.map((tag_id) => ({
+              event_id: id,
+              tag_id,
+            }));
+            await (
+              admin.from as unknown as (
+                t: string
+              ) => ReturnType<typeof admin.from>
+            )("event_tag_assignments").insert(rows);
+          }
+        } catch (err) {
+          console.error("[PUT /api/events/[id]] tag sync error:", err);
+        }
+      }
     }
 
     if (error || !event) {
