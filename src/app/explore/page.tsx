@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Search, SlidersHorizontal, Sparkles, LayoutList, CalendarDays } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { EventWithBookingCount } from "@/types/database";
 import { CATEGORIES } from "@/lib/templates";
 import { CATEGORY_ICONS } from "@/lib/constants";
@@ -25,19 +26,38 @@ async function getPublishedEvents(): Promise<EventWithBookingCount[]> {
     const supabase = await createClient();
     const { data: events, error } = await supabase
       .from("events")
-      .select(`*, booking_count:bookings(count)`)
+      .select("*")
       .eq("is_published", true)
       .order("created_at", { ascending: false });
 
     if (error || !events) return [];
 
-    return events.map((e) => {
-      const raw = e.booking_count;
-      const count = Array.isArray(raw)
-        ? (raw[0] as { count: number } | undefined)?.count ?? 0
-        : (raw as unknown as number) ?? 0;
-      return { ...e, booking_count: Number(count) } as EventWithBookingCount;
-    });
+    // Bookings have RLS that hides rows from anonymous viewers,
+    // so anon counts come back as 0. Use the service role client to
+    // derive an accurate confirmed-only count per event for display.
+    const ids = events.map((e) => e.id);
+    const counts: Record<string, number> = {};
+    if (ids.length > 0 && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      try {
+        const admin = createAdminClient();
+        const { data: rows } = await admin
+          .from("bookings")
+          .select("event_id")
+          .in("event_id", ids)
+          .eq("status", "confirmed");
+        for (const row of rows ?? []) {
+          const eid = (row as { event_id: string }).event_id;
+          counts[eid] = (counts[eid] ?? 0) + 1;
+        }
+      } catch {
+        // fall back to 0 counts if admin client unavailable
+      }
+    }
+
+    return events.map((e) => ({
+      ...e,
+      booking_count: counts[e.id] ?? 0,
+    })) as EventWithBookingCount[];
   } catch {
     return [];
   }
