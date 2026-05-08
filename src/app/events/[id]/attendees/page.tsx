@@ -27,7 +27,6 @@ import { MessageDialog } from "@/components/message-dialog";
 import { BookingEditDialog } from "@/components/booking-edit-dialog";
 import { BookingCancelDialog } from "@/components/booking-cancel-dialog";
 import { useAuth } from "@/components/auth-provider";
-import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -130,79 +129,40 @@ export default function AttendeesPage() {
   const fetchData = useCallback(async () => {
     if (!eventId || !user) return;
 
-    const supabase = createClient();
-
     try {
-      // Fetch event and verify ownership
-      const { data: eventData, error: eventError } = await supabase
-        .from("events")
-        .select("*")
-        .eq("id", eventId)
-        .single();
+      // Bookings have RLS that hides rows from non-bookers; even event
+      // creators only see them via the service role. Use the dedicated
+      // server endpoint which authorizes (creator / co-admin / super-admin)
+      // and bypasses RLS via the admin client.
+      const res = await fetch(`/api/events/${eventId}/attendees`, {
+        cache: "no-store",
+      });
 
-      if (eventError || !eventData) {
-        setError("イベントが見つかりませんでした");
-        setLoading(false);
+      if (res.status === 401) {
+        router.replace("/");
         return;
       }
-
-      // Check if current user is the creator, co-admin, or super-admin
-      const SUPER_ADMIN_EMAILS = ["imatoru@gmail.com"];
-      const isSuperAdmin = SUPER_ADMIN_EMAILS.includes(user.email ?? "");
-
-      if (eventData.creator_id !== user.id && !isSuperAdmin) {
-        // Check co-admin status
-        const { data: adminRecord } = await supabase
-          .from("event_admins")
-          .select("id")
-          .eq("event_id", eventId)
-          .eq("user_id", user.id)
-          .eq("status", "accepted")
-          .maybeSingle();
-
-        if (!adminRecord) {
-          router.replace("/");
-          return;
-        }
+      if (res.status === 403) {
+        router.replace("/");
+        return;
       }
-
-      setEvent(eventData);
-
-      // Fetch confirmed bookings
-      const { data: bookingsData, error: bookingsError } = await supabase
-        .from("bookings")
-        .select("*")
-        .eq("event_id", eventId)
-        .eq("status", "confirmed")
-        .order("created_at", { ascending: true });
-
-      if (bookingsError) {
+      if (!res.ok) {
         setError("予約一覧の取得に失敗しました");
         setLoading(false);
         return;
       }
 
-      setBookings(bookingsData ?? []);
+      const data = (await res.json()) as {
+        event: Event;
+        confirmed: Booking[];
+        waitlisted: Booking[];
+        cancelled: Booking[];
+      };
 
-      // Fetch waitlisted bookings
-      const { data: waitlistedData } = await supabase
-        .from("bookings")
-        .select("*")
-        .eq("event_id", eventId)
-        .eq("status", "waitlisted")
-        .order("created_at", { ascending: true });
-
-      setWaitlistedBookings(waitlistedData ?? []);
-
-      // Fetch cancelled bookings
-      const { data: cancelledData } = await supabase
-        .from("bookings")
-        .select("*")
-        .eq("event_id", eventId)
-        .eq("status", "cancelled")
-        .order("created_at", { ascending: true });
-
-      setCancelledBookings(cancelledData ?? []);
+      setEvent(data.event);
+      setBookings(data.confirmed ?? []);
+      setWaitlistedBookings(data.waitlisted ?? []);
+      setCancelledBookings(data.cancelled ?? []);
     } catch {
       setError("データの読み込みに失敗しました");
     } finally {
