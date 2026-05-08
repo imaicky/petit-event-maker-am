@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import Link from "next/link";
+import { Loader2, Sparkles, ChevronRight } from "lucide-react";
 import { Header } from "@/components/header";
 import { MyBookingsClient, type BookingItem } from "./my-bookings-client";
 import { useAuth } from "@/components/auth-provider";
@@ -112,6 +113,23 @@ export default function MyPage() {
             申し込んだイベントを確認できます
           </p>
         </div>
+
+        {/* History / Skill map link */}
+        <Link
+          href="/my/history"
+          className="mb-6 flex items-center justify-between rounded-2xl border border-[#E5E5E5] bg-white p-4 hover:border-[#1A1A1A]/30 hover:shadow-sm transition-all"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#1A1A1A] to-[#404040] text-white">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-[#1A1A1A]">参加履歴・AIスキルマップ</p>
+              <p className="text-xs text-[#999999]">参加カテゴリの可視化と次の学びの提案</p>
+            </div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-[#999999]" />
+        </Link>
 
         {bookingsLoading ? (
           <div className="flex items-center justify-center py-20">

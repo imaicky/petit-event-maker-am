@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { canManageEvent } from "@/lib/check-event-access";
 import { getEventInsights } from "@/lib/analytics";
+import { getAudienceInsights } from "@/lib/user-history";
 
 export const dynamic = "force-dynamic";
 
@@ -96,7 +97,10 @@ export default async function EventInsightsPage({
 
   const days = Number(daysParam ?? "30");
   const safeDays = Number.isFinite(days) && days > 0 && days <= 365 ? days : 30;
-  const insights = await getEventInsights(eventId, { daysBack: safeDays });
+  const [insights, audience] = await Promise.all([
+    getEventInsights(eventId, { daysBack: safeDays }),
+    getAudienceInsights(eventId),
+  ]);
 
   const totalBookings =
     insights.bookings_confirmed +
@@ -283,6 +287,69 @@ export default async function EventInsightsPage({
               }))}
               emptyMessage=""
             />
+          </section>
+        )}
+
+        {/* Audience interest analysis */}
+        {audience.participant_count > 0 && (
+          <section className="mb-8 rounded-2xl border border-[#E5E5E5] bg-white p-5">
+            <h2 className="mb-1 text-sm font-bold text-[#1A1A1A]">
+              参加者の興味プロファイル
+            </h2>
+            <p className="mb-4 text-xs text-[#666666]">
+              本イベント以外で参加者が参加しているカテゴリ（{audience.participant_count}名分）
+            </p>
+
+            {/* AI level distribution */}
+            {Object.values(audience.audience_ai_level_distribution).some(
+              (n) => n > 0
+            ) && (
+              <div className="mb-5">
+                <p className="mb-2 text-xs font-medium text-[#666666]">
+                  参加者のAIレベル分布
+                </p>
+                <div className="flex h-8 w-full overflow-hidden rounded-full bg-[#F2F2F2] text-[10px] font-medium text-white">
+                  {(["未参加", "入門", "初級", "中級", "上級"] as const).map(
+                    (lvl) => {
+                      const n = audience.audience_ai_level_distribution[lvl] ?? 0;
+                      if (n === 0) return null;
+                      const pct = (n / audience.participant_count) * 100;
+                      const colors: Record<typeof lvl, string> = {
+                        未参加: "bg-[#CCCCCC] text-[#1A1A1A]",
+                        入門: "bg-[#999999]",
+                        初級: "bg-[#666666]",
+                        中級: "bg-[#404040]",
+                        上級: "bg-[#1A1A1A]",
+                      };
+                      return (
+                        <div
+                          key={lvl}
+                          className={`flex items-center justify-center px-1 ${colors[lvl]}`}
+                          style={{ width: `${pct}%` }}
+                          title={`${lvl}: ${n}名`}
+                        >
+                          {pct > 12 ? `${lvl} ${n}` : ""}
+                        </div>
+                      );
+                    }
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Other categories */}
+            <div>
+              <p className="mb-2 text-xs font-medium text-[#666666]">
+                参加者が他に参加しているカテゴリ
+              </p>
+              <MiniBarChart
+                data={audience.audience_categories.map((c) => ({
+                  label: c.name,
+                  count: c.count,
+                }))}
+                emptyMessage="他のイベント参加履歴なし"
+              />
+            </div>
           </section>
         )}
 
