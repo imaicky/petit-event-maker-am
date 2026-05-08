@@ -31,6 +31,8 @@ const createEventSchema = z.object({
   teacher_name: z.string().optional().nullable(),
   teacher_bio: z.string().optional().nullable(),
   category: z.string().optional().nullable(),
+  category_id: z.coerce.number().int().positive().optional().nullable(),
+  tag_ids: z.array(z.coerce.number().int().positive()).optional(),
   price_note: z.string().max(100).optional().nullable(),
   payment_method: z.enum(['stripe', 'bank', 'onsite', 'custom']).optional().default('stripe'),
   payment_methods: z.array(z.enum(['stripe', 'bank', 'onsite', 'custom'])).optional(),
@@ -292,6 +294,7 @@ export async function POST(request: NextRequest) {
         slug,
         short_code,
         is_published: data.is_published ?? true,
+        category_id: data.category_id ?? null,
       } as never)
       .select()
       .single();
@@ -308,6 +311,24 @@ export async function POST(request: NextRequest) {
         { error: "イベントの作成に失敗しました" },
         { status: 500 }
       );
+    }
+
+    // Persist tag assignments via service role (RLS allows creator/co-admin/super-admin only)
+    if (data.tag_ids && data.tag_ids.length > 0 && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      try {
+        const admin = createAdminClient();
+        const eventRow = event as { id: string };
+        const rows = data.tag_ids.map((tag_id) => ({
+          event_id: eventRow.id,
+          tag_id,
+        }));
+        await (admin.from as unknown as (t: string) => ReturnType<typeof admin.from>)(
+          "event_tag_assignments"
+        ).insert(rows);
+      } catch (err) {
+        console.error("[POST /api/events] tag insert error:", err);
+        // do not fail the whole request — event was created
+      }
     }
 
     // Notify creator via LINE (async, non-blocking)

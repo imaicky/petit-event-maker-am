@@ -37,6 +37,8 @@ import { useAuth } from "@/components/auth-provider";
 import { LoginDialog } from "@/components/login-dialog";
 import { ImageUpload } from "@/components/image-upload";
 import { PaymentMethodsField, type PaymentMethod } from "@/components/payment-methods-field";
+import { CategoryPicker } from "@/components/category-picker";
+import { TagPicker } from "@/components/tag-picker";
 
 // ─── Schema ────────────────────────────────────────────────────────────────
 
@@ -133,6 +135,8 @@ interface CreateEventPayload {
   limited_passcode?: string;
   teacher_name?: string;
   teacher_bio?: string;
+  category_id?: number | null;
+  tag_ids?: number[];
 }
 
 // ─── Step definitions ─────────────────────────────────────────────────────────
@@ -528,6 +532,8 @@ function NewEventPageInner() {
   });
 
   const [savingDraft, setSavingDraft] = useState(false);
+  const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [tagIds, setTagIds] = useState<number[]>([]);
 
   const watchedValues = watch();
 
@@ -697,6 +703,8 @@ function NewEventPageInner() {
       limited_passcode: data.is_limited ? (data.limited_passcode || undefined) : undefined,
       teacher_name: data.teacher_name,
       teacher_bio: data.teacher_bio,
+      category_id: categoryId ?? undefined,
+      tag_ids: tagIds.length > 0 ? tagIds : undefined,
     };
 
     try {
@@ -1028,6 +1036,31 @@ function NewEventPageInner() {
                       placeholder="例：各自のお食事代のみ"
                       {...register("price_note")}
                       className={inputCls}
+                    />
+                  </FieldWrapper>
+
+                  <Separator />
+
+                  {/* Category & Tags */}
+                  <FieldWrapper
+                    label="カテゴリ"
+                    optional
+                    hint="近いものを1つ選ぶと、関連イベントへのレコメンドや参加者の興味分析の精度が上がります"
+                  >
+                    <CategoryPicker
+                      value={categoryId}
+                      onChange={setCategoryId}
+                    />
+                  </FieldWrapper>
+
+                  <FieldWrapper
+                    label="タグ（複数選択可）"
+                    optional
+                    hint="形式・対象レベル・使用ツール・トピックを選ぶと検索でヒットしやすくなります"
+                  >
+                    <TagPicker
+                      selectedIds={tagIds}
+                      onChange={setTagIds}
                     />
                   </FieldWrapper>
 
