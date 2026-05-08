@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { Calendar, TrendingUp } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { EventWithBookingCount } from "@/types/database";
 import { AverageRatingBadge } from "@/components/average-rating-badge";
+import { SoldOutStamp } from "@/components/sold-out-stamp";
 
 interface TrendingEventsProps {
   events: EventWithBookingCount[];
@@ -35,16 +37,24 @@ export function TrendingEvents({ events, reviewAggs }: TrendingEventsProps) {
           const remaining = event.capacity ? event.capacity - event.booking_count : null;
           const isFull = remaining !== null && remaining <= 0;
           const isLow = !isFull && remaining !== null && remaining > 0 && remaining <= 3;
+          const isPast = new Date(event.datetime).getTime() < Date.now();
 
           return (
             <Link
               key={event.id}
               href={`/events/${event.id}`}
-              className="group flex-none w-[260px] snap-start"
+              aria-label={isPast ? `${event.title}（終了）` : event.title}
+              className={cn(
+                "group flex-none w-[260px] snap-start",
+                isPast && "opacity-70 hover:opacity-90"
+              )}
             >
               <div className="rounded-2xl border border-[#E5E5E5] bg-white overflow-hidden shadow-sm hover:shadow-lg hover:border-[#1A1A1A]/30 transition-all duration-200">
                 {/* Image */}
-                <div className="h-32 relative overflow-hidden bg-gradient-to-br from-[#F2F2F2] to-[#E0E0E0]">
+                <div className={cn(
+                  "h-32 relative overflow-hidden bg-gradient-to-br from-[#F2F2F2] to-[#E0E0E0]",
+                  isPast && "grayscale"
+                )}>
                   {event.image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -58,6 +68,23 @@ export function TrendingEvents({ events, reviewAggs }: TrendingEventsProps) {
                     </div>
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
+
+                  {/* 満員御礼 stamp — center, only for upcoming sold-out (waitlist可) */}
+                  {isFull && !isPast && (
+                    <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center">
+                      <SoldOutStamp size="sm" rotateDeg={-10} />
+                    </div>
+                  )}
+
+                  {/* Past overlay */}
+                  {isPast && (
+                    <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center bg-black/15">
+                      <span className="rounded-md bg-[#1A1A1A]/85 px-3 py-1 text-xs font-bold tracking-widest text-white">
+                        終了
+                      </span>
+                    </div>
+                  )}
+
                   {/* Trending badge */}
                   <div className="absolute top-2 left-2">
                     <span className="inline-flex items-center gap-1 rounded-full bg-[#1A1A1A] px-2 py-0.5 text-[10px] font-bold text-white">
@@ -85,8 +112,10 @@ export function TrendingEvents({ events, reviewAggs }: TrendingEventsProps) {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold">
-                      {isFull ? (
-                        <span className="text-[#999999]">満員</span>
+                      {isPast ? (
+                        <span className="text-[#999999]">終了</span>
+                      ) : isFull ? (
+                        <span className="text-[#B91C1C]">満員御礼・キャンセル待ち可</span>
                       ) : isLow ? (
                         <span className="text-[#FF8C00]">残りわずか</span>
                       ) : remaining !== null ? (
