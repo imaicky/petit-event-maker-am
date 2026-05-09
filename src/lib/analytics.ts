@@ -63,7 +63,7 @@ export type EventInsights = {
 
 const TOP_LIMIT = 8;
 
-function bucket(arr: Array<string | null | undefined>): Array<{ source: string; count: number }> {
+export function bucket(arr: Array<string | null | undefined>): Array<{ source: string; count: number }> {
   const counts: Record<string, number> = {};
   for (const v of arr) {
     if (!v) continue;
@@ -78,7 +78,7 @@ function bucket(arr: Array<string | null | undefined>): Array<{ source: string; 
 /**
  * URLからホスト名（短縮表示）を取り出す。値がドメインでない場合はそのまま返す。
  */
-function shortenReferrer(ref: string | null | undefined): string | null {
+export function shortenReferrer(ref: string | null | undefined): string | null {
   if (!ref) return null;
   try {
     const url = new URL(ref);

@@ -26,7 +26,7 @@ export const AI_CATEGORY_SLUGS = new Set([
 // 既存 events.category テキストのうち、AI 関連と見做すもの（補完用）
 export const AI_LEGACY_CATEGORY_PATTERNS = [/AI/i, /ＡＩ/, /生成/, /プロンプト/];
 
-function isAiLegacy(category: string | null | undefined): boolean {
+export function isAiLegacy(category: string | null | undefined): boolean {
   if (!category) return false;
   return AI_LEGACY_CATEGORY_PATTERNS.some((re) => re.test(category));
 }
@@ -36,7 +36,7 @@ export type CategoryStat = { name: string; count: number };
 
 export type AiLevel = "未参加" | "入門" | "初級" | "中級" | "上級";
 
-function inferAiLevel(aiEventCount: number, distinctAiDomains: number): AiLevel {
+export function inferAiLevel(aiEventCount: number, distinctAiDomains: number): AiLevel {
   if (aiEventCount === 0) return "未参加";
   if (aiEventCount <= 2) return "入門";
   if (aiEventCount <= 5) {
