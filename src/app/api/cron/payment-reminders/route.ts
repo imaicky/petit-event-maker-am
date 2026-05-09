@@ -47,12 +47,17 @@ type BookingRow = {
 };
 
 export async function GET(req: Request) {
-  // Vercel Cron は Authorization: Bearer ${CRON_SECRET} を付ける
+  // Adversarial fix: CRON_SECRET 未設定時に fail-open になるバグ修正。
+  // 必ず CRON_SECRET 必須に変更（fail-closed）。
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    return NextResponse.json(
+      { error: "CRON_SECRET not configured" },
+      { status: 500 }
+    );
+  }
   const authHeader = req.headers.get("authorization");
-  if (
-    process.env.CRON_SECRET &&
-    authHeader !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
+  if (authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

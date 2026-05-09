@@ -14,6 +14,7 @@ import { sendBatchEmails } from "@/lib/email";
 import { wrapInHtml } from "@/lib/email-templates";
 import { getStripeForCreator } from "@/lib/stripe";
 import { logPaymentEvent } from "@/lib/payment-audit";
+import { canManageEvent } from "@/lib/check-event-access";
 
 // ─── Validation ──────────────────────────────────────────────
 
@@ -113,6 +114,33 @@ export async function POST(
       return NextResponse.json(
         { error: "予約がこのイベントに属していません" },
         { status: 400 }
+      );
+    }
+
+    // Adversarial fix (CRITICAL): 権限チェック
+    // 元実装は誰でも任意の booking_id を渡してキャンセルできた。
+    // 正当な操作者は (a) 予約者本人、(b) イベント主催者・共同管理者・super-admin のみ。
+    const {
+      data: { user: authUser },
+    } = await supabase.auth.getUser();
+    const isBooker =
+      authUser != null &&
+      ((booking.user_id != null && booking.user_id === authUser.id) ||
+        (authUser.email != null &&
+          authUser.email.toLowerCase() ===
+            (booking.guest_email ?? "").toLowerCase()));
+    let isOrganizer = false;
+    if (authUser && !isBooker) {
+      try {
+        isOrganizer = await canManageEvent(supabase, eventId, authUser.id);
+      } catch {
+        isOrganizer = false;
+      }
+    }
+    if (!isBooker && !isOrganizer) {
+      return NextResponse.json(
+        { error: "この予約をキャンセルする権限がありません" },
+        { status: 403 }
       );
     }
 
