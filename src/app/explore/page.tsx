@@ -42,6 +42,7 @@ async function getDbCategories(): Promise<DbCategory[]> {
 import { EventCard } from "@/components/event-card";
 import { ExploreFilters } from "@/components/explore-filters";
 import { TrendingEvents } from "@/components/trending-events";
+import { PersonalizedFeed } from "@/components/personalized-feed";
 import { EventCalendar } from "@/components/event-calendar";
 
 // ─── Data ────────────────────────────────────────────────────────────────────
@@ -551,6 +552,9 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
       </div>
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-12">
+
+        {/* ── Personalized feed (logged-in only, unfiltered view) ── */}
+        {!isFiltered && !isCalendarView && <PersonalizedFeed />}
 
         {/* ── Trending events (only on unfiltered view) ── */}
         {!isFiltered && trendingEvents.length > 0 && (

@@ -117,7 +117,7 @@ export default function MyPage() {
         {/* History / Skill map link */}
         <Link
           href="/my/history"
-          className="mb-6 flex items-center justify-between rounded-2xl border border-[#E5E5E5] bg-white p-4 hover:border-[#1A1A1A]/30 hover:shadow-sm transition-all"
+          className="mb-3 flex items-center justify-between rounded-2xl border border-[#E5E5E5] bg-white p-4 hover:border-[#1A1A1A]/30 hover:shadow-sm transition-all"
         >
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#1A1A1A] to-[#404040] text-white">
@@ -126,6 +126,23 @@ export default function MyPage() {
             <div>
               <p className="text-sm font-bold text-[#1A1A1A]">参加履歴・AIスキルマップ</p>
               <p className="text-xs text-[#999999]">参加カテゴリの可視化と次の学びの提案</p>
+            </div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-[#999999]" />
+        </Link>
+
+        {/* Follows link */}
+        <Link
+          href="/my/follows"
+          className="mb-6 flex items-center justify-between rounded-2xl border border-[#E5E5E5] bg-white p-4 hover:border-[#1A1A1A]/30 hover:shadow-sm transition-all"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#C26A4A] to-[#A85535] text-white">
+              <span className="text-base">♥</span>
+            </div>
+            <div>
+              <p className="text-sm font-bold text-[#1A1A1A]">フォロー中の主催者</p>
+              <p className="text-xs text-[#999999]">新規イベント公開を見逃さない</p>
             </div>
           </div>
           <ChevronRight className="h-4 w-4 text-[#999999]" />

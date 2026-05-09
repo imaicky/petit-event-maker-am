@@ -74,6 +74,8 @@ export type Database = {
           slug: string
           category: string | null
           category_id: number | null
+          group_id: string | null
+          series_index: number | null
           teacher_name: string | null
           teacher_bio: string | null
           price_note: string | null
