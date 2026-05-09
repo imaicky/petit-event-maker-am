@@ -6,7 +6,16 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
   // 'next' is optional — redirect destination after login
-  const next = searchParams.get('next') ?? '/'
+  // Adversarial fix: open-redirect 防御。
+  // user 由来の next を / で始まり且つ // や :// を含まない相対パスのみ許可。
+  const rawNext = searchParams.get('next') ?? '/'
+  const next = (() => {
+    if (!rawNext.startsWith('/')) return '/'
+    if (rawNext.startsWith('//')) return '/'
+    if (rawNext.includes('://')) return '/'
+    if (rawNext.startsWith('/\\')) return '/'
+    return rawNext
+  })()
 
   if (code) {
     const supabase = await createClient()
