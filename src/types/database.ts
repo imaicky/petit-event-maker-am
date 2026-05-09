@@ -692,12 +692,18 @@ export type Database = {
           id: string
           user_id: string
           stripe_account_id: string | null
-          stripe_secret_key: string
+          stripe_secret_key: string | null
           stripe_webhook_id: string | null
           stripe_webhook_secret: string | null
           display_name: string
           is_test_mode: boolean
           is_active: boolean
+          connect_mode: 'legacy' | 'standard' | 'express'
+          charges_enabled: boolean
+          payouts_enabled: boolean
+          details_submitted: boolean
+          platform_fee_percent: number
+          platform_fee_fixed_jpy: number
           created_at: string
           updated_at: string
         }
@@ -705,12 +711,18 @@ export type Database = {
           id?: string
           user_id: string
           stripe_account_id?: string | null
-          stripe_secret_key: string
+          stripe_secret_key?: string | null
           stripe_webhook_id?: string | null
           stripe_webhook_secret?: string | null
           display_name?: string
           is_test_mode?: boolean
           is_active?: boolean
+          connect_mode?: 'legacy' | 'standard' | 'express'
+          charges_enabled?: boolean
+          payouts_enabled?: boolean
+          details_submitted?: boolean
+          platform_fee_percent?: number
+          platform_fee_fixed_jpy?: number
           created_at?: string
           updated_at?: string
         }
@@ -718,12 +730,18 @@ export type Database = {
           id?: string
           user_id?: string
           stripe_account_id?: string | null
-          stripe_secret_key?: string
+          stripe_secret_key?: string | null
           stripe_webhook_id?: string | null
           stripe_webhook_secret?: string | null
           display_name?: string
           is_test_mode?: boolean
           is_active?: boolean
+          connect_mode?: 'legacy' | 'standard' | 'express'
+          charges_enabled?: boolean
+          payouts_enabled?: boolean
+          details_submitted?: boolean
+          platform_fee_percent?: number
+          platform_fee_fixed_jpy?: number
           created_at?: string
           updated_at?: string
         }

@@ -384,7 +384,33 @@ export default function StripeSettingsPage() {
                 </div>
               </SectionCard>
 
-              <SectionCard title="Stripeアカウントを連携">
+              <SectionCard title="Stripeアカウントを連携（推奨：Connect）">
+                <div className="mb-4 rounded-xl bg-gradient-to-r from-[#FFF9F5] to-white border border-[#E5DFD5] p-4">
+                  <p className="text-sm font-bold text-[#1A1A1A] mb-1">
+                    🔐 Stripeでワンクリック連携
+                  </p>
+                  <p className="text-xs text-[#666666] leading-relaxed mb-3">
+                    Stripeアカウントへのログイン画面に遷移し、許可するだけで連携が完了します。
+                    シークレットキーの入力は不要・安全です。
+                  </p>
+                  <a
+                    href="/api/stripe/connect/start"
+                    className="inline-flex items-center gap-2 h-10 px-5 rounded-full bg-[#635BFF] text-white text-sm font-medium hover:bg-[#5851db] transition-colors shadow-sm"
+                  >
+                    <CreditCard className="h-4 w-4" />
+                    Stripeで連携する
+                  </a>
+                  <p className="mt-3 text-[10px] text-[#999999]">
+                    プラットフォーム手数料: 5%（Pro加入で優遇予定）/ 決済はStripeから直接ご自身の口座へ入金されます
+                  </p>
+                </div>
+
+                <details className="mb-3">
+                  <summary className="cursor-pointer text-xs text-[#999999] hover:text-[#666666]">
+                    レガシー方式（Secret Key 直接入力）を使う場合 →
+                  </summary>
+                </details>
+
                 <form onSubmit={handleConnect} className="space-y-4">
                   <div className="rounded-xl bg-[#FAFAFA] border border-[#F2F2F2] px-4 py-3">
                     <p className="text-sm text-[#666666] leading-relaxed">
@@ -393,6 +419,9 @@ export default function StripeSettingsPage() {
                         シークレットキー
                       </span>
                       を入力するだけで連携完了です。Webhookも自動設定されます。
+                      <span className="block mt-1 text-xs text-[#999999]">
+                        ※ レガシー方式：プラットフォーム手数料は発生しません。新規登録は上のConnect連携を推奨します。
+                      </span>
                     </p>
                   </div>
 

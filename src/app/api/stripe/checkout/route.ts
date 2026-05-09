@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStripeForCreator } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  calcApplicationFee,
+  createConnectCheckoutSession,
+} from "@/lib/stripe-connect";
 
 export async function POST(request: NextRequest) {
   try {
@@ -49,6 +53,48 @@ export async function POST(request: NextRequest) {
         { error: "This event does not use Stripe" },
         { status: 400 }
       );
+    }
+
+    // Look up creator's Stripe settings to determine Connect mode vs legacy.
+    type SettingsRow = {
+      connect_mode: "legacy" | "standard" | "express" | null;
+      stripe_account_id: string | null;
+      platform_fee_percent: number | null;
+      platform_fee_fixed_jpy: number | null;
+      charges_enabled: boolean | null;
+    };
+    let settings: SettingsRow | null = null;
+    if (event.creator_id) {
+      const { data } = await admin
+        .from("stripe_settings")
+        .select(
+          "connect_mode, stripe_account_id, platform_fee_percent, platform_fee_fixed_jpy, charges_enabled"
+        )
+        .eq("user_id", event.creator_id)
+        .maybeSingle();
+      settings = (data as SettingsRow) ?? null;
+    }
+
+    // Connect (standard) mode requires charges_enabled to actually accept payment.
+    const isConnect =
+      settings?.connect_mode === "standard" || settings?.connect_mode === "express";
+
+    if (isConnect) {
+      if (!settings?.stripe_account_id) {
+        return NextResponse.json(
+          { error: "Stripe Connect アカウントが見つかりません" },
+          { status: 503 }
+        );
+      }
+      if (!settings.charges_enabled) {
+        return NextResponse.json(
+          {
+            error:
+              "Stripe Connect の登録が完了していません（charges_enabled=false）。Stripe側で必要な情報の入力を完了してください",
+          },
+          { status: 503 }
+        );
+      }
     }
 
     // Get Stripe instance for this creator (DB → env var fallback)
@@ -101,35 +147,65 @@ export async function POST(request: NextRequest) {
       process.env.NEXT_PUBLIC_BASE_URL ||
       `${request.nextUrl.protocol}//${request.nextUrl.host}`;
 
-    const session = await stripe.checkout.sessions.create(
-      {
-        mode: "payment",
-        payment_method_types: ["card"],
-        line_items: [
-          {
-            price_data: {
-              currency: "jpy",
-              product_data: {
-                name: event.title,
-                ...(event.image_url ? { images: [event.image_url] } : {}),
-              },
-              unit_amount: event.price,
-            },
-            quantity: 1,
-          },
-        ],
-        customer_email: booking.guest_email,
+    const successUrl = `${baseUrl}/events/${event_id}/thanks?booking_id=${encodeURIComponent(booking_id)}&name=${encodeURIComponent(booking.guest_name)}&email=${encodeURIComponent(booking.guest_email)}&session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${baseUrl}/events/${event_id}?payment_cancelled=1`;
+
+    let session;
+    if (isConnect && settings?.stripe_account_id) {
+      // Connect: Direct charge with application_fee_amount
+      const feeJpy = calcApplicationFee(
+        event.price,
+        Number(settings.platform_fee_percent ?? 5),
+        Number(settings.platform_fee_fixed_jpy ?? 0)
+      );
+      session = await createConnectCheckoutSession({
+        stripeAccountId: settings.stripe_account_id,
+        amountJpy: event.price,
+        feeJpy,
+        productName: event.title,
+        productImageUrl: event.image_url ?? undefined,
+        customerEmail: booking.guest_email,
         metadata: {
           booking_id,
           event_id,
+          platform_fee_jpy: String(feeJpy),
         },
-        success_url: `${baseUrl}/events/${event_id}/thanks?booking_id=${encodeURIComponent(booking_id)}&name=${encodeURIComponent(booking.guest_name)}&email=${encodeURIComponent(booking.guest_email)}&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${baseUrl}/events/${event_id}?payment_cancelled=1`,
-      },
-      {
+        successUrl,
+        cancelUrl,
         idempotencyKey: `checkout-${booking_id}`,
-      }
-    );
+      });
+    } else {
+      // Legacy: Direct API on creator's own Stripe account (no fee)
+      session = await stripe.checkout.sessions.create(
+        {
+          mode: "payment",
+          payment_method_types: ["card"],
+          line_items: [
+            {
+              price_data: {
+                currency: "jpy",
+                product_data: {
+                  name: event.title,
+                  ...(event.image_url ? { images: [event.image_url] } : {}),
+                },
+                unit_amount: event.price,
+              },
+              quantity: 1,
+            },
+          ],
+          customer_email: booking.guest_email,
+          metadata: {
+            booking_id,
+            event_id,
+          },
+          success_url: successUrl,
+          cancel_url: cancelUrl,
+        },
+        {
+          idempotencyKey: `checkout-${booking_id}`,
+        }
+      );
+    }
 
     // Update booking with stripe session id
     const { error: updateErr } = await admin
