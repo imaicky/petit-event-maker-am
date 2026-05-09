@@ -133,6 +133,7 @@ export async function GET(req: Request) {
 
     // ── 新規 Checkout セッションを作成 ────────────────────────
     let checkoutUrl = "";
+    let newSessionId = "";
     try {
       const { data: settingsRow } = await admin
         .from("stripe_settings")
@@ -186,6 +187,7 @@ export async function GET(req: Request) {
           idempotencyKey: `auto-${b.id}-${tier}-${Math.floor(now.getTime() / 3600000)}`,
         });
         checkoutUrl = session.url ?? "";
+        newSessionId = session.id;
       } else {
         const stripe = await getStripeForCreator(b.events.creator_id);
         if (!stripe) {
@@ -226,6 +228,7 @@ export async function GET(req: Request) {
           }
         );
         checkoutUrl = session.url ?? "";
+        newSessionId = session.id;
       }
     } catch (err) {
       console.error("[cron/payment-reminders] checkout error:", b.id, err);
@@ -282,10 +285,14 @@ ${
       }
     }
 
-    // ── reminded_at 更新 ──────────────────────────────────────
+    // ── reminded_at + stripe_session_id 更新 ──────────────────
+    // 新セッションをbookingに反映 (古いセッションのexpired webhookで誤キャンセルを防ぐ)
     await admin
       .from("bookings")
-      .update({ payment_reminded_at: new Date().toISOString() })
+      .update({
+        payment_reminded_at: new Date().toISOString(),
+        ...(newSessionId ? { stripe_session_id: newSessionId } : {}),
+      })
       .eq("id", b.id);
 
     results.push({ id: b.id, tier, status: "sent" });

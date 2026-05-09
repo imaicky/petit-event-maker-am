@@ -166,6 +166,30 @@ export async function POST(request: NextRequest) {
         const eventId = session.metadata?.event_id;
         if (!bookingId || !eventId) break;
 
+        // Adversarial fix: 古いセッションの expire でも、その後 relink で
+        // 新セッションが作成された場合は誤って予約をキャンセルしてはならない。
+        // bookings.stripe_session_id が一致する場合 + payment_status が pending の場合のみ処理。
+        const { data: latest } = await admin
+          .from("bookings")
+          .select("stripe_session_id, payment_status")
+          .eq("id", bookingId)
+          .single();
+        const cur = latest as
+          | { stripe_session_id?: string | null; payment_status?: string }
+          | null;
+        if (cur?.payment_status === "paid") {
+          console.log(
+            `[Stripe Webhook] expired ignored — booking ${bookingId} already paid`
+          );
+          break;
+        }
+        if (cur?.stripe_session_id && cur.stripe_session_id !== session.id) {
+          console.log(
+            `[Stripe Webhook] expired ignored — booking ${bookingId} has newer session`
+          );
+          break;
+        }
+
         const { error } = await admin
           .from("bookings")
           .update({ payment_status: "failed", status: "cancelled" })

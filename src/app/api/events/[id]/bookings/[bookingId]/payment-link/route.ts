@@ -133,6 +133,7 @@ export async function POST(
   const cancelUrl = `${baseUrl}/events/${ev.id}?payment_cancelled=1`;
 
   let checkoutUrl: string;
+  let newSessionId: string | null = null;
   try {
     if (isConnect && settings?.stripe_account_id && settings.charges_enabled) {
       const feeJpy = calcApplicationFee(
@@ -158,6 +159,7 @@ export async function POST(
         idempotencyKey: `relink-${bookingId}-${Date.now()}`,
       });
       checkoutUrl = session.url ?? "";
+      newSessionId = session.id;
     } else {
       const stripe = await getStripeForCreator(ev.creator_id);
       if (!stripe) {
@@ -195,6 +197,7 @@ export async function POST(
         { idempotencyKey: `relink-${bookingId}-${Date.now()}` }
       );
       checkoutUrl = session.url ?? "";
+      newSessionId = session.id;
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : "checkout_failed";
@@ -210,11 +213,13 @@ export async function POST(
   }
 
   // booking 行に新セッションを反映
+  // (古いセッションのexpired webhookで誤キャンセルされないよう session_id を更新)
   await admin
     .from("bookings")
     .update({
       payment_status: "pending",
       payment_method: "stripe",
+      ...(newSessionId ? { stripe_session_id: newSessionId } : {}),
     })
     .eq("id", bookingId);
 
