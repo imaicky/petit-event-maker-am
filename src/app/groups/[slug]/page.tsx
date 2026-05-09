@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Users, Globe, MessageCircle } from "lucide-react";
 import { Header } from "@/components/header";
 import { EventCard } from "@/components/event-card";
+import { GroupFollowButton } from "@/components/group-follow-button";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -173,7 +174,7 @@ export default async function GroupDetailPage({
             </div>
 
             {!isOwner && user && (
-              <FollowToggle slug={slug} initialFollowing={isFollowing} />
+              <GroupFollowButton slug={slug} initialFollowing={isFollowing} />
             )}
             {!user && (
               <Link
@@ -314,31 +315,3 @@ export default async function GroupDetailPage({
   );
 }
 
-// クライアントコンポーネント
-function FollowToggle({
-  slug,
-  initialFollowing,
-}: {
-  slug: string;
-  initialFollowing: boolean;
-}) {
-  // SSRなので初期表示はインタラクティブでない静的UI
-  return (
-    <form
-      action={`/api/groups/${slug}/follow`}
-      method={initialFollowing ? "DELETE" : "POST"}
-      className="shrink-0"
-    >
-      <button
-        type="submit"
-        className={`rounded-full px-4 py-1.5 text-sm font-medium ${
-          initialFollowing
-            ? "border border-[#E5E5E5] bg-white text-[#666666] hover:bg-[#FAFAFA]"
-            : "bg-[#C26A4A] text-white hover:bg-[#A85535]"
-        }`}
-      >
-        {initialFollowing ? "フォロー中" : "フォローする"}
-      </button>
-    </form>
-  );
-}

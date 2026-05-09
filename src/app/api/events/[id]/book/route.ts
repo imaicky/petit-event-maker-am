@@ -245,7 +245,9 @@ export async function POST(
     }
 
     // 5. Insert booking (waitlisted if full)
-    const bookingStatus = isFull ? "waitlisted" : "confirmed";
+    let bookingStatus: "waitlisted" | "confirmed" = isFull
+      ? "waitlisted"
+      : "confirmed";
     const isPaid = chosenMethod === 'stripe';
     const isPendingBank = chosenMethod === 'bank' && bookingStatus === "confirmed";
     let paymentStatus: "pending" | "paid" | "none" | "refunded" | "failed" = "none";
@@ -280,6 +282,48 @@ export async function POST(
       return NextResponse.json({ error: "予約の登録に失敗しました" }, { status: 500 });
     }
     booking = inserted as BookingRow;
+
+    // ─── Adversarial defense: post-insert capacity verification ──
+    // 同時アクセスで定員を超えてしまった場合、後から確認して
+    // 必要なら waitlisted にデモートする。
+    // （根本対策には Postgres RPC + SELECT FOR UPDATE が望ましいが、
+    //   暫定対策として post-check で過剰登録を緩和する）
+    if (
+      bookingStatus === "confirmed" &&
+      ev.capacity !== null &&
+      typeof ev.capacity === "number"
+    ) {
+      const { count: postCount } = await admin
+        .from("bookings")
+        .select("*", { count: "exact", head: true })
+        .eq("event_id", eventId)
+        .eq("status", "confirmed");
+      if ((postCount ?? 0) > ev.capacity) {
+        // 自分の予約が確定しているか + 自分が最後発か（created_at ベース）を確認
+        // 簡易判定: post-count が定員を超えていたら最後の confirmed をwaitlistedに降格
+        const { data: latest } = await admin
+          .from("bookings")
+          .select("id, created_at")
+          .eq("event_id", eventId)
+          .eq("status", "confirmed")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (latest && (latest as { id: string }).id === booking.id) {
+          // この予約が最後発 → waitlisted に降格
+          await admin
+            .from("bookings")
+            .update({ status: "waitlisted" })
+            .eq("id", booking.id);
+          booking = { ...booking, status: "waitlisted" } as BookingRow;
+          bookingStatus = "waitlisted"; // notify 系の分岐に反映
+          console.warn(
+            "[book] race condition detected: demoted to waitlisted",
+            booking.id
+          );
+        }
+      }
+    }
 
     // Audit log: booking created (with payment expectations if any)
     if (chosenMethod) {
