@@ -7,7 +7,7 @@
 
 ---
 
-## 🐛 検出 → 修正したバグ一覧（全8件）
+## 🐛 検出 → 修正したバグ一覧（全9件）
 
 ### Severity: CRITICAL（即時影響あり）
 
@@ -60,6 +60,15 @@
 - **影響**: ユーザーがイベントタイトルに `{eventUrl}` と書くとリマインダーメールでタイトル位置にURLが入る等の偽装
 - **修正**: 単一パスの正規表現置換に変更
 - **commit**: `f57fa83`
+
+#### バグ9: Stripe再決済リンクの session_id 競合
+- **症状**: payment-link API と payment-reminders cron が新セッション作成しても booking.stripe_session_id を更新しない
+- **影響**: 古いセッションが期限切れになると webhook が予約を誤キャンセル → 新session支払い直前で消える可能性
+- **修正**: 
+  - 両エンドポイントで新session_id を booking に反映
+  - `checkout.session.expired` webhook は session_id 一致のみ処理
+  - すでに paid の場合は無視
+- **commit**: `8fbfefc`
 
 ### Severity: LOW（防御的改善）
 
