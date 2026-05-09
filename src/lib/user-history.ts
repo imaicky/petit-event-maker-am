@@ -37,7 +37,8 @@ export type CategoryStat = { name: string; count: number };
 export type AiLevel = "未参加" | "入門" | "初級" | "中級" | "上級";
 
 export function inferAiLevel(aiEventCount: number, distinctAiDomains: number): AiLevel {
-  if (aiEventCount === 0) return "未参加";
+  // Adversarial fix: 負値・NaN・Infinity を防御
+  if (!Number.isFinite(aiEventCount) || aiEventCount <= 0) return "未参加";
   if (aiEventCount <= 2) return "入門";
   if (aiEventCount <= 5) {
     return distinctAiDomains >= 3 ? "中級" : "初級";

@@ -43,7 +43,12 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
 ];
 
 /**
- * Replace template placeholders with actual values
+ * Replace template placeholders with actual values.
+ *
+ * Adversarial fix: 単一パスでの置換を使う。
+ * 連続 .replace チェーンだと「先に置換された値の中に別のプレースホルダーが含まれていた」
+ * 場合に二重置換され、ユーザー由来の値が他フィールドの値に化ける（XSS/spoofing）。
+ * 単一の正規表現マッチで決着させる。
  */
 export function fillTemplate(
   text: string,
@@ -54,11 +59,15 @@ export function fillTemplate(
     eventUrl: string;
   }
 ): string {
-  return text
-    .replace(/{eventTitle}/g, vars.eventTitle)
-    .replace(/{eventDate}/g, vars.eventDate)
-    .replace(/{eventLocation}/g, vars.eventLocation)
-    .replace(/{eventUrl}/g, vars.eventUrl);
+  const map: Record<string, string> = {
+    eventTitle: vars.eventTitle,
+    eventDate: vars.eventDate,
+    eventLocation: vars.eventLocation,
+    eventUrl: vars.eventUrl,
+  };
+  return text.replace(/\{(eventTitle|eventDate|eventLocation|eventUrl)\}/g, (_, key: string) =>
+    map[key] ?? `{${key}}`
+  );
 }
 
 /**
