@@ -136,10 +136,10 @@ export function Footer() {
             </h3>
             <ul className="flex flex-col gap-2.5">
               {[
-                { href: "/terms", label: "利用規約" },
-                { href: "/privacy", label: "プライバシーポリシー" },
-                { href: "/contact", label: "お問い合わせ" },
-                { href: "/faq", label: "よくある質問" },
+                { href: "/legal/terms", label: "利用規約" },
+                { href: "/legal/privacy", label: "プライバシーポリシー" },
+                { href: "/legal/specified-commercial", label: "特定商取引法に基づく表記" },
+                { href: "/help", label: "よくある質問" },
               ].map(({ href, label }) => (
                 <li key={href}>
                   <Link
