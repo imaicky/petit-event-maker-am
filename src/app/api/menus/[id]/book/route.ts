@@ -137,6 +137,40 @@ export async function POST(
       return NextResponse.json({ error: "申し込みの登録に失敗しました" }, { status: 500 });
     }
 
+    // Adversarial fix: post-insert capacity verification (TOCTOU race防御)
+    if (menu.capacity !== null && typeof menu.capacity === "number") {
+      const { count: postCount } = await admin
+        .from("menu_bookings")
+        .select("*", { count: "exact", head: true })
+        .eq("menu_id", menuId)
+        .eq("status", "confirmed");
+      if ((postCount ?? 0) > menu.capacity) {
+        const { data: latest } = await admin
+          .from("menu_bookings")
+          .select("id, created_at")
+          .eq("menu_id", menuId)
+          .eq("status", "confirmed")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (latest && (latest as { id: string }).id === booking.id) {
+          // 自分が最後発 → cancelled に降格（メニューには waitlist 概念がない）
+          await admin
+            .from("menu_bookings")
+            .update({ status: "cancelled" })
+            .eq("id", booking.id);
+          console.warn(
+            "[menus/book] race condition: demoted to cancelled",
+            booking.id
+          );
+          return NextResponse.json(
+            { error: "メニューが満員になりました（同時アクセスにより登録できませんでした）" },
+            { status: 409 }
+          );
+        }
+      }
+    }
+
     // Send confirmation email (async, non-blocking)
     const priceStr = menu.price === 0 ? "無料" : `¥${menu.price.toLocaleString("ja-JP")}`;
     const guestSubject = `【申し込み完了】${menu.title}`;
