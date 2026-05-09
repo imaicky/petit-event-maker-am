@@ -10,6 +10,77 @@ function fromTable(name: string) {
   return (admin.from as unknown as AdminFromAny)(name);
 }
 
+// ─── 純粋関数: 提案を計算（テスト可能） ──────────────────────
+const LEVEL_LABEL: Record<string, string> = {
+  未参加: "AI入門者向け",
+  入門: "入門者向け",
+  初級: "初級者向け",
+  中級: "中級者向け",
+  上級: "上級者・エキスパート向け",
+};
+
+export function dominantLevelFromDistribution(
+  distribution: Record<string, number>
+): string {
+  const levels = Object.entries(distribution).filter(([, n]) => n > 0);
+  if (levels.length === 0) return "初級";
+  levels.sort(([, a], [, b]) => b - a);
+  return levels[0][0];
+}
+
+export function buildSuggestionsFromAudience(args: {
+  audienceCategories: Array<{ name: string; count: number }>;
+  participantCount: number;
+  aiLevelDistribution: Record<string, number>;
+  ownCategoryNames: Set<string>;
+  aiCategoryNames: Set<string>; // AI 系カテゴリ名（AI_CATEGORY_SLUGS 経由で渡す）
+}): Suggestion[] {
+  const dominantLevel = dominantLevelFromDistribution(args.aiLevelDistribution);
+  const levelLabel = LEVEL_LABEL[dominantLevel] ?? "初級者向け";
+
+  const candidates = args.audienceCategories
+    .filter((c) => !args.ownCategoryNames.has(c.name))
+    .slice(0, 3);
+
+  const suggestions: Suggestion[] = candidates.map((c) => {
+    const matchPct =
+      args.participantCount > 0 ? c.count / args.participantCount : 0;
+    const isAi = args.aiCategoryNames.has(c.name);
+    const baseTitle = isAi
+      ? `${c.name} ${levelLabel} ハンズオン`
+      : `${c.name} ${levelLabel} ワークショップ`;
+    return {
+      title: baseTitle,
+      rationale: `参加者の${Math.round(matchPct * 100)}%が「${c.name}」の他イベントに参加しています。AIレベルは「${dominantLevel}」が最多で、ニーズに合致する可能性が高いカテゴリです。`,
+      category_name: c.name,
+      audience_match: Math.round(matchPct * 100) / 100,
+    };
+  });
+
+  if (suggestions.length < 3) {
+    const fallbacks: Suggestion[] = [
+      {
+        title: `フォロワー限定の少人数AI座談会（${levelLabel}）`,
+        rationale: `参加者にはリピーター層が含まれます。少人数の座談会で関係を深めると、継続参加・有料化に繋がりやすい傾向があります。`,
+        category_name: "AIコミュニティ・座談会",
+        audience_match: 0.5,
+      },
+      {
+        title: `参加者の質問にその場で答えるAI実践会`,
+        rationale: `アンケート/Q&A形式は満足度が高く、参加者プロファイルの精度向上にも寄与します。`,
+        category_name: null,
+        audience_match: 0.4,
+      },
+    ];
+    for (const f of fallbacks) {
+      if (suggestions.length >= 3) break;
+      suggestions.push(f);
+    }
+  }
+
+  return suggestions.slice(0, 3);
+}
+
 export type Suggestion = {
   title: string;
   rationale: string;

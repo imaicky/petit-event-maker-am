@@ -10,15 +10,101 @@ function fromTable(name: string) {
 }
 
 // ─── スコア重み（チューニング可能） ────────────────────────────
-const WEIGHTS = {
+export const FEED_WEIGHTS = {
   tagMatch: 0.4, // 興味タグ一致
   followBoost: 0.25, // フォロー中の主催者
   recency: 0.15, // 開催日が近い
   popularity: 0.15, // 予約数 / 定員
   novelty: 0.05, // 未閲覧ボーナス
+} as const;
+
+// 後方互換用エイリアス（既存コードはWEIGHTSを参照）
+const WEIGHTS = FEED_WEIGHTS;
+
+export const MAX_FEED_SIZE = 24;
+
+// ─── 純粋関数: 単一イベントのスコア計算（テスト可能）─────────
+export type ScoringContext = {
+  interestTagIds: Set<number>;
+  followingOrgIds: Set<string>;
+  viewedEventIds: Set<string>;
+  attendedCategoryIds: Set<number>;
+  isLoggedIn: boolean;
+  now: number;
 };
 
-const MAX_FEED_SIZE = 24;
+export type ScoringEvent = {
+  id: string;
+  datetime: string;
+  capacity: number | null;
+  is_limited: boolean;
+  creator_id: string | null;
+  category_id: number | null;
+  tagIds: number[];
+  bookingCount: number;
+};
+
+export function calculateEventScore(
+  event: ScoringEvent,
+  ctx: ScoringContext
+): { score: number; reasons: string[] } {
+  const reasons: string[] = [];
+  let score = 0;
+
+  // 1. タグマッチ
+  let tagMatch = 0;
+  if (ctx.interestTagIds.size > 0) {
+    const hits = event.tagIds.filter((t) => ctx.interestTagIds.has(t)).length;
+    if (hits > 0) {
+      tagMatch = Math.min(1, hits / 3);
+      reasons.push(`興味タグ${hits}件マッチ`);
+    }
+  }
+  if (
+    tagMatch === 0 &&
+    event.category_id != null &&
+    ctx.attendedCategoryIds.has(event.category_id)
+  ) {
+    tagMatch = 0.6;
+    reasons.push("過去参加カテゴリ");
+  }
+  score += FEED_WEIGHTS.tagMatch * tagMatch;
+
+  // 2. フォローブースト
+  if (event.creator_id && ctx.followingOrgIds.has(event.creator_id)) {
+    score += FEED_WEIGHTS.followBoost;
+    reasons.push("フォロー中の主催者");
+  }
+
+  // 3. 開催日近接
+  const daysAhead =
+    (new Date(event.datetime).getTime() - ctx.now) / (24 * 60 * 60 * 1000);
+  if (daysAhead >= 0) {
+    const recencyScore = Math.max(0, 1 - daysAhead / 30);
+    score += FEED_WEIGHTS.recency * recencyScore;
+  }
+
+  // 4. 人気度
+  const cap = event.capacity ?? 0;
+  if (cap > 0) {
+    const fill = event.bookingCount / cap;
+    const popScore = fill < 0.9 ? fill : 1 - (fill - 0.9) * 5;
+    score += FEED_WEIGHTS.popularity * Math.max(0, popScore);
+    if (fill >= 0.7 && fill < 0.9) reasons.push("人気上昇中");
+  }
+
+  // 5. 未閲覧ボーナス
+  if (ctx.isLoggedIn && !ctx.viewedEventIds.has(event.id)) {
+    score += FEED_WEIGHTS.novelty;
+  }
+
+  // 6. 限定公開イベントはタグマッチが弱いと除外
+  if (event.is_limited && tagMatch < 0.3) {
+    score = 0;
+  }
+
+  return { score, reasons };
+}
 
 export type FeedEvent = {
   id: string;
