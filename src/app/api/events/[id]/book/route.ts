@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { broadcastLineMessage, pushLineMessage, pushFlexMessage, buildBookingNotifyText, buildBookingConfirmationFlex, buildWaitlistNotifyText, buildWaitlistConfirmationFlex } from "@/lib/line";
+import { broadcastLineMessage, pushLineMessage, pushFlexMessage, multicastLineMessage, buildBookingNotifyText, buildBookingConfirmationFlex, buildWaitlistNotifyText, buildWaitlistConfirmationFlex } from "@/lib/line";
 import { sendBatchEmails } from "@/lib/email";
 import { wrapInHtml } from "@/lib/email-templates";
 import { logPaymentEvent } from "@/lib/payment-audit";
@@ -310,6 +310,7 @@ export async function POST(
       is_active: boolean;
       notify_on_booking: boolean;
       owner_line_user_id: string | null;
+      notify_line_user_ids: string[] | null;
       bot_basic_id: string | null;
     };
     let lineAccount: LineAccountRow | null = null;
@@ -317,7 +318,7 @@ export async function POST(
       const adminForLine = createAdminClient();
       const { data: la } = await adminForLine
         .from("line_accounts")
-        .select("id, channel_access_token, is_active, notify_on_booking, owner_line_user_id, bot_basic_id")
+        .select("id, channel_access_token, is_active, notify_on_booking, owner_line_user_id, notify_line_user_ids, bot_basic_id")
         .eq("user_id", event.creator_id)
         .maybeSingle();
       lineAccount = la as LineAccountRow | null;
@@ -531,10 +532,25 @@ ${lineSection}
                   wlCount ?? 1
                 );
 
-                if (lineAccount.owner_line_user_id) {
+                // Notify ALL registered admin LINE user IDs (multicast),
+                // falling back to owner if the array is empty.
+                const recipients = (
+                  lineAccount.notify_line_user_ids?.length
+                    ? lineAccount.notify_line_user_ids
+                    : lineAccount.owner_line_user_id
+                    ? [lineAccount.owner_line_user_id]
+                    : []
+                );
+                if (recipients.length === 1) {
                   await pushLineMessage(
                     lineAccount.channel_access_token,
-                    lineAccount.owner_line_user_id,
+                    recipients[0],
+                    message
+                  );
+                } else if (recipients.length > 1) {
+                  await multicastLineMessage(
+                    lineAccount.channel_access_token,
+                    recipients,
                     message
                   );
                 }
@@ -552,10 +568,23 @@ ${lineSection}
                   event.capacity
                 );
 
-                if (lineAccount.owner_line_user_id) {
+                const recipients = (
+                  lineAccount.notify_line_user_ids?.length
+                    ? lineAccount.notify_line_user_ids
+                    : lineAccount.owner_line_user_id
+                    ? [lineAccount.owner_line_user_id]
+                    : []
+                );
+                if (recipients.length === 1) {
                   await pushLineMessage(
                     lineAccount.channel_access_token,
-                    lineAccount.owner_line_user_id,
+                    recipients[0],
+                    message
+                  );
+                } else if (recipients.length > 1) {
+                  await multicastLineMessage(
+                    lineAccount.channel_access_token,
+                    recipients,
                     message
                   );
                 }

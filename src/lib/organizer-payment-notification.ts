@@ -7,7 +7,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendBatchEmails } from "@/lib/email";
 import { wrapInHtml } from "@/lib/email-templates";
-import { pushLineMessage } from "@/lib/line";
+import { pushLineMessage, multicastLineMessage } from "@/lib/line";
 
 interface NotifyArgs {
   bookingId: string;
@@ -111,27 +111,42 @@ export async function notifyOrganizerPayment({ bookingId, source, amount }: Noti
       try {
         const { data: la } = await admin
           .from("line_accounts")
-          .select("channel_access_token, owner_line_user_id, is_active, notify_on_booking")
+          .select("channel_access_token, owner_line_user_id, notify_line_user_ids, is_active, notify_on_booking")
           .eq("user_id", event.creator_id)
           .maybeSingle();
         const lineAccount = la as {
           channel_access_token: string | null;
           owner_line_user_id: string | null;
+          notify_line_user_ids: string[] | null;
           is_active: boolean;
           notify_on_booking: boolean;
         } | null;
         if (
           lineAccount?.is_active &&
           lineAccount.notify_on_booking &&
-          lineAccount.channel_access_token &&
-          lineAccount.owner_line_user_id
+          lineAccount.channel_access_token
         ) {
           const text = `💴 ${meta.verb}\n${event.title}\n${booking.guest_name}様\n金額：${priceStr}（${meta.label}）`;
-          await pushLineMessage(
-            lineAccount.channel_access_token,
-            lineAccount.owner_line_user_id,
-            text
+          const recipients = (
+            lineAccount.notify_line_user_ids?.length
+              ? lineAccount.notify_line_user_ids
+              : lineAccount.owner_line_user_id
+              ? [lineAccount.owner_line_user_id]
+              : []
           );
+          if (recipients.length === 1) {
+            await pushLineMessage(
+              lineAccount.channel_access_token,
+              recipients[0],
+              text
+            );
+          } else if (recipients.length > 1) {
+            await multicastLineMessage(
+              lineAccount.channel_access_token,
+              recipients,
+              text
+            );
+          }
         }
       } catch (err) {
         console.error("[organizer-notify] LINE push:", err);

@@ -1,6 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { verifyLineSignature, getLineUserProfile } from "@/lib/line";
+import { verifyLineSignature, getLineUserProfile, pushLineMessage } from "@/lib/line";
+
+const NOTIFY_ON_TRIGGERS = [
+  "通知ON",
+  "通知オン",
+  "通知開始",
+  "通知をオン",
+  "通知を有効",
+  "notify on",
+  "/notify on",
+];
+const NOTIFY_OFF_TRIGGERS = [
+  "通知OFF",
+  "通知オフ",
+  "通知停止",
+  "通知をオフ",
+  "通知を無効",
+  "notify off",
+  "/notify off",
+];
+
+function matchesTrigger(text: string, triggers: string[]): boolean {
+  const norm = text.trim().toLowerCase();
+  return triggers.some((t) => norm === t.toLowerCase());
+}
 
 type LineEvent = {
   type: string;
@@ -50,7 +74,7 @@ export async function POST(request: NextRequest) {
     const admin = createAdminClient();
     const { data: lineAccount, error: laErr } = await admin
       .from("line_accounts")
-      .select("id, channel_access_token, channel_secret")
+      .select("id, channel_access_token, channel_secret, notify_line_user_ids")
       .eq("bot_user_id", destination)
       .maybeSingle();
 
@@ -133,6 +157,55 @@ export async function POST(request: NextRequest) {
           content,
           line_message_id: msg.id,
         });
+
+        // Notification opt-in/out commands (multi-admin support)
+        if (msg.type === "text" && msg.text && lineAccount.channel_access_token) {
+          const text = msg.text;
+          const currentIds: string[] = (
+            (lineAccount as { notify_line_user_ids?: string[] | null })
+              .notify_line_user_ids ?? []
+          );
+
+          if (matchesTrigger(text, NOTIFY_ON_TRIGGERS)) {
+            if (!currentIds.includes(userId)) {
+              const next = [...currentIds, userId];
+              await admin
+                .from("line_accounts")
+                .update({ notify_line_user_ids: next })
+                .eq("id", lineAccount.id);
+              await pushLineMessage(
+                lineAccount.channel_access_token,
+                userId,
+                "✅ 通知を有効化しました\n\n以後、新規予約や決済完了などの主催者通知がこのアカウントに届きます。\n\n停止するには「通知OFF」と送信してください。"
+              ).catch(() => {});
+            } else {
+              await pushLineMessage(
+                lineAccount.channel_access_token,
+                userId,
+                "ℹ️ すでに通知が有効です。"
+              ).catch(() => {});
+            }
+          } else if (matchesTrigger(text, NOTIFY_OFF_TRIGGERS)) {
+            if (currentIds.includes(userId)) {
+              const next = currentIds.filter((id) => id !== userId);
+              await admin
+                .from("line_accounts")
+                .update({ notify_line_user_ids: next })
+                .eq("id", lineAccount.id);
+              await pushLineMessage(
+                lineAccount.channel_access_token,
+                userId,
+                "🔕 通知を停止しました\n\n再度有効にするには「通知ON」と送信してください。"
+              ).catch(() => {});
+            } else {
+              await pushLineMessage(
+                lineAccount.channel_access_token,
+                userId,
+                "ℹ️ 通知は元から無効です。"
+              ).catch(() => {});
+            }
+          }
+        }
       }
     }
 

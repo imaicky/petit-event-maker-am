@@ -765,6 +765,22 @@ export default function LineSettingsPage() {
                       onCheckedChange={handleToggleBookingNotify}
                     />
                   </div>
+
+                  {/* Multi-admin notification opt-in instruction */}
+                  <div className="rounded-xl bg-[#FFF9F5] border border-[#E5DFD5] p-4">
+                    <p className="text-sm font-medium text-[#1A1A1A] mb-2">
+                      🧑‍🤝‍🧑 他の管理者も通知を受け取れます
+                    </p>
+                    <p className="text-xs text-[#666666] leading-relaxed mb-2">
+                      LINE公式アカウントの管理者が複数いる場合、各自の個人LINEから公式アカウントに「<span className="font-bold text-[#1A1A1A]">通知ON</span>」とメッセージを送ると通知先に追加されます。
+                    </p>
+                    <p className="text-xs text-[#666666] leading-relaxed">
+                      停止するには「<span className="font-bold text-[#1A1A1A]">通知OFF</span>」と送信してください。
+                    </p>
+                    <p className="text-[10px] text-[#999999] mt-2">
+                      ※ 事前に各管理者が公式アカウントを「友だち追加」している必要があります
+                    </p>
+                  </div>
                 </div>
               </SectionCard>
 

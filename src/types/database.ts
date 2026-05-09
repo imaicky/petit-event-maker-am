@@ -314,6 +314,7 @@ export type Database = {
           bot_user_id: string | null
           bot_basic_id: string | null
           owner_line_user_id: string | null
+          notify_line_user_ids: string[]
           is_active: boolean
           notify_on_booking: boolean
           created_at: string
@@ -328,6 +329,7 @@ export type Database = {
           bot_user_id?: string | null
           bot_basic_id?: string | null
           owner_line_user_id?: string | null
+          notify_line_user_ids?: string[]
           is_active?: boolean
           notify_on_booking?: boolean
           created_at?: string
@@ -342,6 +344,7 @@ export type Database = {
           bot_user_id?: string | null
           bot_basic_id?: string | null
           owner_line_user_id?: string | null
+          notify_line_user_ids?: string[]
           is_active?: boolean
           notify_on_booking?: boolean
           created_at?: string
