@@ -336,6 +336,48 @@ export default function AttendeesPage() {
     );
   }
 
+  async function sendPaymentLink(bookingId: string, name: string) {
+    if (!confirm(`${name}様 に決済リンクをメール送信しますか？`)) return;
+    try {
+      const res = await fetch(
+        `/api/events/${eventId}/bookings/${bookingId}/payment-link`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sendEmail: true }),
+        }
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(`送信に失敗しました: ${j.error ?? "unknown"}`);
+        return;
+      }
+      alert(
+        j.emailed
+          ? `✅ 決済リンクをメール送信しました`
+          : `決済URLを生成しました（メール送信は無効）\n\n${j.url ?? ""}`
+      );
+    } catch {
+      alert("ネットワークエラー");
+    }
+  }
+
+  function SendPaymentLinkButton({ booking }: { booking: Booking }) {
+    if (!isPaidEvent) return null;
+    if (booking.payment_status === "paid") return null;
+    if (booking.status === "cancelled") return null;
+    return (
+      <button
+        type="button"
+        onClick={() => sendPaymentLink(booking.id, booking.guest_name)}
+        className="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors"
+        title="参加者に再決済リンクをメール送信"
+      >
+        💳 決済リンク送信
+      </button>
+    );
+  }
+
   function PaymentBadge({ status }: { status: string | null | undefined }) {
     if (!isPaidEvent) return null;
     switch (status) {
@@ -583,6 +625,7 @@ export default function AttendeesPage() {
                       </span>
                       <PaymentBadge status={booking.payment_status} />
                       <ConfirmPaymentButton booking={booking} />
+                      <SendPaymentLinkButton booking={booking} />
                     </div>
                     <span className="flex items-center gap-1 text-xs text-[#999999]">
                       <Clock className="h-3 w-3" />
