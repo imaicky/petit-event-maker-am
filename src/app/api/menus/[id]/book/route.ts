@@ -13,11 +13,14 @@ const baseBookingSchema = z.object({
   guest_name: z
     .string()
     .min(1, "お名前を入力してください")
-    .max(50, "お名前は50文字以内で入力してください"),
+    .max(50, "お名前は50文字以内で入力してください")
+    .transform((s) => s.trim()),
+  // Adversarial fix: 重複チェックの大文字小文字バイパス防止
   guest_email: z
     .string()
     .min(1, "メールアドレスを入力してください")
-    .email("有効なメールアドレスを入力してください"),
+    .email("有効なメールアドレスを入力してください")
+    .transform((s) => s.trim().toLowerCase()),
   guest_phone: z
     .string()
     .regex(/^[\d\-\(\)\+\s]+$/, "有効な電話番号を入力してください")

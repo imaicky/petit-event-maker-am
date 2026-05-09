@@ -68,8 +68,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ext = file.name.split(".").pop() ?? "jpg";
-    const filePath = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    // Adversarial fix: 拡張子はクライアント由来ではなく contentType から導出（信頼境界）
+    // また Math.random は弱いので crypto.randomUUID を使用
+    const extByType: Record<string, string> = {
+      "image/jpeg": "jpg",
+      "image/png": "png",
+      "image/webp": "webp",
+      "image/gif": "gif",
+    };
+    const ext = extByType[file.type] ?? "bin";
+    const randomToken = (typeof crypto !== "undefined" && "randomUUID" in crypto)
+      ? crypto.randomUUID().replace(/-/g, "").slice(0, 12)
+      : Math.random().toString(36).slice(2, 14);
+    const filePath = `${user.id}/${Date.now()}-${randomToken}.${ext}`;
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = new Uint8Array(arrayBuffer);
