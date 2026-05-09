@@ -237,6 +237,124 @@ export async function getUserHistory(userId: string): Promise<UserHistory> {
   };
 }
 
+// ─── 純粋関数: イベント配列を受けて履歴を集計（テスト可能） ──
+const RECENT_LIMIT_PURE = 6;
+const TOP_LIMIT_PURE = 8;
+
+export type AggregateInput = {
+  events: Array<{
+    id: string;
+    title: string;
+    datetime: string;
+    category: string | null;
+    category_id: number | null;
+  }>;
+  categoriesMaster: Array<{ id: number; slug: string; name: string }>;
+  topicTagAssignments: Array<{ event_id: string; tag_id: number }>;
+  topicTags: Array<{ id: number; name: string; tag_type: string }>;
+};
+
+export function aggregateUserHistory(
+  input: AggregateInput
+): {
+  total_events: number;
+  total_categories: number;
+  by_category: CategoryStat[];
+  by_tag_topic: CategoryStat[];
+  ai_event_count: number;
+  ai_distinct_domains: number;
+  ai_level: AiLevel;
+  recommended_next: CategoryStat[];
+  recent_events: Array<{
+    id: string;
+    title: string;
+    datetime: string;
+    category: string | null;
+  }>;
+} {
+  const catById = new Map<number, { slug: string; name: string }>();
+  for (const c of input.categoriesMaster) {
+    catById.set(c.id, { slug: c.slug, name: c.name });
+  }
+
+  const byCategoryMap: Record<string, number> = {};
+  const aiDomainSet = new Set<string>();
+  let aiEventCount = 0;
+
+  for (const ev of input.events) {
+    let label: string | null = null;
+    let aiSlug: string | null = null;
+
+    if (ev.category_id != null && catById.has(ev.category_id)) {
+      const c = catById.get(ev.category_id)!;
+      label = c.name;
+      if (AI_CATEGORY_SLUGS.has(c.slug)) aiSlug = c.slug;
+    } else if (ev.category) {
+      label = ev.category;
+      if (isAiLegacy(ev.category)) aiSlug = `legacy:${ev.category}`;
+    } else {
+      label = "未分類";
+    }
+
+    if (label) byCategoryMap[label] = (byCategoryMap[label] ?? 0) + 1;
+    if (aiSlug) {
+      aiEventCount += 1;
+      aiDomainSet.add(aiSlug);
+    }
+  }
+
+  const by_category = Object.entries(byCategoryMap)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, TOP_LIMIT_PURE);
+
+  // トピックタグ集計
+  const tagById = new Map(input.topicTags.map((t) => [t.id, t]));
+  const tagCount: Record<string, number> = {};
+  for (const a of input.topicTagAssignments) {
+    const t = tagById.get(a.tag_id);
+    if (!t || t.tag_type !== "topic") continue;
+    tagCount[t.name] = (tagCount[t.name] ?? 0) + 1;
+  }
+  const by_tag_topic = Object.entries(tagCount)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, TOP_LIMIT_PURE);
+
+  // レコメンド: 未経験のAI領域
+  const recommended_next = input.categoriesMaster
+    .filter((c) => AI_CATEGORY_SLUGS.has(c.slug))
+    .filter((c) => !aiDomainSet.has(c.slug))
+    .slice(0, 4)
+    .map((c) => ({ name: c.name, count: 0 }));
+
+  // 最近のイベント
+  const recent_events = [...input.events]
+    .sort((a, b) => (a.datetime < b.datetime ? 1 : -1))
+    .slice(0, RECENT_LIMIT_PURE)
+    .map((e) => ({
+      id: e.id,
+      title: e.title,
+      datetime: e.datetime,
+      category:
+        e.category_id != null && catById.has(e.category_id)
+          ? catById.get(e.category_id)!.name
+          : e.category,
+    }));
+
+  return {
+    total_events: input.events.length,
+    total_categories: by_category.length,
+    by_category,
+    by_tag_topic,
+    ai_event_count: aiEventCount,
+    ai_distinct_domains: aiDomainSet.size,
+    ai_level: inferAiLevel(aiEventCount, aiDomainSet.size),
+    recommended_next,
+    recent_events,
+  };
+}
+
 // ─── 主催者向け: 自イベント参加者の他カテゴリ嗜好 ──────────────────
 export type AudienceInsights = {
   participant_count: number;

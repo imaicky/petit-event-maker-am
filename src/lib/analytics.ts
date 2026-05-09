@@ -88,6 +88,65 @@ export function shortenReferrer(ref: string | null | undefined): string | null {
   }
 }
 
+// ─── 純粋関数: views配列からインサイトを集計（テスト可能） ────
+export type RawView = {
+  user_id: string | null;
+  anon_id: string | null;
+  referrer: string | null;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  viewed_at: string;
+};
+
+export function aggregateViews(
+  views: RawView[],
+  bookings: Array<{ status: string }>
+): EventInsights {
+  // ユニーク（user_id優先、なければanon_id、両方nullなら個別カウント）
+  const unique = new Set<string>();
+  let anonymousNoIdCount = 0;
+  for (const v of views) {
+    const key = v.user_id ?? v.anon_id;
+    if (key) {
+      unique.add(key);
+    } else {
+      anonymousNoIdCount++;
+    }
+  }
+  const uniqueSize = unique.size + anonymousNoIdCount;
+
+  // 日別集計
+  const dayMap: Record<string, number> = {};
+  for (const v of views) {
+    const day = v.viewed_at.slice(0, 10);
+    dayMap[day] = (dayMap[day] ?? 0) + 1;
+  }
+  const views_by_day = Object.entries(dayMap)
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([date, count]) => ({ date, count }));
+
+  // Booking 集計
+  const confirmed = bookings.filter((b) => b.status === "confirmed").length;
+  const waitlisted = bookings.filter((b) => b.status === "waitlisted").length;
+  const cancelled = bookings.filter((b) => b.status === "cancelled").length;
+
+  return {
+    total_views: views.length,
+    unique_views: uniqueSize,
+    bookings_confirmed: confirmed,
+    bookings_waitlisted: waitlisted,
+    bookings_cancelled: cancelled,
+    conversion_rate:
+      uniqueSize > 0
+        ? Math.round((confirmed / uniqueSize) * 1000) / 10
+        : 0,
+    views_by_day,
+    top_referrers: bucket(views.map((v) => shortenReferrer(v.referrer))),
+    top_utm_sources: bucket(views.map((v) => v.utm_source)),
+  };
+}
+
 export async function getEventInsights(
   eventId: string,
   options?: { daysBack?: number }
