@@ -7,7 +7,7 @@
 
 ---
 
-## 🐛 検出 → 修正したバグ一覧（全9件）
+## 🐛 検出 → 修正したバグ一覧（全11件）
 
 ### Severity: CRITICAL（即時影響あり）
 
@@ -70,6 +70,18 @@
   - すでに paid の場合は無視
 - **commit**: `8fbfefc`
 
+#### バグ10: 予約のメール重複チェックが大文字小文字を区別
+- **症状**: `JOHN@example.com` と `john@example.com` を別人扱い
+- **影響**: 同イベントに二重予約可能（席を圧迫＋主催者混乱）
+- **修正**: zod schema で `.transform((s) => s.trim().toLowerCase())` を追加（events と menus 両方）
+- **commit**: `39fa149`
+
+#### バグ11: 画像アップロードでクライアント由来拡張子を使用
+- **症状**: `file.name.split(".").pop()` でユーザー由来の拡張子を使用
+- **影響**: `.svg` や `.html` 等で保存される可能性。コンテンツタイプは検証済みなので致命傷ではないが poor hygiene
+- **修正**: `contentType` から拡張子を導出（jpg/png/webp/gif のみ）。副次的に `Math.random` → `crypto.randomUUID`
+- **commit**: `39fa149`
+
 ### Severity: LOW（防御的改善）
 
 #### バグ1: `inferAiLevel` の不正入力ガード不在
@@ -95,6 +107,15 @@
 | `/api/events/[id]/resend` | ✅ enumeration 防御 (常に generic success) |
 
 ---
+
+## 🤔 修正せず記録した既知の制限事項
+
+| 領域 | 制限内容 | 推奨対応 |
+|---|---|---|
+| 予約 race condition | post-check は完全防御ではない（< 100ms 内の3+並列で漏れる可能性） | Postgres RPC + SELECT FOR UPDATE、または unique partial index で根本対処 |
+| Rate limiting | 全エンドポイントで未実装（予約スパム可能） | Vercel Edge Config or Upstash Redis を導入 |
+| Reviews 投稿 | 認証不要・参加実績不問（design choice） | 「参加者のみレビュー可」のフラグを追加検討 |
+| Stripe Connect Direct Charge | 接続アカウント側 webhook が必要 | Stripe Dashboard で Connect webhook URL を登録 |
 
 ## ⚠️ 別途対応が必要な既知の重大課題
 
