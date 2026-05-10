@@ -106,6 +106,7 @@ export default function LineSettingsPage() {
   // Followers
   const [followers, setFollowers] = useState<Follower[]>([]);
   const [ownerLineUserId, setOwnerLineUserId] = useState<string | null>(null);
+  const [botBasicId, setBotBasicId] = useState<string | null>(null);
   const [followersLoading, setFollowersLoading] = useState(false);
   const [settingOwner, setSettingOwner] = useState<string | null>(null);
   const [editingTags, setEditingTags] = useState<string | null>(null);
@@ -172,6 +173,7 @@ export default function LineSettingsPage() {
         const json = await res.json();
         setFollowers(json.followers ?? []);
         setOwnerLineUserId(json.owner_line_user_id ?? null);
+        setBotBasicId(json.bot_basic_id ?? null);
       }
     } catch {
       // ignore
@@ -563,6 +565,93 @@ export default function LineSettingsPage() {
                 </div>
                 </div>
               </section>
+
+              {/* Onboarding banner: prompt the owner to friend-add themselves */}
+              {!ownerLineUserId && (
+                <section className="rounded-2xl border-2 border-amber-200 bg-amber-50/60 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-amber-200/60 bg-amber-100/40">
+                    <div className="flex items-center gap-2">
+                      <Bell className="h-4 w-4 text-amber-700" />
+                      <h2 className="text-xs font-bold uppercase tracking-wider text-amber-800">
+                        通知を受け取る設定（必須）
+                      </h2>
+                    </div>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    <div className="space-y-2">
+                      <p className="text-sm font-semibold text-[#1A1A1A]">
+                        まずあなた自身が公式アカウントを友だち追加してください
+                      </p>
+                      <p className="text-xs text-[#666666] leading-relaxed">
+                        LINEの仕様上、公式アカウント自体には通知を表示できません。
+                        予約通知を受け取るには、<span className="font-medium text-[#1A1A1A]">あなた個人のLINE</span>で
+                        この公式アカウントを友だち追加し、通知先として登録する必要があります。
+                      </p>
+                    </div>
+
+                    <ol className="space-y-3 text-sm text-[#333333]">
+                      <li className="flex gap-3">
+                        <span className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-amber-200 text-xs font-bold text-amber-900">
+                          1
+                        </span>
+                        <div className="flex-1 space-y-2">
+                          <p>
+                            スマホのLINEで「<span className="font-medium">{lineAccount.channel_name || "公式アカウント"}</span>」を友だち追加
+                          </p>
+                          {botBasicId ? (
+                            <a
+                              href={`https://line.me/R/ti/p/${botBasicId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 rounded-full bg-[#06C755] px-4 py-1.5 text-xs font-medium text-white hover:bg-[#05B048] transition-colors"
+                            >
+                              <MessageSquare className="h-3.5 w-3.5" />
+                              友だち追加リンクを開く
+                            </a>
+                          ) : (
+                            <p className="text-xs text-[#999999]">
+                              ※ Bot Basic IDが取得できていません。LINE Developersコンソールで Bot 設定を確認してください
+                            </p>
+                          )}
+                        </div>
+                      </li>
+                      <li className="flex gap-3">
+                        <span className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-amber-200 text-xs font-bold text-amber-900">
+                          2
+                        </span>
+                        <div className="flex-1 space-y-1">
+                          <p>
+                            友だち追加すると、下の<span className="font-medium">「フォロワー一覧」</span>にあなたが表示されます
+                          </p>
+                          <p className="text-xs text-[#666666]">
+                            ※ 表示されない場合は、Webhook URLが LINE Developers コンソールに正しく設定されているか確認してください
+                          </p>
+                        </div>
+                      </li>
+                      <li className="flex gap-3">
+                        <span className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-amber-200 text-xs font-bold text-amber-900">
+                          3
+                        </span>
+                        <div className="flex-1 space-y-1">
+                          <p>
+                            自分の名前の横にある<span className="font-medium">「通知先に設定」</span>ボタンをタップ
+                          </p>
+                          <p className="text-xs text-[#666666]">
+                            これで予約が入った時にあなたのLINEに直接通知が届くようになります
+                          </p>
+                        </div>
+                      </li>
+                    </ol>
+
+                    <div className="flex items-start gap-2 rounded-xl bg-white/70 border border-amber-200/60 px-3 py-2.5">
+                      <Sparkles className="h-3.5 w-3.5 text-amber-700 mt-0.5 shrink-0" />
+                      <p className="text-xs text-[#666666] leading-relaxed">
+                        複数の管理者で通知を共有したい場合は、各管理者がそれぞれ友だち追加し、トーク画面で「<span className="font-medium text-[#1A1A1A]">通知ON</span>」と送信してください。
+                      </p>
+                    </div>
+                  </div>
+                </section>
+              )}
 
               {/* Webhook URL */}
               <SectionCard title="Webhook URL">

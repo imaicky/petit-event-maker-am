@@ -31,12 +31,12 @@ export async function GET(request: NextRequest) {
     // Get the target user's line_account
     const { data: lineAccount } = await admin
       .from("line_accounts")
-      .select("id, owner_line_user_id")
+      .select("id, owner_line_user_id, bot_basic_id")
       .eq("user_id", targetUserId)
       .maybeSingle();
 
     if (!lineAccount) {
-      return NextResponse.json({ followers: [], owner_line_user_id: null });
+      return NextResponse.json({ followers: [], owner_line_user_id: null, bot_basic_id: null });
     }
 
     // Get followers
@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       followers: followers ?? [],
       owner_line_user_id: lineAccount.owner_line_user_id,
+      bot_basic_id: (lineAccount as { bot_basic_id: string | null }).bot_basic_id,
     });
   } catch (err) {
     console.error("[GET /api/line/followers] Unexpected error:", err);
