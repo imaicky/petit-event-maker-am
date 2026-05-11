@@ -363,7 +363,7 @@ export default function AttendeesPage() {
     const isOnline = current === "online";
     const next = isOnline ? "physical" : "online";
     const busy = updatingFormat === booking.id;
-    const label = isOnline ? "🎥 オンライン" : "📍 リアル";
+    const label = isOnline ? "オンライン" : "リアル";
     const cls = isOnline
       ? "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
       : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100";
@@ -372,8 +372,8 @@ export default function AttendeesPage() {
         type="button"
         onClick={() => setAttendanceFormat(booking.id, next)}
         disabled={busy}
-        title={`参加形式を切り替え（現在: ${isOnline ? "オンライン" : "リアル"}）`}
-        className={`inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[11px] font-medium transition-colors ${cls} ${
+        title={`参加形式を切り替え（現在: ${label}）`}
+        className={`shrink-0 inline-flex items-center whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[10px] font-medium transition-colors ${cls} ${
           busy ? "opacity-50" : ""
         }`}
       >
@@ -744,11 +744,13 @@ export default function AttendeesPage() {
                       <span className="text-[11px] font-bold">{index + 1}</span>
                     )}
                   </button>
-                  <span className="text-[13px] font-medium text-[#1A1A1A] truncate min-w-0 flex items-center gap-1.5">
-                    {booking.guest_name}
-                    <PaymentBadge status={booking.payment_status} />
-                    <AttendanceFormatPill booking={booking} />
-                    <ConfirmPaymentButton booking={booking} />
+                  <span className="text-[13px] font-medium text-[#1A1A1A] min-w-0 flex items-center gap-1.5">
+                    <span className="truncate min-w-0">{booking.guest_name}</span>
+                    <span className="shrink-0 flex items-center gap-1.5">
+                      <PaymentBadge status={booking.payment_status} />
+                      <AttendanceFormatPill booking={booking} />
+                      <ConfirmPaymentButton booking={booking} />
+                    </span>
                   </span>
                   <span className="flex items-center gap-1 text-[13px] text-[#999999] min-w-0 truncate">
                     <Mail className="h-3 w-3 shrink-0" />
