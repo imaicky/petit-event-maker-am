@@ -135,6 +135,8 @@ export default function AttendeesPage() {
   const [editBooking, setEditBooking] = useState<Booking | null>(null);
   const [cancelBooking, setCancelBooking] = useState<Booking | null>(null);
   const [updatingFormat, setUpdatingFormat] = useState<string | null>(null);
+  const [sendingSurvey, setSendingSurvey] = useState(false);
+  const [surveyResult, setSurveyResult] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!eventId || !user) return;
@@ -246,6 +248,34 @@ export default function AttendeesPage() {
       // silently fail
     } finally {
       setUpdatingFormat(null);
+    }
+  }
+
+  async function sendFormatSurvey() {
+    if (
+      !confirm(
+        `${bookings.length}名にアンケートメールを送信します。よろしいですか？\n（各人にワンクリックで「リアル/オンライン」を回答できるリンクを送ります）`
+      )
+    ) {
+      return;
+    }
+    setSendingSurvey(true);
+    setSurveyResult(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/format-survey`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSurveyResult(json.error ?? "送信に失敗しました");
+        return;
+      }
+      setSurveyResult(`✅ ${json.sent}/${json.total}名にアンケートを送信しました`);
+    } catch {
+      setSurveyResult("ネットワークエラーが発生しました");
+    } finally {
+      setSendingSurvey(false);
     }
   }
 
@@ -520,6 +550,20 @@ export default function AttendeesPage() {
                   <Download className="h-3.5 w-3.5" />
                   CSV
                 </button>
+                {event.location_type === "hybrid" && (
+                  <button
+                    type="button"
+                    disabled={sendingSurvey}
+                    onClick={sendFormatSurvey}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-3 text-xs font-medium text-amber-800 hover:border-amber-400 hover:bg-amber-100 transition-colors disabled:opacity-50"
+                  >
+                    {sendingSurvey ? (
+                      <span className="text-[10px]">送信中…</span>
+                    ) : (
+                      <>📊 <span className="hidden sm:inline">参加形式アンケート</span></>
+                    )}
+                  </button>
+                )}
                 <Button
                   type="button"
                   size="sm"
@@ -533,6 +577,12 @@ export default function AttendeesPage() {
             )}
           </div>
         </div>
+
+        {surveyResult && (
+          <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+            {surveyResult}
+          </div>
+        )}
 
         {/* Event summary card */}
         <div className="rounded-2xl bg-white border border-[#E5E5E5] overflow-hidden mb-6">

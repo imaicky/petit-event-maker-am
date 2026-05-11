@@ -166,6 +166,60 @@ ${unsubscribeUrl}
 }
 
 /**
+ * 参加形式アンケート: 主催者が hybrid イベントの予約者全員に
+ * 「リアルかオンラインか」を1クリックで答えてもらうメール本文。
+ *
+ * physicalUrl / onlineUrl は予約者ごとに発行された署名付きURL。
+ * URL内のクエリで attendance_format が確定する。
+ */
+export function buildFormatSurveyEmailHtml(
+  guestName: string,
+  eventTitle: string,
+  dateStr: string,
+  location: string,
+  physicalUrl: string,
+  onlineUrl: string
+): string {
+  const safe = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  const intro = `${safe(guestName)} 様\n\nお申し込みありがとうございます。\n${safe(eventTitle)} はリアル / オンラインの両方で参加できる「ハイブリッド開催」です。\nお手数ですが、当日の参加方法をお知らせください。\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n■ イベント：${safe(eventTitle)}\n■ 日時：${safe(dateStr)}\n■ 場所：${safe(location)}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#fafafa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  <div style="max-width:560px;margin:0 auto;padding:32px 16px">
+    <div style="background:#ffffff;border-radius:16px;border:1px solid #e5e5e5;padding:32px 24px">
+      <p style="font-size:13px;color:#999;margin:0 0 8px">${safe(eventTitle)}</p>
+      <div style="font-size:15px;color:#1a1a1a;line-height:1.7;white-space:pre-wrap">${intro.replace(/\n/g, "<br>")}</div>
+
+      <div style="margin-top:28px;display:block">
+        <p style="font-size:14px;font-weight:bold;color:#1a1a1a;margin:0 0 12px">↓ 当日の参加方法を1クリックで教えてください</p>
+        <a href="${physicalUrl}"
+           style="display:block;width:100%;box-sizing:border-box;background:#b45309;color:#ffffff;text-align:center;text-decoration:none;padding:14px 16px;border-radius:12px;font-weight:bold;font-size:15px;margin-bottom:10px">
+          📍 リアル参加（会場）で確定する
+        </a>
+        <a href="${onlineUrl}"
+           style="display:block;width:100%;box-sizing:border-box;background:#0369a1;color:#ffffff;text-align:center;text-decoration:none;padding:14px 16px;border-radius:12px;font-weight:bold;font-size:15px">
+          🎥 オンライン参加で確定する
+        </a>
+      </div>
+
+      <p style="margin-top:24px;font-size:12px;color:#999;line-height:1.6">
+        ボタンを押すと、その場で参加形式が確定します。後で変更したい場合は主催者にご連絡ください。<br>
+        このメールに心当たりがない場合は無視してください。
+      </p>
+    </div>
+    <p style="text-align:center;font-size:11px;color:#999;margin-top:24px">
+      このメールは「プチイベント作成くん」を通じて送信されました
+    </p>
+  </div>
+</body>
+</html>`;
+}
+
+/**
  * Wrap plain text body in a simple HTML email layout
  */
 export function wrapInHtml(body: string, eventTitle: string): string {
