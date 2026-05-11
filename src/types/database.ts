@@ -218,6 +218,7 @@ export type Database = {
           guest_phone: string | null
           status: 'confirmed' | 'cancelled' | 'waitlisted'
           attended: boolean | null
+          attendance_format: 'physical' | 'online'
           stripe_session_id: string | null
           payment_status: 'none' | 'pending' | 'paid' | 'failed' | 'refunded'
           payment_method: string | null
@@ -234,6 +235,7 @@ export type Database = {
           guest_phone?: string | null
           status?: 'confirmed' | 'cancelled' | 'waitlisted'
           attended?: boolean | null
+          attendance_format?: 'physical' | 'online'
           stripe_session_id?: string | null
           payment_status?: 'none' | 'pending' | 'paid' | 'failed' | 'refunded'
           payment_method?: string | null
@@ -250,6 +252,7 @@ export type Database = {
           guest_phone?: string | null
           status?: 'confirmed' | 'cancelled' | 'waitlisted'
           attended?: boolean | null
+          attendance_format?: 'physical' | 'online'
           stripe_session_id?: string | null
           payment_status?: 'none' | 'pending' | 'paid' | 'failed' | 'refunded'
           payment_method?: string | null

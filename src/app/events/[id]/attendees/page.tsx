@@ -125,6 +125,7 @@ export default function AttendeesPage() {
   const [showCancelled, setShowCancelled] = useState(false);
   const [editBooking, setEditBooking] = useState<Booking | null>(null);
   const [cancelBooking, setCancelBooking] = useState<Booking | null>(null);
+  const [updatingFormat, setUpdatingFormat] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!eventId || !user) return;
@@ -203,6 +204,39 @@ export default function AttendeesPage() {
       // silently fail
     } finally {
       setUpdatingAttendance(null);
+    }
+  }
+
+  async function setAttendanceFormat(
+    bookingId: string,
+    next: "physical" | "online"
+  ) {
+    setUpdatingFormat(bookingId);
+    try {
+      const res = await fetch(
+        `/api/events/${eventId}/bookings/${bookingId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ attendance_format: next }),
+        }
+      );
+      if (res.ok) {
+        setBookings((prev) =>
+          prev.map((b) =>
+            b.id === bookingId ? { ...b, attendance_format: next } : b
+          )
+        );
+        setWaitlistedBookings((prev) =>
+          prev.map((b) =>
+            b.id === bookingId ? { ...b, attendance_format: next } : b
+          )
+        );
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setUpdatingFormat(null);
     }
   }
 
@@ -320,6 +354,32 @@ export default function AttendeesPage() {
     } catch {
       alert("ネットワークエラーが発生しました");
     }
+  }
+
+  // ── Attendance format pill (hybrid 開催時のみ表示) ─────────────────
+  function AttendanceFormatPill({ booking }: { booking: Booking }) {
+    if (event?.location_type !== "hybrid") return null;
+    const current = booking.attendance_format ?? "physical";
+    const isOnline = current === "online";
+    const next = isOnline ? "physical" : "online";
+    const busy = updatingFormat === booking.id;
+    const label = isOnline ? "🎥 オンライン" : "📍 リアル";
+    const cls = isOnline
+      ? "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
+      : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100";
+    return (
+      <button
+        type="button"
+        onClick={() => setAttendanceFormat(booking.id, next)}
+        disabled={busy}
+        title={`参加形式を切り替え（現在: ${isOnline ? "オンライン" : "リアル"}）`}
+        className={`inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[11px] font-medium transition-colors ${cls} ${
+          busy ? "opacity-50" : ""
+        }`}
+      >
+        {label}
+      </button>
+    );
   }
 
   function ConfirmPaymentButton({ booking }: { booking: Booking }) {
@@ -624,6 +684,7 @@ export default function AttendeesPage() {
                         {booking.guest_name}
                       </span>
                       <PaymentBadge status={booking.payment_status} />
+                      <AttendanceFormatPill booking={booking} />
                       <ConfirmPaymentButton booking={booking} />
                       <SendPaymentLinkButton booking={booking} />
                     </div>
@@ -686,6 +747,7 @@ export default function AttendeesPage() {
                   <span className="text-[13px] font-medium text-[#1A1A1A] truncate min-w-0 flex items-center gap-1.5">
                     {booking.guest_name}
                     <PaymentBadge status={booking.payment_status} />
+                    <AttendanceFormatPill booking={booking} />
                     <ConfirmPaymentButton booking={booking} />
                   </span>
                   <span className="flex items-center gap-1 text-[13px] text-[#999999] min-w-0 truncate">

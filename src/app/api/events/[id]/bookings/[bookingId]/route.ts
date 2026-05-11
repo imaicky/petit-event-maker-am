@@ -40,17 +40,37 @@ export async function PATCH(
     );
   }
 
-  const { guest_name, guest_email, guest_phone, status } = body as {
-    guest_name?: string;
-    guest_email?: string;
-    guest_phone?: string;
-    status?: string;
-  };
+  const { guest_name, guest_email, guest_phone, status, attendance_format } =
+    body as {
+      guest_name?: string;
+      guest_email?: string;
+      guest_phone?: string;
+      status?: string;
+      attendance_format?: string;
+    };
 
   // Validate at least one field
-  if (!guest_name && !guest_email && guest_phone === undefined && !status) {
+  if (
+    !guest_name &&
+    !guest_email &&
+    guest_phone === undefined &&
+    !status &&
+    !attendance_format
+  ) {
     return NextResponse.json(
       { error: "更新するフィールドを指定してください" },
+      { status: 400 }
+    );
+  }
+
+  // attendance_format whitelist check
+  if (
+    attendance_format !== undefined &&
+    attendance_format !== "physical" &&
+    attendance_format !== "online"
+  ) {
+    return NextResponse.json(
+      { error: "参加形式は physical / online のみ指定できます" },
       { status: 400 }
     );
   }
@@ -103,6 +123,9 @@ export async function PATCH(
   if (guest_phone !== undefined) updates.guest_phone = guest_phone || null;
   if (status && ["confirmed", "cancelled"].includes(status)) {
     updates.status = status;
+  }
+  if (attendance_format === "physical" || attendance_format === "online") {
+    updates.attendance_format = attendance_format;
   }
 
   const { error: updateError } = await admin
