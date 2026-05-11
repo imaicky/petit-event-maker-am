@@ -132,6 +132,40 @@ ${locationLines}
 }
 
 /**
+ * Build a "new event from a creator you follow" email body.
+ * organizerName / unsubscribeUrl は HTML としてエスケープせずに渡し、
+ * wrapInHtml が改行＋エスケープ処理を担当する（既存リマインダーと同方針）。
+ */
+export function buildNewEventEmailHtml(
+  organizerName: string,
+  eventTitle: string,
+  dateStr: string,
+  location: string,
+  eventUrl: string,
+  unsubscribeUrl: string
+): string {
+  const body = `${organizerName}さんが新しいイベントを公開しました。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+■ イベント：${eventTitle}
+■ 日時：${dateStr}
+■ 場所：${location}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▼ 詳細・お申し込みはこちら
+${eventUrl}
+
+──────────────────────────────
+このメールは ${organizerName} さんをフォローしているためお送りしました。
+今後この主催者からの通知を停止する場合は次のページから設定できます。
+${unsubscribeUrl}
+
+プチイベント作成くん`;
+
+  return wrapInHtml(body, eventTitle);
+}
+
+/**
  * Wrap plain text body in a simple HTML email layout
  */
 export function wrapInHtml(body: string, eventTitle: string): string {

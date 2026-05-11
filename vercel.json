@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/payment-reminders",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/notify-new-events",
+      "schedule": "0 0 * * *"
     }
   ]
 }

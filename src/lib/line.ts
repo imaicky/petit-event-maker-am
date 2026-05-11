@@ -522,6 +522,118 @@ export function buildReminderFlexBubble(
   return bubble;
 }
 
+// ─── New Event Flex Bubble (for organizer followers) ──────────
+// フォロー中の主催者が新規イベントを公開したときに送る通知。
+// reminder と違って Zoom 情報は伏せ、ティザー寄りに「詳細を見る」を主導線にする。
+
+export function buildNewEventFlexBubble(
+  event: EventForFlex,
+  organizerName: string,
+  baseUrl: string
+): FlexContainer {
+  const eventUrl = event.short_code
+    ? `${baseUrl}/e/${event.short_code}`
+    : `${baseUrl}/events/${event.id}`;
+  const dateStr = formatDateJa(event.datetime);
+  const priceStr = event.price === 0 ? "無料" : `¥${event.price.toLocaleString()}`;
+
+  const locationRows: Record<string, unknown>[] = [];
+  if (event.location && event.location_type !== "online") {
+    locationRows.push({
+      type: "box",
+      layout: "baseline",
+      spacing: "sm",
+      contents: [
+        { type: "text", text: "📍", size: "sm", flex: 0 },
+        { type: "text", text: event.location, size: "sm", color: "#666666", flex: 5, wrap: true },
+      ],
+    });
+  } else if (event.location_type === "online") {
+    locationRows.push({
+      type: "box",
+      layout: "baseline",
+      spacing: "sm",
+      contents: [
+        { type: "text", text: "🎥", size: "sm", flex: 0 },
+        { type: "text", text: "オンライン開催", size: "sm", color: "#666666", flex: 5, wrap: true },
+      ],
+    });
+  }
+
+  const bubble: Record<string, unknown> = {
+    type: "bubble",
+    body: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "text",
+          text: `✨ ${organizerName} さんの新着イベント`,
+          color: "#C26A4A",
+          size: "sm",
+          weight: "bold",
+          wrap: true,
+        },
+        {
+          type: "text",
+          text: event.title,
+          weight: "bold",
+          size: "lg",
+          wrap: true,
+          margin: "md",
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          margin: "lg",
+          spacing: "sm",
+          contents: [
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "📅", size: "sm", flex: 0 },
+                { type: "text", text: dateStr, size: "sm", color: "#666666", flex: 5, wrap: true },
+              ],
+            },
+            ...locationRows,
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "💴", size: "sm", flex: 0 },
+                { type: "text", text: priceStr, size: "sm", color: "#666666", flex: 5, wrap: true },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#C26A4A",
+          action: {
+            type: "uri",
+            label: "イベント詳細を見る",
+            uri: eventUrl,
+          },
+        },
+      ],
+      flex: 0,
+    },
+  };
+
+  return bubble;
+}
+
 // Build LINE Flex rows for online meeting info (Zoom ID/passcode/URL).
 function buildOnlineFlexLines(event: EventForFlex): Record<string, unknown>[] {
   const rows: Record<string, unknown>[] = [];

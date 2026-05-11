@@ -5,6 +5,7 @@ import {
   buildWaitlistNotifyText,
   buildWaitlistPromotionNotifyText,
   verifyLineSignature,
+  buildNewEventFlexBubble,
 } from "./line";
 
 describe("buildBookingNotifyText", () => {
@@ -98,5 +99,83 @@ describe("verifyLineSignature", () => {
 
   it("rejects empty signature", () => {
     expect(verifyLineSignature("body", "", "secret")).toBe(false);
+  });
+});
+
+describe("buildNewEventFlexBubble", () => {
+  const baseEvent = {
+    id: "evt-1",
+    title: "AI開発もくもく会",
+    datetime: "2026-06-01T10:00:00.000Z",
+    price: 0,
+    short_code: "abc123",
+  };
+
+  it("uses short_code link when present", () => {
+    const bubble = buildNewEventFlexBubble(
+      baseEvent,
+      "源",
+      "https://example.com"
+    );
+    const json = JSON.stringify(bubble);
+    expect(json).toContain("https://example.com/e/abc123");
+    expect(json).not.toContain(`/events/${baseEvent.id}`);
+  });
+
+  it("falls back to /events/{id} when short_code is missing", () => {
+    const bubble = buildNewEventFlexBubble(
+      { ...baseEvent, short_code: null },
+      "源",
+      "https://example.com"
+    );
+    const json = JSON.stringify(bubble);
+    expect(json).toContain(`https://example.com/events/${baseEvent.id}`);
+  });
+
+  it("renders organizer name and event title", () => {
+    const bubble = buildNewEventFlexBubble(
+      baseEvent,
+      "源",
+      "https://example.com"
+    );
+    const json = JSON.stringify(bubble);
+    expect(json).toContain("源");
+    expect(json).toContain("AI開発もくもく会");
+  });
+
+  it("shows 無料 for free events", () => {
+    const bubble = buildNewEventFlexBubble(
+      baseEvent,
+      "源",
+      "https://example.com"
+    );
+    expect(JSON.stringify(bubble)).toContain("無料");
+  });
+
+  it("formats paid price with yen sign", () => {
+    const bubble = buildNewEventFlexBubble(
+      { ...baseEvent, price: 3000 },
+      "源",
+      "https://example.com"
+    );
+    expect(JSON.stringify(bubble)).toContain("¥3,000");
+  });
+
+  it("shows online label when location_type is online", () => {
+    const bubble = buildNewEventFlexBubble(
+      { ...baseEvent, location_type: "online" },
+      "源",
+      "https://example.com"
+    );
+    expect(JSON.stringify(bubble)).toContain("オンライン開催");
+  });
+
+  it("shows physical location text when provided", () => {
+    const bubble = buildNewEventFlexBubble(
+      { ...baseEvent, location: "渋谷区", location_type: "physical" },
+      "源",
+      "https://example.com"
+    );
+    expect(JSON.stringify(bubble)).toContain("渋谷区");
   });
 });

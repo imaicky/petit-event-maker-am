@@ -3,6 +3,7 @@ import {
   fillTemplate,
   wrapInHtml,
   buildReminderEmailHtml,
+  buildNewEventEmailHtml,
   EMAIL_TEMPLATES,
 } from "./email-templates";
 
@@ -172,5 +173,52 @@ describe("EMAIL_TEMPLATES", () => {
         expect(validPlaceholders).toContain(m);
       }
     }
+  });
+});
+
+describe("buildNewEventEmailHtml", () => {
+  it("includes organizer, title, datetime, location and the event link", () => {
+    const html = buildNewEventEmailHtml(
+      "源",
+      "AI開発もくもく会",
+      "2026年6月1日(月) 19:00",
+      "オンライン",
+      "https://example.com/e/abc",
+      "https://example.com/my/follows"
+    );
+    expect(html).toContain("源");
+    expect(html).toContain("AI開発もくもく会");
+    expect(html).toContain("2026年6月1日(月) 19:00");
+    expect(html).toContain("オンライン");
+    expect(html).toContain("https://example.com/e/abc");
+    expect(html).toContain("https://example.com/my/follows");
+  });
+
+  it("escapes HTML in user-provided fields to prevent injection", () => {
+    const html = buildNewEventEmailHtml(
+      "<script>alert(1)</script>",
+      "</title><b>x",
+      "2026-01-01",
+      "Tokyo",
+      "https://example.com/e/abc",
+      "https://example.com/my/follows"
+    );
+    expect(html).not.toContain("<script>alert(1)</script>");
+    expect(html).toContain("&lt;script&gt;");
+    // タイトルは <title> 内には差し込まないが念のため
+    expect(html).not.toMatch(/<\/title><b>/i);
+  });
+
+  it("renders as a complete HTML document", () => {
+    const html = buildNewEventEmailHtml(
+      "Org",
+      "Title",
+      "Date",
+      "Place",
+      "https://example.com/e/abc",
+      "https://example.com/my/follows"
+    );
+    expect(html).toContain("<!DOCTYPE html>");
+    expect(html).toContain("</html>");
   });
 });
