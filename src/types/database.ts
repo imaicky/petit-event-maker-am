@@ -93,6 +93,8 @@ export type Database = {
           reminder_24h_sent: boolean
           reminder_2h_sent: boolean
           follower_notified_at: string | null
+          capacity_physical: number | null
+          capacity_online: number | null
           payment_method: string | null
           payment_methods: string[] | null
           payment_link: string | null
@@ -138,6 +140,8 @@ export type Database = {
           reminder_24h_sent?: boolean
           reminder_2h_sent?: boolean
           follower_notified_at?: string | null
+          capacity_physical?: number | null
+          capacity_online?: number | null
           payment_method?: string | null
           payment_methods?: string[] | null
           payment_link?: string | null
@@ -183,6 +187,8 @@ export type Database = {
           reminder_24h_sent?: boolean
           reminder_2h_sent?: boolean
           follower_notified_at?: string | null
+          capacity_physical?: number | null
+          capacity_online?: number | null
           payment_method?: string | null
           payment_methods?: string[] | null
           payment_link?: string | null

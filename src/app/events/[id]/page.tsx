@@ -36,9 +36,13 @@ interface EventData {
   location_url?: string | null;
   booking_deadline?: string | null;
   capacity: number;
+  capacity_physical?: number | null;
+  capacity_online?: number | null;
   price: number;
   /** booking_count is returned by the API (computed via subquery) */
   booking_count: number;
+  booking_count_physical?: number;
+  booking_count_online?: number;
   image_url?: string;
   category?: string;
   teacher_name?: string;
@@ -773,6 +777,11 @@ export default async function EventPage({ params, searchParams }: EventPageProps
                   paymentInfo={event.payment_info}
                   paymentLink={event.payment_link}
                   isClosed={isClosed}
+                  locationType={event.location_type}
+                  capacityPhysical={event.capacity_physical}
+                  capacityOnline={event.capacity_online}
+                  confirmedPhysical={event.booking_count_physical}
+                  confirmedOnline={event.booking_count_online}
                 />
               </div>
             </section>
@@ -810,6 +819,11 @@ export default async function EventPage({ params, searchParams }: EventPageProps
                 paymentMethod={event.payment_method}
                 paymentInfo={event.payment_info}
                 paymentLink={event.payment_link}
+                locationType={event.location_type}
+                capacityPhysical={event.capacity_physical}
+                capacityOnline={event.capacity_online}
+                confirmedPhysical={event.booking_count_physical}
+                confirmedOnline={event.booking_count_online}
               />
             </div>
           </aside>

@@ -587,6 +587,28 @@ export default function AttendeesPage() {
                 />
               </div>
             )}
+            {event.location_type === "hybrid" && (
+              <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-amber-800">
+                  📍 リアル{" "}
+                  <span className="font-bold tabular-nums">
+                    {bookings.filter((b) => (b.attendance_format ?? "physical") === "physical").length}
+                  </span>
+                  {event.capacity_physical != null && (
+                    <span className="text-amber-600"> / {event.capacity_physical}名</span>
+                  )}
+                </div>
+                <div className="rounded-lg bg-sky-50 px-2.5 py-1.5 text-sky-800">
+                  🎥 オンライン{" "}
+                  <span className="font-bold tabular-nums">
+                    {bookings.filter((b) => b.attendance_format === "online").length}
+                  </span>
+                  {event.capacity_online != null && (
+                    <span className="text-sky-600"> / {event.capacity_online}名</span>
+                  )}
+                </div>
+              </div>
+            )}
             {capacity != null && confirmedCount >= capacity && (
               <p className="mt-1.5 text-xs font-medium text-[#EF4444]">
                 満席です

@@ -32,6 +32,8 @@ const bookingSchema = z.object({
     .or(z.literal("")),
   passcode: z.string().optional(),
   payment_method: z.enum(['stripe', 'bank', 'onsite', 'custom']).optional(),
+  // hybrid イベントでは必須。非hybrid では無視（イベントの location_type から自動決定）。
+  attendance_format: z.enum(["physical", "online"]).optional(),
 });
 
 // Default deadline rule: min(申込日 + 7日, 開催日 - 3日).
@@ -154,7 +156,7 @@ export async function POST(
     // 1. Fetch event
     const { data: ev, error: evErr } = await admin
       .from("events")
-      .select("id, capacity, is_published, price, payment_method, payment_methods, payment_deadline_days, booking_deadline, datetime, bank_account_number, bank_account_holder, payment_info, payment_link")
+      .select("id, capacity, capacity_physical, capacity_online, location_type, is_published, price, payment_method, payment_methods, payment_deadline_days, booking_deadline, datetime, bank_account_number, bank_account_holder, payment_info, payment_link")
       .eq("id", eventId)
       .single();
     if (evErr || !ev) {
@@ -181,13 +183,58 @@ export async function POST(
       );
     }
 
-    // 2. Check capacity
-    const { count } = await admin
-      .from("bookings")
-      .select("*", { count: "exact", head: true })
-      .eq("event_id", eventId)
-      .eq("status", "confirmed");
-    const isFull = ev.capacity !== null && (count ?? 0) >= ev.capacity;
+    // 2. 参加形式の決定 (hybrid のときだけユーザー入力必須)
+    const evLocType = (ev as { location_type?: string | null }).location_type ?? "physical";
+    const isHybridEvent = evLocType === "hybrid";
+    let effectiveFormat: "physical" | "online";
+    if (isHybridEvent) {
+      if (!data.attendance_format) {
+        return NextResponse.json(
+          { error: "参加形式（リアル / オンライン）を選んでください" },
+          { status: 400 }
+        );
+      }
+      effectiveFormat = data.attendance_format;
+    } else {
+      effectiveFormat = evLocType === "online" ? "online" : "physical";
+    }
+
+    // 2b. Check capacity
+    // hybrid: 形式別 capacity を見る / 非hybrid: 全体 capacity
+    let count: number | null = null;
+    let isFull = false;
+    if (isHybridEvent) {
+      const formatCapacity =
+        effectiveFormat === "physical"
+          ? (ev as { capacity_physical?: number | null }).capacity_physical
+          : (ev as { capacity_online?: number | null }).capacity_online;
+      if (formatCapacity == null) {
+        return NextResponse.json(
+          {
+            error: `${
+              effectiveFormat === "physical" ? "リアル参加" : "オンライン参加"
+            }の定員が設定されていないため受け付けられません。主催者にお問い合わせください。`,
+          },
+          { status: 503 }
+        );
+      }
+      const fmtQ = await admin
+        .from("bookings")
+        .select("*", { count: "exact", head: true })
+        .eq("event_id", eventId)
+        .eq("status", "confirmed")
+        .eq("attendance_format", effectiveFormat);
+      count = fmtQ.count ?? 0;
+      isFull = count >= formatCapacity;
+    } else {
+      const q = await admin
+        .from("bookings")
+        .select("*", { count: "exact", head: true })
+        .eq("event_id", eventId)
+        .eq("status", "confirmed");
+      count = q.count ?? 0;
+      isFull = ev.capacity !== null && count >= ev.capacity;
+    }
 
     // 3. Check duplicate (confirmed or waitlisted)
     const { count: dupCount } = await admin
@@ -274,6 +321,7 @@ export async function POST(
         guest_email: data.guest_email,
         guest_phone: data.guest_phone || null,
         status: bookingStatus,
+        attendance_format: effectiveFormat,
         payment_status: paymentStatus,
         payment_method: chosenMethod,
         payment_deadline: paymentDeadline,
@@ -290,41 +338,51 @@ export async function POST(
     // ─── Adversarial defense: post-insert capacity verification ──
     // 同時アクセスで定員を超えてしまった場合、後から確認して
     // 必要なら waitlisted にデモートする。
-    // （根本対策には Postgres RPC + SELECT FOR UPDATE が望ましいが、
-    //   暫定対策として post-check で過剰登録を緩和する）
-    if (
-      bookingStatus === "confirmed" &&
-      ev.capacity !== null &&
-      typeof ev.capacity === "number"
-    ) {
-      const { count: postCount } = await admin
-        .from("bookings")
-        .select("*", { count: "exact", head: true })
-        .eq("event_id", eventId)
-        .eq("status", "confirmed");
-      if ((postCount ?? 0) > ev.capacity) {
-        // 自分の予約が確定しているか + 自分が最後発か（created_at ベース）を確認
-        // 簡易判定: post-count が定員を超えていたら最後の confirmed をwaitlistedに降格
-        const { data: latest } = await admin
+    // hybrid のときは形式別 capacity で判定する。
+    {
+      let formatCapacityForCheck: number | null = null;
+      if (isHybridEvent) {
+        formatCapacityForCheck =
+          effectiveFormat === "physical"
+            ? ((ev as { capacity_physical?: number | null }).capacity_physical ?? null)
+            : ((ev as { capacity_online?: number | null }).capacity_online ?? null);
+      } else if (typeof ev.capacity === "number") {
+        formatCapacityForCheck = ev.capacity;
+      }
+
+      if (
+        bookingStatus === "confirmed" &&
+        formatCapacityForCheck !== null
+      ) {
+        const postQ = admin
           .from("bookings")
-          .select("id, created_at")
+          .select("*", { count: "exact", head: true })
           .eq("event_id", eventId)
-          .eq("status", "confirmed")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (latest && (latest as { id: string }).id === booking.id) {
-          // この予約が最後発 → waitlisted に降格
-          await admin
+          .eq("status", "confirmed");
+        if (isHybridEvent) postQ.eq("attendance_format", effectiveFormat);
+        const { count: postCount } = await postQ;
+        if ((postCount ?? 0) > formatCapacityForCheck) {
+          const latestQ = admin
             .from("bookings")
-            .update({ status: "waitlisted" })
-            .eq("id", booking.id);
-          booking = { ...booking, status: "waitlisted" } as BookingRow;
-          bookingStatus = "waitlisted"; // notify 系の分岐に反映
-          console.warn(
-            "[book] race condition detected: demoted to waitlisted",
-            booking.id
-          );
+            .select("id, created_at")
+            .eq("event_id", eventId)
+            .eq("status", "confirmed")
+            .order("created_at", { ascending: false })
+            .limit(1);
+          if (isHybridEvent) latestQ.eq("attendance_format", effectiveFormat);
+          const { data: latest } = await latestQ.maybeSingle();
+          if (latest && (latest as { id: string }).id === booking.id) {
+            await admin
+              .from("bookings")
+              .update({ status: "waitlisted" })
+              .eq("id", booking.id);
+            booking = { ...booking, status: "waitlisted" } as BookingRow;
+            bookingStatus = "waitlisted";
+            console.warn(
+              "[book] race condition detected: demoted to waitlisted",
+              booking.id
+            );
+          }
         }
       }
     }
@@ -461,7 +519,7 @@ ${event.title} のキャンセル待ちに登録されました。
 ■ 予約番号：${booking.id}
 ■ イベント：${event.title}
 ■ 日時：${dateStr}
-${locationLines}
+${locationLines}${isHybridEvent ? `\n■ 参加形式：${effectiveFormat === "physical" ? "リアル参加（会場）" : "オンライン参加"}` : ""}
 ■ 参加費：${priceStr}
 ■ ステータス：キャンセル待ち
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -477,7 +535,7 @@ ${event.title} へのお申し込みが完了しました。
 ■ 予約番号：${booking.id}
 ■ イベント：${event.title}
 ■ 日時：${dateStr}
-${locationLines}
+${locationLines}${isHybridEvent ? `\n■ 参加形式：${effectiveFormat === "physical" ? "リアル参加（会場）" : "オンライン参加"}` : ""}
 ■ 参加費：${priceStr}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${bankSection}

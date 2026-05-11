@@ -65,6 +65,12 @@ interface BookingFormProps {
   /** Booking is closed because the deadline has passed or the event has started */
   isClosed?: boolean;
   className?: string;
+  /** hybrid 参加形式選択用のメタ。未指定なら非hybridとして従来動作 */
+  locationType?: string | null;
+  capacityPhysical?: number | null;
+  capacityOnline?: number | null;
+  confirmedPhysical?: number;
+  confirmedOnline?: number;
 }
 
 function FieldError({ message }: { message?: string }) {
@@ -91,7 +97,28 @@ export function BookingForm({
   paymentLink,
   isClosed,
   className,
+  locationType,
+  capacityPhysical,
+  capacityOnline,
+  confirmedPhysical = 0,
+  confirmedOnline = 0,
 }: BookingFormProps) {
+  const isHybridEvent = locationType === "hybrid";
+  const physicalRemaining =
+    capacityPhysical == null ? null : Math.max(0, capacityPhysical - confirmedPhysical);
+  const onlineRemaining =
+    capacityOnline == null ? null : Math.max(0, capacityOnline - confirmedOnline);
+  const physicalFull = physicalRemaining !== null && physicalRemaining <= 0;
+  const onlineFull = onlineRemaining !== null && onlineRemaining <= 0;
+  // 初期選択: hybrid のとき空きある形式を優先（両方空きなら physical）
+  const defaultFormat: "physical" | "online" = isHybridEvent
+    ? !physicalFull
+      ? "physical"
+      : !onlineFull
+      ? "online"
+      : "physical"
+    : "physical";
+  const [attendanceFormat, setAttendanceFormat] = useState<"physical" | "online">(defaultFormat);
   // Resolve list of allowed methods. Prefer the multi-select array, fall back
   // to the legacy single method.
   const availableMethods: ("stripe" | "bank" | "onsite" | "custom")[] =
@@ -135,6 +162,7 @@ export function BookingForm({
         body: JSON.stringify({
           ...data,
           payment_method: price > 0 ? selectedMethod ?? availableMethods[0] : undefined,
+          attendance_format: isHybridEvent ? attendanceFormat : undefined,
         }),
       });
 
@@ -271,6 +299,51 @@ export function BookingForm({
           ) : null}
         </div>
       </div>
+
+      {/* Hybrid: 参加形式の選択 */}
+      {isHybridEvent && (
+        <div className="space-y-2">
+          <Label className="text-sm font-medium text-[#1A1A1A]">
+            参加形式 <span className="text-[#1A1A1A]">*</span>
+          </Label>
+          <div className="grid grid-cols-2 gap-2">
+            {(["physical", "online"] as const).map((fmt) => {
+              const isSelected = attendanceFormat === fmt;
+              const isThisFull = fmt === "physical" ? physicalFull : onlineFull;
+              const remaining = fmt === "physical" ? physicalRemaining : onlineRemaining;
+              const label = fmt === "physical" ? "リアル参加" : "オンライン参加";
+              const emoji = fmt === "physical" ? "📍" : "🎥";
+              return (
+                <button
+                  key={fmt}
+                  type="button"
+                  onClick={() => setAttendanceFormat(fmt)}
+                  disabled={isClosed}
+                  className={cn(
+                    "flex flex-col items-start gap-0.5 rounded-xl border-2 px-3 py-2.5 text-left transition-colors",
+                    isSelected
+                      ? fmt === "physical"
+                        ? "border-amber-500 bg-amber-50"
+                        : "border-sky-500 bg-sky-50"
+                      : "border-[#E5E5E5] hover:border-[#1A1A1A]/30"
+                  )}
+                >
+                  <span className="text-sm font-medium text-[#1A1A1A]">
+                    {emoji} {label}
+                  </span>
+                  <span className="text-[10px] text-[#999999]">
+                    {isThisFull
+                      ? "キャンセル待ち"
+                      : remaining === null
+                      ? "受付中"
+                      : `残り${remaining}席`}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Name field */}
       <div className="space-y-1">

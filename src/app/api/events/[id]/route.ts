@@ -26,6 +26,8 @@ const updateEventSchema = z.object({
     .int()
     .min(1, "定員は1名以上にしてください")
     .max(10000),
+  capacity_physical: z.coerce.number().int().min(0).max(10000).optional().nullable(),
+  capacity_online: z.coerce.number().int().min(0).max(10000).optional().nullable(),
   price: z.coerce.number().int().min(0, "料金は0円以上にしてください"),
   image_url: z.union([z.string().url(), z.literal("")]).optional().nullable(),
   teacher_name: z.string().optional().nullable(),
@@ -79,6 +81,8 @@ const updateDraftSchema = z.object({
   zoom_passcode: z.string().max(50).optional().nullable(),
   location_url: z.string().optional().nullable(),
   capacity: z.coerce.number().int().min(0).max(10000).optional().nullable(),
+  capacity_physical: z.coerce.number().int().min(0).max(10000).optional().nullable(),
+  capacity_online: z.coerce.number().int().min(0).max(10000).optional().nullable(),
   price: z.coerce.number().int().min(0).optional().default(0),
   image_url: z.union([z.string().url(), z.literal("")]).optional().nullable(),
   teacher_name: z.string().optional().nullable(),
@@ -150,6 +154,8 @@ export async function GET(
     // cancelled rows must not consume capacity.
     let count = 0;
     let waitlistCount = 0;
+    let physicalCount = 0;
+    let onlineCount = 0;
     if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
       const admin = createAdminClient();
       const { count: confirmedCount } = await admin
@@ -164,6 +170,21 @@ export async function GET(
         .eq("event_id", id)
         .eq("status", "waitlisted");
       waitlistCount = wlCount ?? 0;
+      // hybrid 用: 形式別の confirmed カウントも返す（非hybrid でも害なし）
+      const { count: pCount } = await admin
+        .from("bookings")
+        .select("*", { count: "exact", head: true })
+        .eq("event_id", id)
+        .eq("status", "confirmed")
+        .eq("attendance_format", "physical");
+      physicalCount = pCount ?? 0;
+      const { count: oCount } = await admin
+        .from("bookings")
+        .select("*", { count: "exact", head: true })
+        .eq("event_id", id)
+        .eq("status", "confirmed")
+        .eq("attendance_format", "online");
+      onlineCount = oCount ?? 0;
     }
 
     // Fetch creator's LINE friend-add URL (bot_basic_id)
@@ -212,6 +233,8 @@ export async function GET(
           ...event,
           booking_count: Number(count),
           waitlist_count: Number(waitlistCount),
+          booking_count_physical: Number(physicalCount),
+          booking_count_online: Number(onlineCount),
           line_friend_url: lineFriendUrl,
         },
       });
@@ -255,7 +278,13 @@ export async function GET(
     })();
 
     return NextResponse.json({
-      event: { ...safeEvent, booking_count: Number(count), line_friend_url: lineFriendUrl },
+      event: {
+        ...safeEvent,
+        booking_count: Number(count),
+        booking_count_physical: Number(physicalCount),
+        booking_count_online: Number(onlineCount),
+        line_friend_url: lineFriendUrl,
+      },
     });
   } catch (err) {
     console.error("[GET /api/events/[id]] Unexpected error:", err);
@@ -356,6 +385,8 @@ export async function PUT(
           zoom_passcode: d.zoom_passcode || null,
           location_url: d.location_url || null,
           capacity: d.capacity ?? 0,
+          capacity_physical: d.capacity_physical ?? null,
+          capacity_online: d.capacity_online ?? null,
           price: d.price ?? 0,
           image_url: d.image_url || null,
           teacher_name: d.teacher_name || null,
@@ -410,6 +441,8 @@ export async function PUT(
           zoom_passcode: data.zoom_passcode || null,
           location_url: data.location_url || null,
           capacity: data.capacity,
+          capacity_physical: data.capacity_physical ?? null,
+          capacity_online: data.capacity_online ?? null,
           price: data.price,
           image_url: data.image_url || null,
           teacher_name: data.teacher_name || null,

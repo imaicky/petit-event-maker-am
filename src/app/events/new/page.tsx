@@ -60,6 +60,8 @@ const createEventBaseSchema = z.object({
     .string()
     .min(1, "定員を入力してください")
     .refine((v) => !isNaN(Number(v)) && Number(v) >= 1, "1名以上にしてください"),
+  capacity_physical: z.string().optional(),
+  capacity_online: z.string().optional(),
   price: z
     .string()
     .min(1, "料金を入力してください")
@@ -101,6 +103,21 @@ const createEventSchema = createEventBaseSchema.refine(
     return true;
   },
   { message: "有効なURLを入力してください", path: ["online_url"] }
+).refine(
+  (data) => {
+    // hybrid のときはリアル枠 / オンライン枠 ともに 1以上必須
+    if (data.location_type !== "hybrid") return true;
+    const p = Number(data.capacity_physical);
+    return !isNaN(p) && p >= 1;
+  },
+  { message: "リアル参加の定員を1名以上で入力してください", path: ["capacity_physical"] }
+).refine(
+  (data) => {
+    if (data.location_type !== "hybrid") return true;
+    const o = Number(data.capacity_online);
+    return !isNaN(o) && o >= 1;
+  },
+  { message: "オンライン参加の定員を1名以上で入力してください", path: ["capacity_online"] }
 );
 
 type CreateEventFormValues = z.infer<typeof createEventBaseSchema>;
@@ -117,6 +134,8 @@ interface CreateEventPayload {
   zoom_passcode?: string;
   location_url?: string;
   capacity: number;
+  capacity_physical?: number | null;
+  capacity_online?: number | null;
   price: number;
   image_url?: string;
   price_note?: string;
@@ -455,7 +474,13 @@ function EventPreview({ values }: { values: Partial<CreateEventFormValues> }) {
           )}
           <div className="flex items-center gap-2">
             <Users className="h-3.5 w-3.5 shrink-0 text-[#1A1A1A]" />
-            <span>定員 {isNaN(capacity) ? "—" : capacity} 名</span>
+            {values.location_type === "hybrid" ? (
+              <span>
+                定員 リアル {Number(values.capacity_physical) || 0} 名 / オンライン {Number(values.capacity_online) || 0} 名
+              </span>
+            ) : (
+              <span>定員 {isNaN(capacity) ? "—" : capacity} 名</span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <JapaneseYen className="h-3.5 w-3.5 shrink-0 text-[#1A1A1A]" />
@@ -624,7 +649,21 @@ function NewEventPageInner() {
           zoom_meeting_id: data.zoom_meeting_id || undefined,
           zoom_passcode: data.zoom_passcode || undefined,
           location_url: data.location_url || undefined,
-          capacity: data.capacity ? Number(data.capacity) : undefined,
+          capacity:
+            data.location_type === "hybrid"
+              ? (Number(data.capacity_physical) || 0) +
+                (Number(data.capacity_online) || 0) || undefined
+              : data.capacity
+              ? Number(data.capacity)
+              : undefined,
+          capacity_physical:
+            data.location_type === "hybrid" && data.capacity_physical
+              ? Number(data.capacity_physical)
+              : undefined,
+          capacity_online:
+            data.location_type === "hybrid" && data.capacity_online
+              ? Number(data.capacity_online)
+              : undefined,
           price: data.price ? Number(data.price) : 0,
           image_url: data.image_url || undefined,
           price_note: data.price_note || undefined,
@@ -678,7 +717,19 @@ function NewEventPageInner() {
       zoom_meeting_id: data.zoom_meeting_id || undefined,
       zoom_passcode: data.zoom_passcode || undefined,
       location_url: data.location_url || undefined,
-      capacity: Number(data.capacity),
+      capacity:
+        data.location_type === "hybrid"
+          ? (Number(data.capacity_physical) || 0) +
+            (Number(data.capacity_online) || 0)
+          : Number(data.capacity),
+      capacity_physical:
+        data.location_type === "hybrid"
+          ? Number(data.capacity_physical)
+          : undefined,
+      capacity_online:
+        data.location_type === "hybrid"
+          ? Number(data.capacity_online)
+          : undefined,
       price: Number(data.price),
       image_url: data.image_url || undefined,
       price_note: data.price_note || undefined,
@@ -992,20 +1043,56 @@ function NewEventPageInner() {
                 <div className="space-y-5" onClick={() => setCurrentStep(3)}>
                   {/* Capacity / Price */}
                   <div className="grid gap-5 sm:grid-cols-2">
-                    <FieldWrapper label="定員（名）" required>
-                      <div className="relative">
-                        <Users className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
-                        <Input
-                          type="number"
-                          min={1}
-                          max={10000}
-                          aria-invalid={!!errors.capacity}
-                          {...register("capacity")}
-                          className={inputWithIconCls}
-                        />
+                    {watchedValues.location_type === "hybrid" ? (
+                      <div className="sm:col-span-2 grid gap-3 sm:grid-cols-2">
+                        <FieldWrapper label="リアル参加の定員（名）" required hint="会場で参加する人の上限">
+                          <div className="relative">
+                            <Users className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-amber-700" />
+                            <Input
+                              type="number"
+                              min={1}
+                              max={10000}
+                              aria-invalid={!!errors.capacity_physical}
+                              {...register("capacity_physical")}
+                              className={inputWithIconCls}
+                            />
+                          </div>
+                          <FieldError message={errors.capacity_physical?.message} />
+                        </FieldWrapper>
+                        <FieldWrapper label="オンライン参加の定員（名）" required hint="オンラインで参加する人の上限">
+                          <div className="relative">
+                            <Video className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-sky-700" />
+                            <Input
+                              type="number"
+                              min={1}
+                              max={10000}
+                              aria-invalid={!!errors.capacity_online}
+                              {...register("capacity_online")}
+                              className={inputWithIconCls}
+                            />
+                          </div>
+                          <FieldError message={errors.capacity_online?.message} />
+                        </FieldWrapper>
+                        <p className="sm:col-span-2 text-xs text-[#999999]">
+                          合計定員: {(Number(watchedValues.capacity_physical) || 0) + (Number(watchedValues.capacity_online) || 0)} 名
+                        </p>
                       </div>
-                      <FieldError message={errors.capacity?.message} />
-                    </FieldWrapper>
+                    ) : (
+                      <FieldWrapper label="定員（名）" required>
+                        <div className="relative">
+                          <Users className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A1A1A]" />
+                          <Input
+                            type="number"
+                            min={1}
+                            max={10000}
+                            aria-invalid={!!errors.capacity}
+                            {...register("capacity")}
+                            className={inputWithIconCls}
+                          />
+                        </div>
+                        <FieldError message={errors.capacity?.message} />
+                      </FieldWrapper>
+                    )}
 
                     <FieldWrapper
                       label="参加費（円）"
