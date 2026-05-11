@@ -69,13 +69,22 @@ function formatTime(iso: string): string {
 function formatBookingDate(iso: string): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleDateString("ja-JP", {
-      month: "short",
+    // Asia/Tokyo の M/D HH:mm 形式（例: 5/11 10:22）。
+    // 「5月11日」より「5/11」の方が横幅を稼げるため、テーブル表示用に短縮。
+    const parts = new Intl.DateTimeFormat("ja-JP", {
+      timeZone: TZ,
+      month: "numeric",
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
-      timeZone: TZ,
-    });
+      hour12: false,
+    }).formatToParts(d);
+    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+    const mm = get("month").replace(/^0/, "");
+    const dd = get("day").replace(/^0/, "");
+    const hh = get("hour");
+    const mi = get("minute");
+    return `${mm}/${dd} ${hh}:${mi}`;
   } catch {
     return iso;
   }
@@ -474,7 +483,7 @@ export default function AttendeesPage() {
     <main className="min-h-dvh bg-[#FAFAFA]">
       <Header />
 
-      <div className="mx-auto max-w-3xl px-4 py-6">
+      <div className="mx-auto max-w-3xl lg:max-w-5xl xl:max-w-6xl px-4 py-6">
         {/* Back navigation */}
         <div className="mb-6 flex items-center gap-3">
           <Button
@@ -726,7 +735,8 @@ export default function AttendeesPage() {
                 </div>
 
                 {/* Desktop layout */}
-                <div className="hidden sm:grid grid-cols-[auto_1fr_1fr_auto_auto_auto] gap-3 items-center">
+                {/* col構成: 出席ボタン / 名前+バッジ(自然幅) / メール(伸縮・略) / 電話 / 予約日 / 操作 */}
+                <div className="hidden sm:grid grid-cols-[auto_auto_minmax(0,1fr)_auto_auto_auto] gap-3 items-center">
                   <button
                     type="button"
                     onClick={() => toggleAttendance(booking.id, booking.attended)}
@@ -744,19 +754,19 @@ export default function AttendeesPage() {
                       <span className="text-[11px] font-bold">{index + 1}</span>
                     )}
                   </button>
-                  <span className="text-[13px] font-medium text-[#1A1A1A] min-w-0 flex items-center gap-1.5">
-                    <span className="truncate min-w-0">{booking.guest_name}</span>
-                    <span className="shrink-0 flex items-center gap-1.5">
-                      <PaymentBadge status={booking.payment_status} />
-                      <AttendanceFormatPill booking={booking} />
-                      <ConfirmPaymentButton booking={booking} />
-                    </span>
+                  {/* 名前+バッジは whitespace-nowrap で必ず全表示 */}
+                  <span className="text-[13px] font-medium text-[#1A1A1A] flex items-center gap-1.5 whitespace-nowrap">
+                    {booking.guest_name}
+                    <PaymentBadge status={booking.payment_status} />
+                    <AttendanceFormatPill booking={booking} />
+                    <ConfirmPaymentButton booking={booking} />
                   </span>
+                  {/* メールは省略可能 */}
                   <span className="flex items-center gap-1 text-[13px] text-[#999999] min-w-0 truncate">
                     <Mail className="h-3 w-3 shrink-0" />
                     {booking.guest_email}
                   </span>
-                  <span className="flex items-center gap-1 text-[13px] text-[#999999] w-28">
+                  <span className="flex items-center gap-1 text-[13px] text-[#999999] whitespace-nowrap">
                     {booking.guest_phone ? (
                       <>
                         <Phone className="h-3 w-3 shrink-0" />
@@ -766,7 +776,7 @@ export default function AttendeesPage() {
                       <span className="text-[#E5E5E5]">--</span>
                     )}
                   </span>
-                  <span className="flex items-center gap-1 text-xs text-[#999999] w-24 justify-end">
+                  <span className="flex items-center gap-1 text-xs text-[#999999] whitespace-nowrap">
                     <Clock className="h-2.5 w-2.5" />
                     {formatBookingDate(booking.created_at)}
                   </span>
