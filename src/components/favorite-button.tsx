@@ -9,6 +9,8 @@ type Props = {
   initialFavorited: boolean;
   isAuthed: boolean;
   variant?: "icon" | "button";
+  /** Total number of favorites for this event. Displayed inline when > 0. */
+  count?: number;
 };
 
 export function FavoriteButton({
@@ -16,9 +18,12 @@ export function FavoriteButton({
   initialFavorited,
   isAuthed,
   variant = "button",
+  count = 0,
 }: Props) {
   const [favorited, setFavorited] = useState(initialFavorited);
   const [busy, setBusy] = useState(false);
+  // ローカルでカウントを動かす（楽観UI）
+  const [localCount, setLocalCount] = useState(count);
   const router = useRouter();
 
   async function toggle() {
@@ -30,15 +35,18 @@ export function FavoriteButton({
     setBusy(true);
     const next = !favorited;
     setFavorited(next); // optimistic
+    setLocalCount((c) => Math.max(0, c + (next ? 1 : -1)));
     try {
       const res = await fetch(`/api/events/${eventId}/favorite`, {
         method: next ? "POST" : "DELETE",
       });
       if (!res.ok) {
         setFavorited(!next); // rollback
+        setLocalCount((c) => Math.max(0, c + (next ? -1 : 1)));
       }
     } catch {
       setFavorited(!next);
+      setLocalCount((c) => Math.max(0, c + (next ? -1 : 1)));
     } finally {
       setBusy(false);
     }
@@ -85,6 +93,11 @@ export function FavoriteButton({
         <Heart className={`h-4 w-4 ${favorited ? "fill-rose-500" : ""}`} />
       )}
       {favorited ? "お気に入り済み" : "お気に入り"}
+      {localCount > 0 && (
+        <span className="ml-1 text-xs tabular-nums text-[#999999]">
+          {localCount}
+        </span>
+      )}
     </button>
   );
 }

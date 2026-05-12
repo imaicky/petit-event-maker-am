@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Sparkles, ChevronRight } from "lucide-react";
 import { EventCard } from "@/components/event-card";
+import { DismissButton } from "@/components/dismiss-button";
 import { buildPersonalizedFeed } from "@/lib/feed";
 import { createClient } from "@/lib/supabase/server";
 
@@ -41,6 +42,7 @@ export async function PersonalizedFeed() {
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {top.map((ev) => (
           <div key={ev.id} className="relative">
+            <DismissButton eventId={ev.id} />
             <EventCard
               id={ev.id}
               title={ev.title}

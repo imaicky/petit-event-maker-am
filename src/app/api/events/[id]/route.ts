@@ -156,6 +156,7 @@ export async function GET(
     let waitlistCount = 0;
     let physicalCount = 0;
     let onlineCount = 0;
+    let favoriteCount = 0;
     if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
       const admin = createAdminClient();
       const { count: confirmedCount } = await admin
@@ -185,6 +186,14 @@ export async function GET(
         .eq("status", "confirmed")
         .eq("attendance_format", "online");
       onlineCount = oCount ?? 0;
+
+      // お気に入り数
+      const { count: favCount } = await (
+        admin.from as unknown as (t: string) => ReturnType<typeof admin.from>
+      )("event_favorites")
+        .select("*", { count: "exact", head: true })
+        .eq("event_id", id);
+      favoriteCount = favCount ?? 0;
     }
 
     // Fetch creator's LINE friend-add URL (bot_basic_id)
@@ -235,6 +244,7 @@ export async function GET(
           waitlist_count: Number(waitlistCount),
           booking_count_physical: Number(physicalCount),
           booking_count_online: Number(onlineCount),
+          favorite_count: Number(favoriteCount),
           line_friend_url: lineFriendUrl,
         },
       });

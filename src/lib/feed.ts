@@ -203,6 +203,7 @@ export async function buildPersonalizedFeed(
   let followingOrgIds = new Set<string>();
   let viewedEventIds = new Set<string>();
   let attendedCategoryIds = new Set<number>();
+  let dismissedEventIds = new Set<string>();
 
   if (userId) {
     // 興味タグ
@@ -229,6 +230,14 @@ export async function buildPersonalizedFeed(
       .limit(100);
     for (const v of (views ?? []) as Array<{ event_id: string }>) {
       viewedEventIds.add(v.event_id);
+    }
+
+    // 「興味なし」で除外したイベント
+    const { data: dismissals } = await fromTable("user_event_dismissals")
+      .select("event_id")
+      .eq("user_id", userId);
+    for (const d of (dismissals ?? []) as Array<{ event_id: string }>) {
+      dismissedEventIds.add(d.event_id);
     }
 
     // 過去参加カテゴリ（興味プロファイルが空の場合のフォールバック）
@@ -325,6 +334,11 @@ export async function buildPersonalizedFeed(
 
     // 6-6. 限定公開イベントはタグマッチが弱いと除外
     if (e.is_limited && tagMatch < 0.3) {
+      score = 0;
+    }
+
+    // 6-7. 「興味なし」で本人が除外したイベントは完全に隠す
+    if (dismissedEventIds.has(e.id)) {
       score = 0;
     }
 

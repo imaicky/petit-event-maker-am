@@ -46,6 +46,7 @@ interface EventData {
   booking_count: number;
   booking_count_physical?: number;
   booking_count_online?: number;
+  favorite_count?: number;
   image_url?: string;
   category?: string;
   teacher_name?: string;
@@ -659,6 +660,7 @@ export default async function EventPage({ params, searchParams }: EventPageProps
                 eventId={id}
                 initialFavorited={favoriteState}
                 isAuthed={isAuthed}
+                count={event.favorite_count ?? 0}
               />
               <ShareButton url={shareUrl} title={event.title} variant="inline" label="URLをシェア" />
               <ShareButton
