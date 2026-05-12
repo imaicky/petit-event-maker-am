@@ -6,6 +6,7 @@ import {
   buildNewEventFlexBubble,
   multicastFlexMessage,
 } from "@/lib/line";
+import { signUnsubscribeToken } from "@/lib/unsubscribe-token";
 
 // ─── GET /api/cron/notify-new-events ──────────────────────────
 // Daily Vercel cron: notifies followers about newly published events.
@@ -240,38 +241,58 @@ async function notifyFollowersOfEvent(
   const eventUrl = event.short_code
     ? `${baseUrl}/e/${event.short_code}`
     : `${baseUrl}/events/${event.id}`;
-  const unsubscribeUrl = `${baseUrl}/my/follows`;
   const subject = `【新着イベント】${organizerName}さんが「${event.title}」を公開しました`;
-  const html = buildNewEventEmailHtml(
-    organizerName,
-    event.title,
-    dateStr,
-    event.location ?? "未定",
-    eventUrl,
-    unsubscribeUrl
-  );
 
-  const emails: string[] = [];
+  // 各フォロワーごとに署名された購読停止URLを発行する必要があるため、
+  // バッチ送信ではなく1通ずつ送る（Promise.all で並列化）。
+  type EmailTarget = { followerId: string; email: string };
+  const emailTargets: EmailTarget[] = [];
+  const seen = new Set<string>();
   for (const row of rows) {
     if (!row.notify_email) continue;
     const e = emailById.get(row.follower_id);
-    if (e && e.includes("@")) emails.push(e);
+    if (!e || !e.includes("@")) continue;
+    if (seen.has(e)) continue; // dedupe by email
+    seen.add(e);
+    emailTargets.push({ followerId: row.follower_id, email: e });
   }
-  const dedupedEmails = [...new Set(emails)];
 
   let sentEmails = 0;
-  if (process.env.RESEND_API_KEY && dedupedEmails.length > 0) {
-    const result = await sendBatchEmails({
-      to: dedupedEmails,
-      subject,
-      html,
-    }).catch((err) => {
-      errors.push(
-        `email batch (${event.id}): ${err instanceof Error ? err.message : String(err)}`
-      );
-      return null;
-    });
-    if (result) sentEmails = dedupedEmails.length;
+  if (process.env.RESEND_API_KEY && emailTargets.length > 0 && event.creator_id) {
+    await Promise.all(
+      emailTargets.map(async (t) => {
+        try {
+          const unsubToken = signUnsubscribeToken(
+            t.followerId,
+            event.creator_id!,
+            "email"
+          );
+          const unsubscribeUrl = `${baseUrl}/api/notifications/unsubscribe?t=${encodeURIComponent(
+            unsubToken
+          )}`;
+          const html = buildNewEventEmailHtml(
+            organizerName,
+            event.title,
+            dateStr,
+            event.location ?? "未定",
+            eventUrl,
+            unsubscribeUrl
+          );
+          await sendBatchEmails({
+            to: [t.email],
+            subject,
+            html,
+          });
+          sentEmails += 1;
+        } catch (err) {
+          errors.push(
+            `email (${event.id} → ${t.email}): ${
+              err instanceof Error ? err.message : String(err)
+            }`
+          );
+        }
+      })
+    );
   }
 
   // ── 5) LINE 送信 ────────────────────────────────────────────
