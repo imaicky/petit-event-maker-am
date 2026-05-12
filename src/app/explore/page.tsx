@@ -39,6 +39,54 @@ async function getDbCategories(): Promise<DbCategory[]> {
     return [];
   }
 }
+
+type DbTag = {
+  id: number;
+  slug: string;
+  name: string;
+  tag_type: "format" | "level" | "tool" | "topic";
+};
+
+async function getDbTags(): Promise<DbTag[]> {
+  try {
+    const supabase = await createClient();
+    const { data } = await (
+      supabase.from as unknown as (t: string) => ReturnType<typeof supabase.from>
+    )("event_tags")
+      .select("id, slug, name, tag_type")
+      .eq("is_active", true);
+    return (data ?? []) as DbTag[];
+  } catch {
+    return [];
+  }
+}
+
+async function getTagAssignments(
+  eventIds: string[]
+): Promise<Map<string, Set<number>>> {
+  if (eventIds.length === 0) return new Map();
+  try {
+    const supabase = await createClient();
+    const { data } = await (
+      supabase.from as unknown as (t: string) => ReturnType<typeof supabase.from>
+    )("event_tag_assignments")
+      .select("event_id, tag_id")
+      .in("event_id", eventIds);
+    const map = new Map<string, Set<number>>();
+    for (const row of (data ?? []) as Array<{
+      event_id: string;
+      tag_id: number;
+    }>) {
+      const set = map.get(row.event_id) ?? new Set<number>();
+      set.add(row.tag_id);
+      map.set(row.event_id, set);
+    }
+    return map;
+  } catch {
+    return new Map();
+  }
+}
+
 import { EventCard } from "@/components/event-card";
 import { ExploreFilters } from "@/components/explore-filters";
 import { TrendingEvents } from "@/components/trending-events";
@@ -182,11 +230,16 @@ function filterEvents(
   category: string,
   area: string,
   locationType: string,
-  categoryNameById?: Map<number, string>
+  tagSlug: string,
+  categoryNameById?: Map<number, string>,
+  tagIdBySlug?: Map<string, number>,
+  tagAssignments?: Map<string, Set<number>>
 ): EventWithBookingCount[] {
   const q = query.toLowerCase().trim();
   const cat = category.trim();
   const ar = area.toLowerCase().trim();
+  const wantedTagId =
+    tagSlug && tagIdBySlug ? tagIdBySlug.get(tagSlug) ?? null : null;
 
   return events.filter((e) => {
     if (cat) {
@@ -196,6 +249,10 @@ function filterEvents(
         e.category_id != null &&
         categoryNameById?.get(e.category_id) === cat;
       if (!legacyMatch && !newMatch) return false;
+    }
+    if (wantedTagId != null) {
+      const set = tagAssignments?.get(e.id);
+      if (!set || !set.has(wantedTagId)) return false;
     }
     if (locationType && e.location_type !== locationType) return false;
     if (ar && !(e.location ?? "").toLowerCase().includes(ar)) return false;
@@ -242,25 +299,32 @@ interface ExplorePageProps {
     view?: string;
     month?: string;
     date?: string;
+    tag?: string;
   }>;
 }
 
 export const dynamic = "force-dynamic";
 
 export default async function ExplorePage({ searchParams }: ExplorePageProps) {
-  const { q = "", category = "", area = "", sort = "new", type = "", view = "", month = "", date = "" } = await searchParams;
+  const { q = "", category = "", area = "", sort = "new", type = "", view = "", month = "", date = "", tag = "" } = await searchParams;
 
   const allEvents = await getPublishedEvents();
   const reviewAggs = await getReviewAggregations(allEvents.map((e) => e.id));
   const dbCategories = await getDbCategories();
   const categoryNameById = new Map(dbCategories.map((c) => [c.id, c.name]));
+  const dbTags = await getDbTags();
+  const tagIdBySlug = new Map(dbTags.map((t) => [t.slug, t.id]));
+  const tagAssignments = await getTagAssignments(allEvents.map((e) => e.id));
   const filtered = filterEvents(
     allEvents,
     q,
     category,
     area,
     type,
-    categoryNameById
+    tag,
+    categoryNameById,
+    tagIdBySlug,
+    tagAssignments
   );
   let sorted = sortEvents(filtered, sort, reviewAggs);
 
@@ -272,7 +336,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
     });
   }
 
-  const isFiltered = !!(q || category || area || type || date);
+  const isFiltered = !!(q || category || area || type || date || tag);
   const isCalendarView = view === "calendar";
 
   // List view excludes past events (calendar still shows them when navigating
@@ -548,6 +612,71 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
               );
             })}
           </div>
+
+          {/* Tag chips (tool / topic タグで絞り込み) */}
+          {dbTags.length > 0 && (
+            <details className="mt-3 group animate-fade-in" {...(tag ? { open: true } : {})}>
+              <summary className="cursor-pointer select-none text-xs text-[#999999] hover:text-[#1A1A1A] inline-flex items-center gap-1">
+                <span>🏷 タグで絞り込む</span>
+                {tag && (
+                  <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-[#1A1A1A] px-2 py-0.5 text-[10px] text-white">
+                    {dbTags.find((t) => t.slug === tag)?.name ?? tag}
+                  </span>
+                )}
+              </summary>
+              <div className="mt-2 space-y-2">
+                {(["tool", "topic", "format", "level"] as const).map((tagType) => {
+                  const tagsOfType = dbTags.filter((t) => t.tag_type === tagType);
+                  if (tagsOfType.length === 0) return null;
+                  const label =
+                    tagType === "tool"
+                      ? "ツール"
+                      : tagType === "topic"
+                      ? "トピック"
+                      : tagType === "format"
+                      ? "形式"
+                      : "レベル";
+                  return (
+                    <div key={tagType} className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] text-[#999999] mr-1">{label}:</span>
+                      {tagsOfType.map((t) => {
+                        const isActive = tag === t.slug;
+                        const href = isActive
+                          ? `/explore?${new URLSearchParams({
+                              ...(q ? { q } : {}),
+                              ...(category ? { category } : {}),
+                              ...(area ? { area } : {}),
+                              ...(sort !== "new" ? { sort } : {}),
+                              ...(type ? { type } : {}),
+                            }).toString()}`
+                          : `/explore?${new URLSearchParams({
+                              ...(q ? { q } : {}),
+                              ...(category ? { category } : {}),
+                              ...(area ? { area } : {}),
+                              ...(sort !== "new" ? { sort } : {}),
+                              ...(type ? { type } : {}),
+                              tag: t.slug,
+                            }).toString()}`;
+                        return (
+                          <Link
+                            key={t.id}
+                            href={href}
+                            className={`inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[11px] font-medium transition-colors ${
+                              isActive
+                                ? "bg-[#1A1A1A] text-white"
+                                : "bg-white text-[#666666] ring-1 ring-[#E5E5E5] hover:ring-[#1A1A1A]/40 hover:text-[#1A1A1A]"
+                            }`}
+                          >
+                            {t.name}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
+          )}
         </div>
       </div>
 
