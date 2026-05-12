@@ -477,31 +477,61 @@ export default function AttendeesPage() {
     );
   }
 
-  function PaymentBadge({ status }: { status: string | null | undefined }) {
+  function paymentMethodLabel(method: string | null | undefined): string | null {
+    switch (method) {
+      case "stripe":
+        return "カード";
+      case "bank":
+        return "銀行振込";
+      case "onsite":
+        return "現地払い";
+      case "custom":
+        return "主催者案内";
+      default:
+        return null;
+    }
+  }
+
+  function PaymentBadge({
+    status,
+    method,
+  }: {
+    status: string | null | undefined;
+    method?: string | null;
+  }) {
     if (!isPaidEvent) return null;
+    const methodLabel = paymentMethodLabel(method);
+
+    const baseCls = "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium gap-1";
+
     switch (status) {
       case "paid":
         return (
-          <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700">
-            支払済
+          <span className={`${baseCls} bg-green-100 text-green-700`}>
+            支払済{methodLabel && <span className="opacity-60">・{methodLabel}</span>}
           </span>
         );
       case "pending":
+        // 「未払い」は誤解されやすい (現地払いの人は来てから払う)
+        // ので支払方法を必ず併記する。
         return (
-          <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] font-medium text-yellow-700">
-            未払い
+          <span className={`${baseCls} bg-yellow-100 text-yellow-800`}>
+            {method === "onsite" ? "現地で支払予定" : "未払い"}
+            {methodLabel && method !== "onsite" && (
+              <span className="opacity-70">・{methodLabel}</span>
+            )}
           </span>
         );
       case "refunded":
         return (
-          <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
-            返金済
+          <span className={`${baseCls} bg-gray-100 text-gray-500`}>
+            返金済{methodLabel && <span className="opacity-60">・{methodLabel}</span>}
           </span>
         );
       case "failed":
         return (
-          <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-600">
-            決済失敗
+          <span className={`${baseCls} bg-red-100 text-red-600`}>
+            決済失敗{methodLabel && <span className="opacity-60">・{methodLabel}</span>}
           </span>
         );
       default:
@@ -764,7 +794,7 @@ export default function AttendeesPage() {
                       <span className="text-sm font-bold text-[#1A1A1A]">
                         {booking.guest_name}
                       </span>
-                      <PaymentBadge status={booking.payment_status} />
+                      <PaymentBadge status={booking.payment_status} method={booking.payment_method} />
                       <AttendanceFormatPill booking={booking} />
                       <ConfirmPaymentButton booking={booking} />
                       <SendPaymentLinkButton booking={booking} />
@@ -829,7 +859,7 @@ export default function AttendeesPage() {
                   {/* 名前+バッジは whitespace-nowrap で必ず全表示 */}
                   <span className="text-[13px] font-medium text-[#1A1A1A] flex items-center gap-1.5 whitespace-nowrap">
                     {booking.guest_name}
-                    <PaymentBadge status={booking.payment_status} />
+                    <PaymentBadge status={booking.payment_status} method={booking.payment_method} />
                     <AttendanceFormatPill booking={booking} />
                     <ConfirmPaymentButton booking={booking} />
                   </span>
