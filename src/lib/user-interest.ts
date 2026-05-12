@@ -79,6 +79,85 @@ export async function recordInterestFromBooking(
 }
 
 /**
+ * イベント閲覧時に該当イベントのタグ群に「+1」を加点する。
+ *
+ * 同じ (user, event) を24時間以内に再度閲覧した場合は、
+ * このメソッドを呼ぶ前に view 履歴をチェックして skip すること。
+ * （重複加点防止は呼び出し側の責務）
+ *
+ * 内部処理は recordInterestFromBooking と同じ「upsert+加算」ロジック。
+ */
+export async function recordInterestFromView(
+  userId: string | null,
+  eventId: string
+): Promise<void> {
+  if (!userId) return;
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return;
+
+  const { data: assigns } = await table("event_tag_assignments")
+    .select("tag_id")
+    .eq("event_id", eventId);
+  const tagIds = ((assigns ?? []) as Array<{ tag_id: number }>).map(
+    (a) => a.tag_id
+  );
+  if (tagIds.length === 0) return;
+
+  const delta = SCORE_BY_SOURCE.view;
+
+  for (const tagId of tagIds) {
+    const { data: existing } = await table("user_interest_scores")
+      .select("score")
+      .eq("user_id", userId)
+      .eq("tag_id", tagId)
+      .eq("source", "view")
+      .maybeSingle();
+
+    if (existing) {
+      const current = (existing as { score: number }).score;
+      await table("user_interest_scores")
+        .update({ score: current + delta, updated_at: new Date().toISOString() })
+        .eq("user_id", userId)
+        .eq("tag_id", tagId)
+        .eq("source", "view");
+    } else {
+      await table("user_interest_scores").insert({
+        user_id: userId,
+        tag_id: tagId,
+        source: "view",
+        score: delta,
+      });
+    }
+  }
+}
+
+/**
+ * 同じ (user, event) が直近24時間に閲覧されているかをチェックする。
+ * recordInterestFromView を呼ぶ前に使い、重複加点を防ぐ。
+ */
+export async function hasRecentView(
+  userId: string,
+  eventId: string,
+  windowHours = 24
+): Promise<boolean> {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return false;
+  const since = new Date(Date.now() - windowHours * 60 * 60 * 1000).toISOString();
+  const { count } = await (table("event_views") as unknown as {
+    select: (cols: string, opts: { count: "exact"; head: true }) => {
+      eq: (k: string, v: string) => {
+        eq: (k: string, v: string) => {
+          gte: (k: string, v: string) => Promise<{ count: number | null }>;
+        };
+      };
+    };
+  })
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("event_id", eventId)
+    .gte("viewed_at", since);
+  return (count ?? 0) > 0;
+}
+
+/**
  * ユーザーの興味タグを集計して、スコア降順で返す。
  * F3-03 のパーソナライズフィードで「興味タグID集合」として使う。
  *

@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { recordEventView } from "@/lib/analytics";
+import {
+  hasRecentView,
+  recordInterestFromView,
+} from "@/lib/user-interest";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +47,19 @@ export async function POST(
     data: { user },
   } = await supabase.auth.getUser();
 
+  // F3-02 興味スコア加点判定（recordEventView の前にチェック）。
+  // recordEventView 後だと自分の view が当たって常に「最近見た」になるため、
+  // 「事前チェック→ recordEventView →条件成立時に加点」の順で実行する。
+  let creditInterest = false;
+  if (user?.id) {
+    try {
+      const recent = await hasRecentView(user.id, eventId);
+      creditInterest = !recent;
+    } catch {
+      // 失敗時は安全側に倒して加点しない
+    }
+  }
+
   await recordEventView({
     event_id: eventId,
     user_id: user?.id ?? null,
@@ -54,6 +71,16 @@ export async function POST(
       typeof body.utm_campaign === "string" ? body.utm_campaign : null,
     user_agent: req.headers.get("user-agent"),
   });
+
+  // 加点処理は fire-and-forget（ログだけ残す）
+  if (creditInterest && user?.id) {
+    recordInterestFromView(user.id, eventId).catch((e) => {
+      console.warn(
+        "[view] recordInterestFromView failed:",
+        e instanceof Error ? e.message : String(e)
+      );
+    });
+  }
 
   const res = NextResponse.json({ ok: true });
   if (setCookie) {
