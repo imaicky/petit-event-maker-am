@@ -151,7 +151,7 @@ export default function MyPage() {
         {/* Favorites link */}
         <Link
           href="/my/favorites"
-          className="mb-6 flex items-center justify-between rounded-2xl border border-[#E5E5E5] bg-white p-4 hover:border-[#1A1A1A]/30 hover:shadow-sm transition-all"
+          className="mb-3 flex items-center justify-between rounded-2xl border border-[#E5E5E5] bg-white p-4 hover:border-[#1A1A1A]/30 hover:shadow-sm transition-all"
         >
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-rose-500 to-rose-700 text-white">
@@ -160,6 +160,23 @@ export default function MyPage() {
             <div>
               <p className="text-sm font-bold text-[#1A1A1A]">お気に入りイベント</p>
               <p className="text-xs text-[#999999]">あとで見返したいイベント</p>
+            </div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-[#999999]" />
+        </Link>
+
+        {/* Interests link */}
+        <Link
+          href="/my/interests"
+          className="mb-6 flex items-center justify-between rounded-2xl border border-[#E5E5E5] bg-white p-4 hover:border-[#1A1A1A]/30 hover:shadow-sm transition-all"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#C26A4A] to-[#A85535] text-white">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-[#1A1A1A]">興味プロファイル</p>
+              <p className="text-xs text-[#999999]">予約・閲覧から自動学習されたあなたの興味タグ</p>
             </div>
           </div>
           <ChevronRight className="h-4 w-4 text-[#999999]" />

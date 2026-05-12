@@ -509,8 +509,21 @@ export default async function EventPage({ params, searchParams }: EventPageProps
 
           {/* ── Left: Event details ─────────────────────────────── */}
           <article>
-            {/* Spots badge */}
-            <div className="mb-6 animate-fade-in-up delay-100">
+            {/* Format & Spots badges */}
+            <div className="mb-6 flex flex-wrap items-center gap-2 animate-fade-in-up delay-100">
+              {locationType === "hybrid" ? (
+                <Badge className="border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
+                  📍🎥 ハイブリッド開催（会場+オンライン）
+                </Badge>
+              ) : locationType === "online" ? (
+                <Badge className="border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-800">
+                  🎥 オンライン開催
+                </Badge>
+              ) : (
+                <Badge className="border border-[#E5E5E5] bg-white px-3 py-1 text-xs font-medium text-[#1A1A1A]">
+                  📍 会場開催
+                </Badge>
+              )}
               <SpotsBadge remaining={remaining} capacity={event.capacity} isClosed={isClosed} />
             </div>
 
