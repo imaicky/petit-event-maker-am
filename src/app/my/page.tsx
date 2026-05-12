@@ -134,7 +134,7 @@ export default function MyPage() {
         {/* Follows link */}
         <Link
           href="/my/follows"
-          className="mb-6 flex items-center justify-between rounded-2xl border border-[#E5E5E5] bg-white p-4 hover:border-[#1A1A1A]/30 hover:shadow-sm transition-all"
+          className="mb-3 flex items-center justify-between rounded-2xl border border-[#E5E5E5] bg-white p-4 hover:border-[#1A1A1A]/30 hover:shadow-sm transition-all"
         >
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#C26A4A] to-[#A85535] text-white">
@@ -143,6 +143,23 @@ export default function MyPage() {
             <div>
               <p className="text-sm font-bold text-[#1A1A1A]">フォロー中の主催者</p>
               <p className="text-xs text-[#999999]">新規イベント公開を見逃さない</p>
+            </div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-[#999999]" />
+        </Link>
+
+        {/* Favorites link */}
+        <Link
+          href="/my/favorites"
+          className="mb-6 flex items-center justify-between rounded-2xl border border-[#E5E5E5] bg-white p-4 hover:border-[#1A1A1A]/30 hover:shadow-sm transition-all"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-rose-500 to-rose-700 text-white">
+              <span className="text-base">♡</span>
+            </div>
+            <div>
+              <p className="text-sm font-bold text-[#1A1A1A]">お気に入りイベント</p>
+              <p className="text-xs text-[#999999]">あとで見返したいイベント</p>
             </div>
           </div>
           <ChevronRight className="h-4 w-4 text-[#999999]" />

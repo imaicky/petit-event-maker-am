@@ -131,6 +131,53 @@ export async function recordInterestFromView(
 }
 
 /**
+ * お気に入り登録時に該当イベントのタグ群に「+3」を加点する。
+ * お気に入り解除時は減点しない（過去の興味は残す）。
+ */
+export async function recordInterestFromFavorite(
+  userId: string | null,
+  eventId: string
+): Promise<void> {
+  if (!userId) return;
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return;
+
+  const { data: assigns } = await table("event_tag_assignments")
+    .select("tag_id")
+    .eq("event_id", eventId);
+  const tagIds = ((assigns ?? []) as Array<{ tag_id: number }>).map(
+    (a) => a.tag_id
+  );
+  if (tagIds.length === 0) return;
+
+  const delta = SCORE_BY_SOURCE.favorite;
+
+  for (const tagId of tagIds) {
+    const { data: existing } = await table("user_interest_scores")
+      .select("score")
+      .eq("user_id", userId)
+      .eq("tag_id", tagId)
+      .eq("source", "favorite")
+      .maybeSingle();
+
+    if (existing) {
+      const current = (existing as { score: number }).score;
+      await table("user_interest_scores")
+        .update({ score: current + delta, updated_at: new Date().toISOString() })
+        .eq("user_id", userId)
+        .eq("tag_id", tagId)
+        .eq("source", "favorite");
+    } else {
+      await table("user_interest_scores").insert({
+        user_id: userId,
+        tag_id: tagId,
+        source: "favorite",
+        score: delta,
+      });
+    }
+  }
+}
+
+/**
  * 同じ (user, event) が直近24時間に閲覧されているかをチェックする。
  * recordInterestFromView を呼ぶ前に使い、重複加点を防ぐ。
  */

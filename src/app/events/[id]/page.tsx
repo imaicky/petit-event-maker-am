@@ -18,7 +18,10 @@ import { LineSchedulePrompt } from "@/components/line-schedule-prompt";
 import { EventAdminBar } from "@/components/event-admin-bar";
 import { PasscodeGate, PasscodeAutoUnlock } from "@/components/passcode-gate";
 import { ViewTracker } from "@/components/view-tracker";
+import { FavoriteButton } from "@/components/favorite-button";
 import { buildGoogleCalendarUrl } from "@/lib/calendar";
+import { createClient } from "@/lib/supabase/server";
+import { getFavoriteState } from "@/lib/favorites";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -326,15 +329,22 @@ export default async function EventPage({ params, searchParams }: EventPageProps
   const passFromUrl = typeof sp.pass === "string" ? sp.pass : undefined;
 
   const baseUrl = await getBaseUrl();
-  const [event, passcodeData, { reviews, averageRating }] = await Promise.all([
+  const [event, passcodeData, { reviews, averageRating }, favoriteState, authUser] = await Promise.all([
     getEvent(id),
     getPasscodeForEvent(id),
     getReviews(id, baseUrl),
+    getFavoriteState(id),
+    (async () => {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      return user;
+    })(),
   ]);
 
   if (!event) {
     notFound();
   }
+  const isAuthed = !!authUser;
 
   // ─── Passcode gate logic ────────────────────────────────────────────────────
   const isLimited = !!passcodeData?.is_limited && !!passcodeData.limited_passcode;
@@ -632,6 +642,11 @@ export default async function EventPage({ params, searchParams }: EventPageProps
 
             {/* Share & Stories actions */}
             <div className="mb-4 flex flex-wrap gap-2 animate-fade-in-up delay-200">
+              <FavoriteButton
+                eventId={id}
+                initialFavorited={favoriteState}
+                isAuthed={isAuthed}
+              />
               <ShareButton url={shareUrl} title={event.title} variant="inline" label="URLをシェア" />
               <ShareButton
                 url={shareUrl}
