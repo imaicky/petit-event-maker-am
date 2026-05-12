@@ -137,6 +137,8 @@ export default function AttendeesPage() {
   const [updatingFormat, setUpdatingFormat] = useState<string | null>(null);
   const [sendingSurvey, setSendingSurvey] = useState(false);
   const [surveyResult, setSurveyResult] = useState<string | null>(null);
+  const [sendingPaymentBulk, setSendingPaymentBulk] = useState(false);
+  const [paymentBulkResult, setPaymentBulkResult] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!eventId || !user) return;
@@ -248,6 +250,43 @@ export default function AttendeesPage() {
       // silently fail
     } finally {
       setUpdatingFormat(null);
+    }
+  }
+
+  async function sendPaymentReminderBulk() {
+    const pendingCardCount = bookings.filter(
+      (b) =>
+        b.payment_status === "pending" &&
+        (b as { payment_method?: string | null }).payment_method === "stripe"
+    ).length;
+    if (pendingCardCount === 0) {
+      setPaymentBulkResult("未払いのカード決済予約はありません");
+      return;
+    }
+    if (
+      !confirm(
+        `カード未払い ${pendingCardCount}名に決済リンクのメールを送信します。よろしいですか？`
+      )
+    ) {
+      return;
+    }
+    setSendingPaymentBulk(true);
+    setPaymentBulkResult(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/payment-reminder-bulk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPaymentBulkResult(json.error ?? "送信に失敗しました");
+        return;
+      }
+      setPaymentBulkResult(`✅ ${json.sent}/${json.total}名に決済リンクを送信しました`);
+    } catch {
+      setPaymentBulkResult("ネットワークエラーが発生しました");
+    } finally {
+      setSendingPaymentBulk(false);
     }
   }
 
@@ -594,6 +633,25 @@ export default function AttendeesPage() {
                     )}
                   </button>
                 )}
+                {isPaidEvent &&
+                  bookings.some(
+                    (b) =>
+                      b.payment_status === "pending" &&
+                      (b as { payment_method?: string | null }).payment_method === "stripe"
+                  ) && (
+                    <button
+                      type="button"
+                      disabled={sendingPaymentBulk}
+                      onClick={sendPaymentReminderBulk}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3 text-xs font-medium text-emerald-800 hover:border-emerald-400 hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                    >
+                      {sendingPaymentBulk ? (
+                        <span className="text-[10px]">送信中…</span>
+                      ) : (
+                        <>💴 <span className="hidden sm:inline">未払いに決済リンク一斉送信</span></>
+                      )}
+                    </button>
+                  )}
                 <Button
                   type="button"
                   size="sm"
@@ -611,6 +669,12 @@ export default function AttendeesPage() {
         {surveyResult && (
           <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
             {surveyResult}
+          </div>
+        )}
+
+        {paymentBulkResult && (
+          <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+            {paymentBulkResult}
           </div>
         )}
 
