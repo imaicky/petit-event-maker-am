@@ -35,6 +35,7 @@ import { Header } from "@/components/header";
 import { useAuth } from "@/components/auth-provider";
 import { createClient } from "@/lib/supabase/client";
 import { LineNotifyDialog } from "@/components/line-notify-dialog";
+import { OrganizerStats } from "@/components/organizer-stats";
 import type { Database } from "@/types/database";
 
 type EventRow = Database["public"]["Tables"]["events"]["Row"];
@@ -1032,6 +1033,9 @@ export default function DashboardPage() {
           <LoadingSkeleton />
         ) : (
           <>
+            {/* Organizer stats: フォロワー数 + 参加者の興味タグ分布 */}
+            <OrganizerStats />
+
             {/* Compact stats bar */}
             {events.length > 0 && (
               <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-2xl border border-[#E5E5E5] bg-white px-5 py-3 mb-6 animate-fade-in">
