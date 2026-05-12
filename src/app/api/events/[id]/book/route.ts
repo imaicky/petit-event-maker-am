@@ -6,6 +6,7 @@ import { broadcastLineMessage, pushLineMessage, pushFlexMessage, multicastLineMe
 import { sendBatchEmails } from "@/lib/email";
 import { wrapInHtml } from "@/lib/email-templates";
 import { logPaymentEvent } from "@/lib/payment-audit";
+import { recordInterestFromBooking } from "@/lib/user-interest";
 
 // ─── Validation ──────────────────────────────────────────────
 
@@ -398,6 +399,17 @@ export async function POST(
         amount: ev.price ?? null,
         actor: user?.id ?? "guest",
         metadata: { booking_status: bookingStatus, payment_deadline: paymentDeadline },
+      });
+    }
+
+    // F3-02 興味プロファイル: confirmed bookingの場合のみタグスコアを加算。
+    // waitlisted は実際に行く確証がないので skip。
+    if (bookingStatus === "confirmed" && user?.id) {
+      recordInterestFromBooking(user.id, eventId).catch((e) => {
+        console.warn(
+          "[book] recordInterestFromBooking failed:",
+          e instanceof Error ? e.message : String(e)
+        );
       });
     }
 

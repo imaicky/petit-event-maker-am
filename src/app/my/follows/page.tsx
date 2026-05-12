@@ -4,6 +4,7 @@ import { ArrowLeft, Heart, Users, ChevronRight } from "lucide-react";
 import { Header } from "@/components/header";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { NotifyToggle } from "./notify-toggle";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,8 @@ type FollowedOrganizer = {
   bio: string | null;
   upcoming_count: number;
   followed_at: string;
+  notify_email: boolean;
+  notify_line: boolean;
 };
 
 async function getFollowedOrganizers(
@@ -28,13 +31,15 @@ async function getFollowedOrganizers(
       t: string
     ) => ReturnType<typeof admin.from>
   )("follows")
-    .select("organizer_id, created_at")
+    .select("organizer_id, created_at, notify_email, notify_line")
     .eq("follower_id", userId)
     .order("created_at", { ascending: false });
 
   const followsRows = (follows ?? []) as Array<{
     organizer_id: string;
     created_at: string;
+    notify_email: boolean;
+    notify_line: boolean;
   }>;
   if (followsRows.length === 0) return [];
 
@@ -78,6 +83,8 @@ async function getFollowedOrganizers(
       ...p,
       upcoming_count: countMap[f.organizer_id] ?? 0,
       followed_at: f.created_at,
+      notify_email: f.notify_email,
+      notify_line: f.notify_line,
     });
   }
   return result;
@@ -190,6 +197,11 @@ export default async function MyFollowsPage() {
                         開催予定 {org.upcoming_count}
                       </span>
                     )}
+                    <NotifyToggle
+                      username={org.username}
+                      initialEmail={org.notify_email}
+                      initialLine={org.notify_line}
+                    />
                     <span className="text-[10px] text-[#999999]">
                       {formatDate(org.followed_at)}〜
                     </span>

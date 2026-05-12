@@ -1,12 +1,27 @@
 import { describe, it, expect } from "vitest";
 import { TEMPLATES, CATEGORIES } from "./templates";
 
-describe("CATEGORIES (legacy)", () => {
-  it("contains expected legacy categories", () => {
+describe("CATEGORIES", () => {
+  it("contains AI領域カテゴリ（主軸）", () => {
+    expect(CATEGORIES).toContain("LLM活用");
+    expect(CATEGORIES).toContain("画像生成");
+    expect(CATEGORIES).toContain("プロンプトエンジニアリング");
+    expect(CATEGORIES).toContain("AI開発・実装");
+    expect(CATEGORIES).toContain("AI×ビジネス");
+  });
+
+  it("ライフスタイル系も後方互換で残す", () => {
     expect(CATEGORIES).toContain("フラワー");
     expect(CATEGORIES).toContain("ハンドメイド");
     expect(CATEGORIES).toContain("ヨガ");
     expect(CATEGORIES).toContain("Instagram");
+  });
+
+  it("AI領域が先頭側に並ぶ（ライフスタイルより前）", () => {
+    const idxLLM = CATEGORIES.indexOf("LLM活用");
+    const idxFlower = CATEGORIES.indexOf("フラワー");
+    expect(idxLLM).toBeGreaterThanOrEqual(0);
+    expect(idxFlower).toBeGreaterThan(idxLLM);
   });
 });
 

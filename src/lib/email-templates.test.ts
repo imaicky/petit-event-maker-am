@@ -4,6 +4,7 @@ import {
   wrapInHtml,
   buildReminderEmailHtml,
   buildNewEventEmailHtml,
+  buildFormatSurveyEmailHtml,
   EMAIL_TEMPLATES,
 } from "./email-templates";
 
@@ -173,6 +174,74 @@ describe("EMAIL_TEMPLATES", () => {
         expect(validPlaceholders).toContain(m);
       }
     }
+  });
+});
+
+describe("buildFormatSurveyEmailHtml", () => {
+  const args = {
+    guestName: "山田 花子",
+    eventTitle: "AI開発もくもく会",
+    dateStr: "2026年6月1日(月) 19:00",
+    location: "渋谷スタジオ",
+    physicalUrl: "https://example.com/api/bookings/confirm-format?t=phys-token",
+    onlineUrl: "https://example.com/api/bookings/confirm-format?t=online-token",
+  };
+
+  it("includes guest name, event title, datetime, location", () => {
+    const html = buildFormatSurveyEmailHtml(
+      args.guestName,
+      args.eventTitle,
+      args.dateStr,
+      args.location,
+      args.physicalUrl,
+      args.onlineUrl
+    );
+    expect(html).toContain("山田 花子");
+    expect(html).toContain("AI開発もくもく会");
+    expect(html).toContain("2026年6月1日");
+    expect(html).toContain("渋谷スタジオ");
+  });
+
+  it("renders both action URLs", () => {
+    const html = buildFormatSurveyEmailHtml(
+      args.guestName,
+      args.eventTitle,
+      args.dateStr,
+      args.location,
+      args.physicalUrl,
+      args.onlineUrl
+    );
+    expect(html).toContain(args.physicalUrl);
+    expect(html).toContain(args.onlineUrl);
+    expect(html).toContain("リアル参加");
+    expect(html).toContain("オンライン参加");
+  });
+
+  it("escapes HTML in user-controlled fields to prevent injection", () => {
+    const html = buildFormatSurveyEmailHtml(
+      "<script>alert(1)</script>",
+      "</title><b>x",
+      "2026-01-01",
+      "<img src=x onerror=alert(1)>",
+      "https://example.com/p",
+      "https://example.com/o"
+    );
+    expect(html).not.toContain("<script>alert(1)</script>");
+    expect(html).not.toContain("<img src=x onerror");
+    expect(html).toContain("&lt;script&gt;");
+  });
+
+  it("is a complete HTML document", () => {
+    const html = buildFormatSurveyEmailHtml(
+      args.guestName,
+      args.eventTitle,
+      args.dateStr,
+      args.location,
+      args.physicalUrl,
+      args.onlineUrl
+    );
+    expect(html).toContain("<!DOCTYPE html>");
+    expect(html).toContain("</html>");
   });
 });
 

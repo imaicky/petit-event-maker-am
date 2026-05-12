@@ -65,6 +65,28 @@ export async function follow(
   return { ok: true };
 }
 
+export async function updateFollowChannels(
+  followerId: string,
+  organizerId: string,
+  channels: { notify_email?: boolean; notify_line?: boolean }
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const updates: Record<string, boolean> = {};
+  if (typeof channels.notify_email === "boolean")
+    updates.notify_email = channels.notify_email;
+  if (typeof channels.notify_line === "boolean")
+    updates.notify_line = channels.notify_line;
+  if (Object.keys(updates).length === 0) {
+    return { ok: false, error: "更新する項目がありません" };
+  }
+  const admin = createAdminClient();
+  const { error } = await fromFollows(admin)
+    .update(updates)
+    .eq("follower_id", followerId)
+    .eq("organizer_id", organizerId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 export async function unfollow(
   followerId: string,
   organizerId: string
