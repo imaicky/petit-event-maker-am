@@ -205,7 +205,8 @@ async function getReviewAggregations(
 function sortEvents(
   events: EventWithBookingCount[],
   sort: string,
-  reviewAggs?: Record<string, ReviewAgg>
+  reviewAggs?: Record<string, ReviewAgg>,
+  favoriteCounts?: Map<string, number>
 ): EventWithBookingCount[] {
   const now = Date.now();
   const isPast = (e: EventWithBookingCount) =>
@@ -223,7 +224,15 @@ function sortEvents(
       Math.abs(new Date(a.datetime).getTime() - now) -
       Math.abs(new Date(b.datetime).getTime() - now);
   } else if (sort === "popular") {
-    compareWithinBucket = (a, b) => b.booking_count - a.booking_count;
+    // 人気度 = 予約数 + お気に入り数 × 2（お気に入りは "今後行きたい" シグナルなので
+    // 過去予約より将来意欲を強く表す）
+    compareWithinBucket = (a, b) => {
+      const aFav = favoriteCounts?.get(a.id) ?? 0;
+      const bFav = favoriteCounts?.get(b.id) ?? 0;
+      const aScore = a.booking_count + aFav * 2;
+      const bScore = b.booking_count + bFav * 2;
+      return bScore - aScore;
+    };
   } else if (sort === "rating" && reviewAggs) {
     compareWithinBucket = (a, b) => {
       const aRating = reviewAggs[a.id]?.averageRating ?? 0;
@@ -350,7 +359,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
     tagIdBySlug,
     tagAssignments
   );
-  let sorted = sortEvents(filtered, sort, reviewAggs);
+  let sorted = sortEvents(filtered, sort, reviewAggs, favoriteCounts);
 
   // クイックフィルタ (?flag=free | nearly-full | physical-ok | followed)
   if (flag === "free") {

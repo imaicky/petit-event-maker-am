@@ -21,6 +21,7 @@ import { ViewTracker } from "@/components/view-tracker";
 import { FavoriteButton } from "@/components/favorite-button";
 import { QRCodeButton } from "@/components/qr-code-button";
 import { RelatedEvents } from "@/components/related-events";
+import { InviteLinkPanel } from "@/components/invite-link-panel";
 import { buildGoogleCalendarUrl } from "@/lib/calendar";
 import { createClient } from "@/lib/supabase/server";
 import { getFavoriteState } from "@/lib/favorites";
@@ -40,6 +41,7 @@ interface EventData {
   zoom_passcode?: string | null;
   location_url?: string | null;
   booking_deadline?: string | null;
+  creator_id?: string | null;
   capacity: number;
   capacity_physical?: number | null;
   capacity_online?: number | null;
@@ -348,6 +350,13 @@ export default async function EventPage({ params, searchParams }: EventPageProps
     notFound();
   }
   const isAuthed = !!authUser;
+  // 管理者判定（招待リンクパネルなど主催者専用UIに使う）
+  const SUPER_ADMIN_EMAILS = ["imatoru@gmail.com"];
+  const isSuperAdmin =
+    !!authUser?.email && SUPER_ADMIN_EMAILS.includes(authUser.email);
+  const isCreator =
+    !!authUser && !!event && event.creator_id === authUser.id;
+  const canManage = isSuperAdmin || isCreator;
 
   // ─── Passcode gate logic ────────────────────────────────────────────────────
   const isLimited = !!passcodeData?.is_limited && !!passcodeData.limited_passcode;
@@ -512,6 +521,17 @@ export default async function EventPage({ params, searchParams }: EventPageProps
 
           {/* ── Left: Event details ─────────────────────────────── */}
           <article>
+            {/* Invite link panel (限定公開イベントの管理者のみ) */}
+            {canManage &&
+              event.is_limited &&
+              passcodeData?.limited_passcode && (
+                <InviteLinkPanel
+                  eventId={id}
+                  shortCode={event.short_code ?? null}
+                  passcode={passcodeData.limited_passcode}
+                />
+              )}
+
             {/* Format & Spots badges */}
             <div className="mb-6 flex flex-wrap items-center gap-2 animate-fade-in-up delay-100">
               {locationType === "hybrid" ? (
