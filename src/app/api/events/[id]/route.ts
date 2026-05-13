@@ -196,6 +196,22 @@ export async function GET(
       favoriteCount = favCount ?? 0;
     }
 
+    // ─── 閲覧数 (管理者のみ返す) ───────────────────────
+    let viewCount = 0;
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      try {
+        const admin = createAdminClient();
+        const { count: vc } = await (
+          admin.from as unknown as (t: string) => ReturnType<typeof admin.from>
+        )("event_views")
+          .select("*", { count: "exact", head: true })
+          .eq("event_id", id);
+        viewCount = vc ?? 0;
+      } catch {
+        // ignore
+      }
+    }
+
     // Fetch creator's LINE friend-add URL (bot_basic_id)
     let lineFriendUrl: string | null = null;
     if (event.creator_id && process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -236,7 +252,7 @@ export async function GET(
     const canManage = isCreator || isCoAdmin || isSuperAdmin;
 
     if (canManage) {
-      // Managers see everything including limited_passcode and Zoom credentials
+      // Managers see everything including limited_passcode, Zoom credentials, view_count
       return NextResponse.json({
         event: {
           ...event,
@@ -245,6 +261,7 @@ export async function GET(
           booking_count_physical: Number(physicalCount),
           booking_count_online: Number(onlineCount),
           favorite_count: Number(favoriteCount),
+          view_count: Number(viewCount),
           line_friend_url: lineFriendUrl,
         },
       });

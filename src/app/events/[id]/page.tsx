@@ -51,6 +51,8 @@ interface EventData {
   booking_count_physical?: number;
   booking_count_online?: number;
   favorite_count?: number;
+  view_count?: number;
+  waitlist_count?: number;
   image_url?: string;
   category?: string;
   teacher_name?: string;
@@ -531,6 +533,56 @@ export default async function EventPage({ params, searchParams }: EventPageProps
                   passcode={passcodeData.limited_passcode}
                 />
               )}
+
+            {/* Owner insights (管理者のみ): 閲覧数/お気に入り/予約 */}
+            {canManage && (
+              <div className="mb-5 rounded-xl border border-[#1A1A1A]/10 bg-[#1A1A1A]/5 px-4 py-3">
+                <div className="mb-2 flex items-center gap-1.5">
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-[#666666]">
+                    管理者向けインサイト
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-2 text-center">
+                  <div>
+                    <p className="text-[10px] text-[#999999]">閲覧</p>
+                    <p className="text-base font-bold tabular-nums text-[#1A1A1A]">
+                      {event.view_count ?? 0}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-[#999999]">お気に入り</p>
+                    <p className="text-base font-bold tabular-nums text-rose-600">
+                      {event.favorite_count ?? 0}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-[#999999]">予約</p>
+                    <p className="text-base font-bold tabular-nums text-emerald-700">
+                      {event.booking_count}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-[#999999]">キャンセル待ち</p>
+                    <p className="text-base font-bold tabular-nums text-amber-600">
+                      {event.waitlist_count ?? 0}
+                    </p>
+                  </div>
+                </div>
+                {(event.view_count ?? 0) > 0 &&
+                  event.booking_count > 0 && (
+                    <p className="mt-2 text-[10px] text-[#999999] text-right">
+                      予約転換率:{" "}
+                      <span className="font-medium tabular-nums text-[#1A1A1A]">
+                        {(
+                          (event.booking_count / (event.view_count ?? 1)) *
+                          100
+                        ).toFixed(1)}
+                        %
+                      </span>
+                    </p>
+                  )}
+              </div>
+            )}
 
             {/* Format & Spots badges */}
             <div className="mb-6 flex flex-wrap items-center gap-2 animate-fade-in-up delay-100">
