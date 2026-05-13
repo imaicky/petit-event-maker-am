@@ -14,12 +14,14 @@ export const dynamic = "force-dynamic";
 // 自分が主催者でない（イベント未作成）でも 0件で返す。
 
 type TagDist = { tag_id: number; tag_name: string; total: number };
+type DailyBooking = { date: string; count: number };
 
 type StatsResponse = {
   follower_count: number;
   upcoming_events: number;
   total_bookings: number;
   audience_tag_distribution: TagDist[];
+  daily_bookings: DailyBooking[];
 };
 
 export async function GET() {
@@ -80,6 +82,37 @@ export async function GET() {
   }
   const uniqBookerIds = Array.from(new Set(bookerIds));
 
+  // ─── 3b) 過去30日の日別予約推移 ─────────────────────────
+  // confirmed/waitlisted 問わず、created_at ベースで集計（予約が入った日）
+  const dailyBookings: DailyBooking[] = [];
+  if (myEventIds.length > 0) {
+    const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+    const { data: recentBookings } = await admin
+      .from("bookings")
+      .select("created_at")
+      .in("event_id", myEventIds)
+      .neq("status", "cancelled")
+      .gte("created_at", thirtyDaysAgo.toISOString());
+
+    const counts = new Map<string, number>();
+    // 30日分のバケットをゼロで初期化（連続性のあるチャート）
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now - i * 24 * 60 * 60 * 1000);
+      const key = d.toLocaleDateString("en-CA", { timeZone: "Asia/Tokyo" });
+      counts.set(key, 0);
+    }
+    for (const b of (recentBookings ?? []) as Array<{ created_at: string }>) {
+      const key = new Date(b.created_at).toLocaleDateString("en-CA", {
+        timeZone: "Asia/Tokyo",
+      });
+      if (counts.has(key)) counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    for (const [date, count] of counts) {
+      dailyBookings.push({ date, count });
+    }
+    dailyBookings.sort((a, b) => a.date.localeCompare(b.date));
+  }
+
   // ─── 4) 予約者の興味タグスコアを合算（上位10件） ──────
   let audienceTagDistribution: TagDist[] = [];
   if (uniqBookerIds.length > 0) {
@@ -130,6 +163,7 @@ export async function GET() {
     upcoming_events: upcomingEvents,
     total_bookings: totalBookings,
     audience_tag_distribution: audienceTagDistribution,
+    daily_bookings: dailyBookings,
   };
   return NextResponse.json(body);
 }
