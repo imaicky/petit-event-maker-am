@@ -19,6 +19,7 @@ import { EventAdminBar } from "@/components/event-admin-bar";
 import { PasscodeGate, PasscodeAutoUnlock } from "@/components/passcode-gate";
 import { ViewTracker } from "@/components/view-tracker";
 import { FavoriteButton } from "@/components/favorite-button";
+import { RelatedEvents } from "@/components/related-events";
 import { buildGoogleCalendarUrl } from "@/lib/calendar";
 import { createClient } from "@/lib/supabase/server";
 import { getFavoriteState } from "@/lib/favorites";
@@ -815,6 +816,9 @@ export default async function EventPage({ params, searchParams }: EventPageProps
                 />
               </div>
             </section>
+
+            {/* ── Related events ──────────────────────────────────── */}
+            <RelatedEvents eventId={id} />
           </article>
 
           {/* ── Right: Sticky booking form (desktop) ────────────── */}
