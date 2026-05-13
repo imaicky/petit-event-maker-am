@@ -15,6 +15,16 @@ export const dynamic = "force-dynamic";
 
 type TagDist = { tag_id: number; tag_name: string; total: number };
 type DailyBooking = { date: string; count: number };
+type RecentReview = {
+  id: string;
+  event_id: string;
+  event_title: string;
+  reviewer_name: string;
+  rating: number;
+  comment: string;
+  created_at: string;
+  short_code: string | null;
+};
 
 type StatsResponse = {
   follower_count: number;
@@ -22,6 +32,7 @@ type StatsResponse = {
   total_bookings: number;
   audience_tag_distribution: TagDist[];
   daily_bookings: DailyBooking[];
+  recent_reviews: RecentReview[];
 };
 
 export async function GET() {
@@ -158,12 +169,60 @@ export async function GET() {
     }
   }
 
+  // ─── 6) 過去7日に投稿された自分のイベントへのレビュー ──
+  let recentReviews: RecentReview[] = [];
+  if (myEventIds.length > 0) {
+    const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+    const { data: reviews } = await admin
+      .from("reviews")
+      .select("id, event_id, reviewer_name, rating, comment, created_at")
+      .in("event_id", myEventIds)
+      .gte("created_at", sevenDaysAgo.toISOString())
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    const reviewRows = (reviews ?? []) as Array<{
+      id: string;
+      event_id: string;
+      reviewer_name: string;
+      rating: number;
+      comment: string;
+      created_at: string;
+    }>;
+    if (reviewRows.length > 0) {
+      // イベントタイトルと short_code をマップ
+      const evIds = reviewRows.map((r) => r.event_id);
+      const { data: evRows } = await admin
+        .from("events")
+        .select("id, title, short_code")
+        .in("id", evIds);
+      const evMap = new Map<string, { title: string; short_code: string | null }>(
+        ((evRows ?? []) as Array<{
+          id: string;
+          title: string;
+          short_code: string | null;
+        }>).map((e) => [e.id, { title: e.title, short_code: e.short_code }])
+      );
+      recentReviews = reviewRows.map((r) => ({
+        id: r.id,
+        event_id: r.event_id,
+        event_title: evMap.get(r.event_id)?.title ?? "(イベント不明)",
+        short_code: evMap.get(r.event_id)?.short_code ?? null,
+        reviewer_name: r.reviewer_name,
+        rating: r.rating,
+        comment: r.comment,
+        created_at: r.created_at,
+      }));
+    }
+  }
+
   const body: StatsResponse = {
     follower_count: followerCount ?? 0,
     upcoming_events: upcomingEvents,
     total_bookings: totalBookings,
     audience_tag_distribution: audienceTagDistribution,
     daily_bookings: dailyBookings,
+    recent_reviews: recentReviews,
   };
   return NextResponse.json(body);
 }

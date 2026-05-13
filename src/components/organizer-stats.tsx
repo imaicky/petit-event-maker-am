@@ -1,16 +1,28 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Users, Sparkles, TrendingUp } from "lucide-react";
+import Link from "next/link";
+import { Users, Sparkles, TrendingUp, Star, ChevronRight } from "lucide-react";
 
 type TagDist = { tag_id: number; tag_name: string; total: number };
 type DailyBooking = { date: string; count: number };
+type RecentReview = {
+  id: string;
+  event_id: string;
+  event_title: string;
+  reviewer_name: string;
+  rating: number;
+  comment: string;
+  created_at: string;
+  short_code: string | null;
+};
 type Stats = {
   follower_count: number;
   upcoming_events: number;
   total_bookings: number;
   audience_tag_distribution: TagDist[];
   daily_bookings: DailyBooking[];
+  recent_reviews: RecentReview[];
 };
 
 export function OrganizerStats() {
@@ -63,6 +75,8 @@ export function OrganizerStats() {
   const totalDaily = daily.reduce((s, d) => s + d.count, 0);
   const maxDaily = Math.max(1, ...daily.map((d) => d.count));
   const hasTrend = daily.length > 0 && totalDaily > 0;
+  const reviews = stats.recent_reviews ?? [];
+  const hasReviews = reviews.length > 0;
 
   // 既存の Compact stats bar と重複しないよう、ここでは「フォロワー数」と
   // 「参加者の興味タグ分布」だけを担当する。
@@ -135,6 +149,72 @@ export function OrganizerStats() {
             <span>{daily[0]?.date.slice(5).replace("-", "/")}</span>
             <span>今日</span>
           </div>
+        </div>
+      )}
+
+      {/* 今週のレビュー */}
+      {hasReviews && (
+        <div className="rounded-2xl border border-[#E5E5E5] bg-white p-4">
+          <div className="mb-3 flex items-center gap-1.5">
+            <Star className="h-4 w-4 fill-amber-500 text-amber-500" />
+            <h2 className="text-sm font-bold text-[#1A1A1A]">
+              今週寄せられたレビュー
+            </h2>
+            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+              {reviews.length}件
+            </span>
+          </div>
+          <ul className="space-y-2">
+            {reviews.slice(0, 5).map((r) => (
+              <li
+                key={r.id}
+                className="rounded-xl border border-[#F2F2F2] bg-[#FAFAFA] px-3 py-2"
+              >
+                <Link
+                  href={r.short_code ? `/e/${r.short_code}` : `/events/${r.event_id}`}
+                  className="block group"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-bold text-[#1A1A1A] truncate group-hover:underline">
+                      {r.event_title}
+                    </p>
+                    <span className="flex items-center gap-0.5 text-[11px] tabular-nums text-amber-600 shrink-0">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`h-3 w-3 ${
+                            i < r.rating
+                              ? "fill-amber-500 text-amber-500"
+                              : "text-[#E5E5E5]"
+                          }`}
+                        />
+                      ))}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-[#555555] line-clamp-2 leading-relaxed">
+                    {r.comment}
+                  </p>
+                  <p className="mt-1 flex items-center gap-1 text-[10px] text-[#999999]">
+                    <span>{r.reviewer_name}</span>
+                    <span>・</span>
+                    <span>
+                      {new Date(r.created_at).toLocaleDateString("ja-JP", {
+                        month: "short",
+                        day: "numeric",
+                        timeZone: "Asia/Tokyo",
+                      })}
+                    </span>
+                    <ChevronRight className="ml-auto h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100" />
+                  </p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          {reviews.length > 5 && (
+            <p className="mt-2 text-[10px] text-[#999999]">
+              他 {reviews.length - 5} 件のレビューはイベント詳細ページで確認できます
+            </p>
+          )}
         </div>
       )}
 
