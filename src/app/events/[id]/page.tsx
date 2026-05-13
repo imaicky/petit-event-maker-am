@@ -19,6 +19,7 @@ import { EventAdminBar } from "@/components/event-admin-bar";
 import { PasscodeGate, PasscodeAutoUnlock } from "@/components/passcode-gate";
 import { ViewTracker } from "@/components/view-tracker";
 import { FavoriteButton } from "@/components/favorite-button";
+import { QRCodeButton } from "@/components/qr-code-button";
 import { RelatedEvents } from "@/components/related-events";
 import { buildGoogleCalendarUrl } from "@/lib/calendar";
 import { createClient } from "@/lib/supabase/server";
@@ -671,6 +672,7 @@ export default async function EventPage({ params, searchParams }: EventPageProps
                 message={announcementMessage}
                 label="告知文付きでシェア"
               />
+              <QRCodeButton eventId={id} />
               <StoriesDownloadButton eventId={id} eventTitle={event.title} />
             </div>
 
