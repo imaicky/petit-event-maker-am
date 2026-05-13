@@ -74,10 +74,46 @@ export async function GET(
     );
   }
 
+  // ─── リピート参加カウント ────────────────────────────────
+  // 同じ主催者の confirmed 予約をメールでカウントし、
+  // 各 booking に repeat_count (このイベント含む累計参加回数) を付与する。
+  const creatorId = (eventResult.data as { creator_id: string | null }).creator_id;
+  const repeatCounts = new Map<string, number>();
+  if (creatorId) {
+    const { data: creatorEvents } = await admin
+      .from("events")
+      .select("id")
+      .eq("creator_id", creatorId);
+    const creatorEventIds = ((creatorEvents ?? []) as Array<{ id: string }>).map(
+      (e) => e.id
+    );
+    if (creatorEventIds.length > 0) {
+      const { data: pastBookings } = await admin
+        .from("bookings")
+        .select("guest_email")
+        .in("event_id", creatorEventIds)
+        .eq("status", "confirmed");
+      for (const b of (pastBookings ?? []) as Array<{ guest_email: string | null }>) {
+        if (!b.guest_email) continue;
+        const key = b.guest_email.toLowerCase();
+        repeatCounts.set(key, (repeatCounts.get(key) ?? 0) + 1);
+      }
+    }
+  }
+
+  type Booking = { guest_email: string | null; [k: string]: unknown };
+  const annotate = (rows: Booking[]) =>
+    rows.map((b) => ({
+      ...b,
+      repeat_count: b.guest_email
+        ? repeatCounts.get(b.guest_email.toLowerCase()) ?? 1
+        : 1,
+    }));
+
   return NextResponse.json({
     event: eventResult.data,
-    confirmed: confirmed.data ?? [],
-    waitlisted: waitlisted.data ?? [],
-    cancelled: cancelled.data ?? [],
+    confirmed: annotate((confirmed.data ?? []) as Booking[]),
+    waitlisted: annotate((waitlisted.data ?? []) as Booking[]),
+    cancelled: annotate((cancelled.data ?? []) as Booking[]),
   });
 }

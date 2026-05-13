@@ -32,7 +32,9 @@ import type { Database } from "@/types/database";
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type Event = Database["public"]["Tables"]["events"]["Row"];
-type Booking = Database["public"]["Tables"]["bookings"]["Row"];
+type Booking = Database["public"]["Tables"]["bookings"]["Row"] & {
+  repeat_count?: number;
+};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -435,6 +437,20 @@ export default function AttendeesPage() {
   }
 
   // ── Attendance format pill (hybrid 開催時のみ表示) ─────────────────
+  // ── Repeat customer badge ──────────────────────────────────
+  function RepeaterBadge({ booking }: { booking: Booking }) {
+    const count = booking.repeat_count ?? 1;
+    if (count <= 1) return null;
+    return (
+      <span
+        title={`同じ主催者のイベントに ${count} 回目の参加`}
+        className="inline-flex items-center gap-1 rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5 text-[10px] font-medium text-purple-700 whitespace-nowrap"
+      >
+        🔁 リピーター {count}回目
+      </span>
+    );
+  }
+
   function AttendanceFormatPill({ booking }: { booking: Booking }) {
     if (event?.location_type !== "hybrid") return null;
     const current = booking.attendance_format ?? "physical";
@@ -858,6 +874,7 @@ export default function AttendeesPage() {
                       <span className="text-sm font-bold text-[#1A1A1A]">
                         {booking.guest_name}
                       </span>
+                      <RepeaterBadge booking={booking} />
                       <PaymentBadge status={booking.payment_status} method={booking.payment_method} />
                       <AttendanceFormatPill booking={booking} />
                       <ConfirmPaymentButton booking={booking} />
@@ -923,6 +940,7 @@ export default function AttendeesPage() {
                   {/* 名前+バッジは whitespace-nowrap で必ず全表示 */}
                   <span className="text-[13px] font-medium text-[#1A1A1A] flex items-center gap-1.5 whitespace-nowrap">
                     {booking.guest_name}
+                    <RepeaterBadge booking={booking} />
                     <PaymentBadge status={booking.payment_status} method={booking.payment_method} />
                     <AttendanceFormatPill booking={booking} />
                     <ConfirmPaymentButton booking={booking} />
