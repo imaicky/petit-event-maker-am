@@ -205,6 +205,31 @@ export default async function TeacherProfilePage({
   );
   const sns = (profile.sns_links ?? {}) as SnsLinks;
 
+  // ─── 主催者の活動実績 ──────────────────────────────
+  // 「初回開催: YYYY年X月」、過去12ヶ月の開催数、活動月数 を計算する。
+  const allEventDates = [...upcomingEvents, ...pastEvents]
+    .map((e) => new Date(e.datetime).getTime())
+    .filter((t) => Number.isFinite(t));
+  const firstEventTimestamp =
+    allEventDates.length > 0 ? Math.min(...allEventDates) : null;
+  const monthsActive = firstEventTimestamp
+    ? Math.max(
+        1,
+        Math.floor((Date.now() - firstEventTimestamp) / (30 * 24 * 60 * 60 * 1000))
+      )
+    : 0;
+  const oneYearAgo = Date.now() - 365 * 24 * 60 * 60 * 1000;
+  const eventsLastYear = [...upcomingEvents, ...pastEvents].filter(
+    (e) => new Date(e.datetime).getTime() >= oneYearAgo
+  ).length;
+  const firstEventLabel = firstEventTimestamp
+    ? new Date(firstEventTimestamp).toLocaleDateString("ja-JP", {
+        year: "numeric",
+        month: "long",
+        timeZone: "Asia/Tokyo",
+      })
+    : null;
+
   // Fetch follow state (graceful fallback if migration not yet applied)
   let followState = { isFollowing: false, followerCount: 0 };
   let viewerId: string | null = null;
@@ -364,6 +389,29 @@ export default async function TeacherProfilePage({
               {highlightReviews.map((review) => (
                 <HighlightReview key={review.id} review={review} />
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Track record banner */}
+        {pastEvents.length > 0 && firstEventLabel && (
+          <div className="mb-5 rounded-2xl border border-[#E5E5E5] bg-gradient-to-br from-[#FAF1ED] to-white px-4 py-3 sm:flex sm:items-center sm:justify-between sm:gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-base">📜</span>
+              <p className="text-xs text-[#666666]">
+                <span className="font-bold text-[#1A1A1A]">{firstEventLabel}</span> から活動中
+                {monthsActive > 0 && (
+                  <span className="text-[#999999]"> ・ 約 {monthsActive} ヶ月</span>
+                )}
+              </p>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2 text-[11px] sm:mt-0">
+              <span className="rounded-full bg-white px-2.5 py-1 ring-1 ring-[#E5E5E5] text-[#1A1A1A]">
+                過去1年: <span className="font-bold tabular-nums">{eventsLastYear}</span> 件
+              </span>
+              <span className="rounded-full bg-white px-2.5 py-1 ring-1 ring-[#E5E5E5] text-[#1A1A1A]">
+                累計: <span className="font-bold tabular-nums">{upcomingEvents.length + pastEvents.length}</span> 件
+              </span>
             </div>
           </div>
         )}
