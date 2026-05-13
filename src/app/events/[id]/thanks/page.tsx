@@ -17,6 +17,7 @@ import { CopyableText } from "@/components/copyable-text";
 import { PaymentPendingNotice } from "@/components/payment-pending-notice";
 import { buildGoogleCalendarUrl } from "@/lib/calendar";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { RelatedEvents } from "@/components/related-events";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -742,6 +743,9 @@ export default async function ThanksPage({
         <p className="text-center text-xs text-[#999999] leading-relaxed">
           ご不明な点はイベント主催者までお問い合わせください。
         </p>
+
+        {/* 関連イベント (二次予約を狙う) */}
+        <RelatedEvents eventId={id} />
       </div>
     </main>
   );

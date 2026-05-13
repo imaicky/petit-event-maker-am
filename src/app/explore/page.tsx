@@ -322,13 +322,14 @@ interface ExplorePageProps {
     month?: string;
     date?: string;
     tag?: string;
+    flag?: string;
   }>;
 }
 
 export const dynamic = "force-dynamic";
 
 export default async function ExplorePage({ searchParams }: ExplorePageProps) {
-  const { q = "", category = "", area = "", sort = "new", type = "", view = "", month = "", date = "", tag = "" } = await searchParams;
+  const { q = "", category = "", area = "", sort = "new", type = "", view = "", month = "", date = "", tag = "", flag = "" } = await searchParams;
 
   const allEvents = await getPublishedEvents();
   const reviewAggs = await getReviewAggregations(allEvents.map((e) => e.id));
@@ -351,6 +352,22 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   );
   let sorted = sortEvents(filtered, sort, reviewAggs);
 
+  // クイックフィルタ (?flag=free | nearly-full | physical-ok | followed)
+  if (flag === "free") {
+    sorted = sorted.filter((e) => e.price === 0);
+  } else if (flag === "nearly-full") {
+    sorted = sorted.filter((e) => {
+      if (!e.capacity || e.capacity <= 0) return false;
+      const remaining = e.capacity - e.booking_count;
+      return remaining > 0 && remaining <= 3;
+    });
+  } else if (flag === "physical-ok") {
+    // 会場参加可能なイベント (physical または hybrid)
+    sorted = sorted.filter(
+      (e) => e.location_type === "physical" || e.location_type === "hybrid"
+    );
+  }
+
   // Date filter (from calendar click)
   if (date) {
     sorted = sorted.filter((e) => {
@@ -359,7 +376,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
     });
   }
 
-  const isFiltered = !!(q || category || area || type || date || tag);
+  const isFiltered = !!(q || category || area || type || date || tag || flag);
   const isCalendarView = view === "calendar";
 
   // List view excludes past events (calendar still shows them when navigating
@@ -527,6 +544,42 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
                 initialDate={date}
               />
             </div>
+          </div>
+
+          {/* Quick-filter chips (free / nearly-full / physical-ok) */}
+          <div className="mb-3 flex flex-wrap items-center gap-2 animate-fade-in">
+            <span className="text-xs text-[#999999]">クイック:</span>
+            {([
+              { key: "free", label: "無料", icon: "🎟" },
+              { key: "nearly-full", label: "残席わずか", icon: "⚡" },
+              { key: "physical-ok", label: "会場参加OK", icon: "📍" },
+            ] as const).map(({ key, label, icon }) => {
+              const isActive = flag === key;
+              const baseParams: Record<string, string> = {};
+              if (q) baseParams.q = q;
+              if (category) baseParams.category = category;
+              if (area) baseParams.area = area;
+              if (sort !== "new") baseParams.sort = sort;
+              if (type) baseParams.type = type;
+              if (tag) baseParams.tag = tag;
+              const href = isActive
+                ? `/explore?${new URLSearchParams(baseParams).toString()}`
+                : `/explore?${new URLSearchParams({ ...baseParams, flag: key }).toString()}`;
+              return (
+                <Link
+                  key={key}
+                  href={href}
+                  className={`inline-flex h-8 items-center gap-1 rounded-full px-3 text-xs font-medium transition-all duration-200 ${
+                    isActive
+                      ? "bg-[#C26A4A] text-white shadow-sm scale-105"
+                      : "bg-white text-[#666666] ring-1 ring-[#E5E5E5] hover:ring-[#C26A4A]/40 hover:text-[#C26A4A] hover:scale-105"
+                  }`}
+                >
+                  <span>{icon}</span>
+                  {label}
+                </Link>
+              );
+            })}
           </div>
 
           {/* Category chips with staggered entrance */}
