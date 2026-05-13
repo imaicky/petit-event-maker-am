@@ -87,6 +87,28 @@ async function getTagAssignments(
   }
 }
 
+async function getFavoriteCounts(
+  eventIds: string[]
+): Promise<Map<string, number>> {
+  if (eventIds.length === 0) return new Map();
+  try {
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return new Map();
+    const admin = createAdminClient();
+    const { data } = await (
+      admin.from as unknown as (t: string) => ReturnType<typeof admin.from>
+    )("event_favorites")
+      .select("event_id")
+      .in("event_id", eventIds);
+    const counts = new Map<string, number>();
+    for (const row of (data ?? []) as Array<{ event_id: string }>) {
+      counts.set(row.event_id, (counts.get(row.event_id) ?? 0) + 1);
+    }
+    return counts;
+  } catch {
+    return new Map();
+  }
+}
+
 import { EventCard } from "@/components/event-card";
 import { ExploreFilters } from "@/components/explore-filters";
 import { TrendingEvents } from "@/components/trending-events";
@@ -315,6 +337,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   const dbTags = await getDbTags();
   const tagIdBySlug = new Map(dbTags.map((t) => [t.slug, t.id]));
   const tagAssignments = await getTagAssignments(allEvents.map((e) => e.id));
+  const favoriteCounts = await getFavoriteCounts(allEvents.map((e) => e.id));
   const filtered = filterEvents(
     allEvents,
     q,
@@ -864,6 +887,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
                   averageRating={reviewAggs[event.id]?.averageRating}
                   reviewCount={reviewAggs[event.id]?.reviewCount}
                   short_code={event.short_code}
+                  favorite_count={favoriteCounts.get(event.id) ?? 0}
                 />
               </div>
             ))}

@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Calendar, MapPin, User, Video } from "lucide-react";
+import { Calendar, MapPin, User, Video, Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AverageRatingBadge } from "@/components/average-rating-badge";
 import { SoldOutStamp } from "@/components/sold-out-stamp";
@@ -21,6 +21,8 @@ export interface EventCardProps {
   averageRating?: number;
   reviewCount?: number;
   short_code?: string | null;
+  /** お気に入り登録数（>0 で表示）*/
+  favorite_count?: number;
   className?: string;
 }
 
@@ -61,6 +63,7 @@ export function EventCard({
   averageRating,
   reviewCount,
   short_code,
+  favorite_count = 0,
   className,
 }: EventCardProps) {
   const remaining = capacity - booked_count;
@@ -193,13 +196,16 @@ export function EventCard({
           <div className="flex items-center gap-1.5 text-xs text-[#999999]">
             {(location_type === "online") ? (
               <>
-                <Video className="h-3.5 w-3.5 shrink-0 text-[#1A1A1A]" />
+                <Video className="h-3.5 w-3.5 shrink-0 text-sky-600" />
                 <span className="truncate">オンライン</span>
               </>
             ) : (location_type === "hybrid") ? (
               <>
-                <Video className="h-3.5 w-3.5 shrink-0 text-[#1A1A1A]" />
-                <span className="truncate">対面 + オンライン</span>
+                <span className="flex items-center gap-0.5 shrink-0">
+                  <MapPin className="h-3 w-3 text-amber-600" />
+                  <Video className="h-3 w-3 text-sky-600" />
+                </span>
+                <span className="truncate font-medium text-amber-700">ハイブリッド</span>
               </>
             ) : (
               <>
@@ -219,10 +225,18 @@ export function EventCard({
           )}
         </div>
 
-        {/* Capacity info */}
-        {capacity > 0 && (
-          <div className="mb-3">
-            <span className="text-xs text-[#999999]">定員{capacity}名</span>
+        {/* Capacity + Favorite count */}
+        {(capacity > 0 || favorite_count > 0) && (
+          <div className="mb-3 flex items-center gap-3">
+            {capacity > 0 && (
+              <span className="text-xs text-[#999999]">定員{capacity}名</span>
+            )}
+            {favorite_count > 0 && (
+              <span className="inline-flex items-center gap-0.5 text-xs text-rose-500">
+                <Heart className="h-3 w-3 fill-rose-500" />
+                {favorite_count}
+              </span>
+            )}
           </div>
         )}
 
