@@ -220,6 +220,60 @@ export function buildFormatSurveyEmailHtml(
 }
 
 /**
+ * お気に入り登録済み・未予約ユーザー向けの開催前リマインダー。
+ * 「保存してたイベントが近いですよ」とそっと promote する。
+ */
+export function buildFavoriteReminderEmailHtml(
+  guestName: string | null,
+  eventTitle: string,
+  dateStr: string,
+  location: string,
+  eventUrl: string,
+  unfavoriteUrl: string
+): string {
+  const safe = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const greeting = guestName ? `${safe(guestName)} 様\n\n` : "";
+  const body = `${greeting}お気に入りに保存したイベントの開催が近づいています。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+■ イベント：${safe(eventTitle)}
+■ 日時：${safe(dateStr)}
+■ 場所：${safe(location)}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+定員が埋まる前にお申し込みください。`;
+
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#fafafa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  <div style="max-width:560px;margin:0 auto;padding:32px 16px">
+    <div style="background:#ffffff;border-radius:16px;border:1px solid #e5e5e5;padding:32px 24px">
+      <p style="font-size:13px;color:#999;margin:0 0 8px">${safe(eventTitle)}</p>
+      <div style="font-size:15px;color:#1a1a1a;line-height:1.7;white-space:pre-wrap">${body.replace(/\n/g, "<br>")}</div>
+
+      <div style="margin-top:24px">
+        <a href="${eventUrl}"
+           style="display:inline-block;background:#1A1A1A;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:24px;font-weight:bold;font-size:15px">
+          イベント詳細を見る
+        </a>
+      </div>
+
+      <p style="margin-top:24px;font-size:11px;color:#999;line-height:1.6">
+        このメールは「お気に入り登録」をしたイベントのため送信されました。<br>
+        今後この通知が不要な場合は、<a href="${unfavoriteUrl}" style="color:#666;text-decoration:underline">お気に入り一覧</a>から解除してください。
+      </p>
+    </div>
+    <p style="text-align:center;font-size:11px;color:#999;margin-top:24px">
+      プチイベント作成くん
+    </p>
+  </div>
+</body>
+</html>`;
+}
+
+/**
  * Wrap plain text body in a simple HTML email layout
  */
 export function wrapInHtml(body: string, eventTitle: string): string {
