@@ -46,6 +46,8 @@ import { ImageUpload } from "@/components/image-upload";
 import { PaymentMethodsField } from "@/components/payment-methods-field";
 import { CategoryPicker } from "@/components/category-picker";
 import { TagPicker } from "@/components/tag-picker";
+import { CustomQuestionsEditor } from "@/components/custom-questions-editor";
+import { parseCustomQuestions, type CustomQuestion } from "@/lib/custom-questions";
 import { useAuth } from "@/components/auth-provider";
 import { createClient } from "@/lib/supabase/client";
 
@@ -531,6 +533,7 @@ export default function EditEventPage() {
   const [savingDraft, setSavingDraft] = useState(false);
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [tagIds, setTagIds] = useState<number[]>([]);
+  const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>([]);
 
   const watchedLocationType = watch("location_type");
   const watchedIsLimited = watch("is_limited");
@@ -619,6 +622,9 @@ export default function EditEventPage() {
         setIsPublished(event.is_published ?? true);
         setCategoryId(
           typeof event.category_id === "number" ? event.category_id : null
+        );
+        setCustomQuestions(
+          parseCustomQuestions((event as { custom_questions?: unknown }).custom_questions)
         );
         // Load existing tag assignments
         try {
@@ -729,6 +735,7 @@ export default function EditEventPage() {
           limited_passcode: data.is_limited ? data.limited_passcode : undefined,
           teacher_name: data.teacher_name,
           teacher_bio: data.teacher_bio,
+          custom_questions: customQuestions,
         }),
       });
       const json = await res.json();
@@ -803,6 +810,7 @@ export default function EditEventPage() {
       is_published: isPublished,
       category_id: categoryId ?? null,
       tag_ids: tagIds,
+      custom_questions: customQuestions,
     };
 
     // If capacity increased AND there are waitlisted bookings, ask for
@@ -1335,6 +1343,19 @@ export default function EditEventPage() {
                     形式・対象レベル・使用ツール・トピックを選ぶと検索でヒットしやすくなります
                   </p>
                   <TagPicker selectedIds={tagIds} onChange={setTagIds} />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-[#1A1A1A]">
+                    事前アンケート
+                    <span className="ml-2 text-xs font-normal text-[#999999]">任意</span>
+                  </label>
+                  <p className="mb-3 text-xs text-[#999999]">
+                    申込時に参加者へ任意質問を聞けます（最大3問・全て任意回答）
+                  </p>
+                  <CustomQuestionsEditor
+                    value={customQuestions}
+                    onChange={setCustomQuestions}
+                  />
                 </div>
               </div>
             </FormSection>

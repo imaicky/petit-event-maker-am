@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { canManageEvent } from "@/lib/check-event-access";
 import { promoteWaitlistOnCapacityIncrease } from "@/lib/waitlist-promotion";
+import { parseCustomQuestions } from "@/lib/custom-questions";
 
 // ─── Validation ──────────────────────────────────────────────
 
@@ -50,6 +51,7 @@ const updateEventSchema = z.object({
   is_published: z.boolean().optional(),
   category_id: z.coerce.number().int().positive().nullable().optional(),
   tag_ids: z.array(z.coerce.number().int().positive()).optional(),
+  custom_questions: z.array(z.unknown()).max(3).optional(),
 }).refine(
   (data) => {
     if (data.location_type === "physical" || data.location_type === "hybrid") {
@@ -103,6 +105,7 @@ const updateDraftSchema = z.object({
   is_limited: z.boolean().optional().default(false),
   limited_passcode: z.string().max(50).optional().nullable(),
   save_as_draft: z.literal(true),
+  custom_questions: z.array(z.unknown()).max(3).optional(),
 });
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -434,6 +437,7 @@ export async function PUT(
           is_limited: d.is_limited ?? false,
           limited_passcode: d.is_limited ? (d.limited_passcode || null) : null,
           is_published: false,
+          custom_questions: parseCustomQuestions(d.custom_questions ?? []),
         } as never)
         .eq("id", id)
         .select()
@@ -497,6 +501,7 @@ export async function PUT(
           limited_passcode: data.is_limited ? (data.limited_passcode || null) : null,
           is_published: data.is_published,
           category_id: data.category_id ?? null,
+          custom_questions: parseCustomQuestions(data.custom_questions ?? []),
         } as never)
         .eq("id", id)
         .select()

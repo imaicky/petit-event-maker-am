@@ -27,6 +27,7 @@ import { buildGoogleCalendarUrl } from "@/lib/calendar";
 import { createClient } from "@/lib/supabase/server";
 import { getFavoriteState } from "@/lib/favorites";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { parseCustomQuestions } from "@/lib/custom-questions";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -67,6 +68,7 @@ interface EventData {
   payment_methods?: string[] | null;
   payment_link?: string | null;
   payment_info?: string | null;
+  custom_questions?: unknown;
 }
 
 // ─── Data fetching ────────────────────────────────────────────────────────────
@@ -904,6 +906,7 @@ export default async function EventPage({ params, searchParams }: EventPageProps
                   capacityOnline={event.capacity_online}
                   confirmedPhysical={event.booking_count_physical}
                   confirmedOnline={event.booking_count_online}
+                  customQuestions={parseCustomQuestions(event.custom_questions)}
                 />
               </div>
             </section>
@@ -961,6 +964,7 @@ export default async function EventPage({ params, searchParams }: EventPageProps
                 capacityOnline={event.capacity_online}
                 confirmedPhysical={event.booking_count_physical}
                 confirmedOnline={event.booking_count_online}
+                customQuestions={parseCustomQuestions(event.custom_questions)}
               />
             </div>
           </aside>

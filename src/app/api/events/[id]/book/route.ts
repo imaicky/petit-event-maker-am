@@ -7,6 +7,7 @@ import { sendBatchEmails } from "@/lib/email";
 import { wrapInHtml } from "@/lib/email-templates";
 import { logPaymentEvent } from "@/lib/payment-audit";
 import { recordInterestFromBooking } from "@/lib/user-interest";
+import { parseCustomQuestions, sanitizeAnswers } from "@/lib/custom-questions";
 
 // ─── Validation ──────────────────────────────────────────────
 
@@ -35,6 +36,9 @@ const bookingSchema = z.object({
   payment_method: z.enum(['stripe', 'bank', 'onsite', 'custom']).optional(),
   // hybrid イベントでは必須。非hybrid では無視（イベントの location_type から自動決定）。
   attendance_format: z.enum(["physical", "online"]).optional(),
+  // イベントのカスタム質問への任意回答。サーバー側で sanitizeAnswers により
+  // 質問定義に存在しない id や、selectの不正な値は破棄される。
+  custom_answers: z.record(z.string(), z.string()).optional(),
 });
 
 // Default deadline rule: min(申込日 + 7日, 開催日 - 3日).
@@ -184,6 +188,27 @@ export async function POST(
       );
     }
 
+    // 1b. カスタム質問への任意回答を、現在の質問定義に対して正規化。
+    // 未定義の id・選択肢外の値・空文字は捨てる。
+    // custom_questions は DB types 未再生成のため untyped クライアントで取得。
+    let eventQuestions: ReturnType<typeof parseCustomQuestions> = [];
+    try {
+      const { data: cqRow } = await (
+        admin.from as unknown as (t: string) => ReturnType<typeof admin.from>
+      )("events")
+        .select("custom_questions")
+        .eq("id", eventId)
+        .maybeSingle();
+      const raw = (cqRow as { custom_questions?: unknown } | null)?.custom_questions;
+      eventQuestions = parseCustomQuestions(raw);
+    } catch {
+      eventQuestions = [];
+    }
+    const sanitizedCustomAnswers = sanitizeAnswers(
+      eventQuestions,
+      data.custom_answers ?? {}
+    );
+
     // 2. 参加形式の決定 (hybrid のときだけユーザー入力必須)
     const evLocType = (ev as { location_type?: string | null }).location_type ?? "physical";
     const isHybridEvent = evLocType === "hybrid";
@@ -326,6 +351,7 @@ export async function POST(
         payment_status: paymentStatus,
         payment_method: chosenMethod,
         payment_deadline: paymentDeadline,
+        custom_answers: sanitizedCustomAnswers,
       })
       .select()
       .single();

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { pushLineMessage } from "@/lib/line";
 import { generateShortCode } from "@/lib/short-code";
+import { parseCustomQuestions } from "@/lib/custom-questions";
 
 // ─── Validation ──────────────────────────────────────────────
 
@@ -54,6 +55,7 @@ const createEventSchema = z.object({
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "スラッグは小文字英数字とハイフンのみ使用できます")
     .optional(),
   is_published: z.boolean().optional().default(true),
+  custom_questions: z.array(z.unknown()).max(3).optional(),
 }).refine(
   (data) => {
     if (data.location_type === "physical" || data.location_type === "hybrid") {
@@ -110,6 +112,7 @@ const draftEventSchema = z.object({
   limited_passcode: z.string().max(50).optional().nullable(),
   slug: z.string().optional(),
   save_as_draft: z.literal(true),
+  custom_questions: z.array(z.unknown()).max(3).optional(),
 });
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -229,6 +232,7 @@ export async function POST(request: NextRequest) {
           slug,
           short_code,
           is_published: false,
+          custom_questions: parseCustomQuestions(d.custom_questions ?? []),
         } as never)
         .select()
         .single();
@@ -303,6 +307,7 @@ export async function POST(request: NextRequest) {
         short_code,
         is_published: data.is_published ?? true,
         category_id: data.category_id ?? null,
+        custom_questions: parseCustomQuestions(data.custom_questions ?? []),
       } as never)
       .select()
       .single();

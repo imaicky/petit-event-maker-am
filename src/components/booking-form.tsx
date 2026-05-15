@@ -18,6 +18,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { CustomQuestionsForm } from "@/components/custom-questions-form";
+import type { CustomQuestion, CustomAnswers } from "@/lib/custom-questions";
 
 const bookingSchema = z.object({
   guest_name: z
@@ -71,6 +73,8 @@ interface BookingFormProps {
   capacityOnline?: number | null;
   confirmedPhysical?: number;
   confirmedOnline?: number;
+  /** 主催者が設定した事前アンケート（任意回答） */
+  customQuestions?: CustomQuestion[];
 }
 
 function FieldError({ message }: { message?: string }) {
@@ -102,6 +106,7 @@ export function BookingForm({
   capacityOnline,
   confirmedPhysical = 0,
   confirmedOnline = 0,
+  customQuestions,
 }: BookingFormProps) {
   const isHybridEvent = locationType === "hybrid";
   const physicalRemaining =
@@ -119,6 +124,7 @@ export function BookingForm({
       : "physical"
     : "physical";
   const [attendanceFormat, setAttendanceFormat] = useState<"physical" | "online">(defaultFormat);
+  const [customAnswers, setCustomAnswers] = useState<CustomAnswers>({});
   // Resolve list of allowed methods. Prefer the multi-select array, fall back
   // to the legacy single method.
   const availableMethods: ("stripe" | "bank" | "onsite" | "custom")[] =
@@ -163,6 +169,8 @@ export function BookingForm({
           ...data,
           payment_method: price > 0 ? selectedMethod ?? availableMethods[0] : undefined,
           attendance_format: isHybridEvent ? attendanceFormat : undefined,
+          custom_answers:
+            customQuestions && customQuestions.length > 0 ? customAnswers : undefined,
         }),
       });
 
@@ -532,6 +540,15 @@ export function BookingForm({
             <p className="text-xs text-gray-700">お支払い方法は主催者にお問い合わせください。</p>
           )}
         </div>
+      )}
+
+      {/* 主催者が設定した事前アンケート（任意回答） */}
+      {customQuestions && customQuestions.length > 0 && (
+        <CustomQuestionsForm
+          questions={customQuestions}
+          value={customAnswers}
+          onChange={setCustomAnswers}
+        />
       )}
 
       {/* Submit button */}

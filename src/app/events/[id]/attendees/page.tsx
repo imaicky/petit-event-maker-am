@@ -27,13 +27,19 @@ import { MessageDialog } from "@/components/message-dialog";
 import { BookingEditDialog } from "@/components/booking-edit-dialog";
 import { BookingCancelDialog } from "@/components/booking-cancel-dialog";
 import { useAuth } from "@/components/auth-provider";
+import { CustomAnswersSummary } from "@/components/custom-answers-summary";
+import { parseCustomQuestions } from "@/lib/custom-questions";
 import type { Database } from "@/types/database";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type Event = Database["public"]["Tables"]["events"]["Row"];
+type Event = Database["public"]["Tables"]["events"]["Row"] & {
+  // DB type 未更新の暫定対応: マイグレーション後は JSONB として返る
+  custom_questions?: unknown;
+};
 type Booking = Database["public"]["Tables"]["bookings"]["Row"] & {
   repeat_count?: number;
+  custom_answers?: Record<string, string> | null;
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -417,6 +423,7 @@ export default function AttendeesPage() {
       : 0;
   const attendedCount = bookings.filter((b) => b.attended === true).length;
   const isPaidEvent = (event.price ?? 0) > 0;
+  const customQuestions = parseCustomQuestions(event.custom_questions);
 
   async function confirmPayment(bookingId: string) {
     if (!confirm("入金を確認済みにしますか？\n参加情報（オンライン参加URL等）が自動でメール送信されます。")) return;
@@ -776,6 +783,16 @@ export default function AttendeesPage() {
             )}
           </div>
         </div>
+
+        {/* 事前アンケート集計（任意質問が定義されているときだけ表示） */}
+        {customQuestions.length > 0 && (
+          <div className="mt-4">
+            <CustomAnswersSummary
+              questions={customQuestions}
+              bookings={bookings}
+            />
+          </div>
+        )}
 
         {/* Attendees list */}
         {bookings.length === 0 ? (

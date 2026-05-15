@@ -40,6 +40,8 @@ import { PaymentMethodsField, type PaymentMethod } from "@/components/payment-me
 import { CategoryPicker } from "@/components/category-picker";
 import { TagPicker } from "@/components/tag-picker";
 import { AITitleSuggestions } from "@/components/ai-title-suggestions";
+import { CustomQuestionsEditor } from "@/components/custom-questions-editor";
+import type { CustomQuestion } from "@/lib/custom-questions";
 
 // ─── Schema ────────────────────────────────────────────────────────────────
 
@@ -157,6 +159,7 @@ interface CreateEventPayload {
   teacher_bio?: string;
   category_id?: number | null;
   tag_ids?: number[];
+  custom_questions?: CustomQuestion[];
 }
 
 // ─── Step definitions ─────────────────────────────────────────────────────────
@@ -560,6 +563,7 @@ function NewEventPageInner() {
   const [savingDraft, setSavingDraft] = useState(false);
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [tagIds, setTagIds] = useState<number[]>([]);
+  const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>([]);
 
   const watchedValues = watch();
 
@@ -680,6 +684,7 @@ function NewEventPageInner() {
           limited_passcode: data.is_limited ? data.limited_passcode : undefined,
           teacher_name: data.teacher_name,
           teacher_bio: data.teacher_bio,
+          custom_questions: customQuestions.length > 0 ? customQuestions : undefined,
         }),
       });
       const json = await res.json();
@@ -757,6 +762,7 @@ function NewEventPageInner() {
       teacher_bio: data.teacher_bio,
       category_id: categoryId ?? undefined,
       tag_ids: tagIds.length > 0 ? tagIds : undefined,
+      custom_questions: customQuestions.length > 0 ? customQuestions : undefined,
     };
 
     try {
@@ -1159,6 +1165,17 @@ function NewEventPageInner() {
                     <TagPicker
                       selectedIds={tagIds}
                       onChange={setTagIds}
+                    />
+                  </FieldWrapper>
+
+                  <FieldWrapper
+                    label="事前アンケート"
+                    optional
+                    hint="申込時に参加者へ任意質問を聞けます（最大3問・全て任意回答）"
+                  >
+                    <CustomQuestionsEditor
+                      value={customQuestions}
+                      onChange={setCustomQuestions}
                     />
                   </FieldWrapper>
 
