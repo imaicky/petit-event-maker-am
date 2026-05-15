@@ -45,11 +45,14 @@ BEGIN
   END IF;
 END $$;
 
--- ── Step 3: 既存行を背景でバリデート（タイムアウトせず実行可能）──
--- これはオプション。失敗した場合でも新規行への制約は有効。
--- 既存行は default 値しか入っていないので必ず通る。
-ALTER TABLE events VALIDATE CONSTRAINT events_custom_questions_max_three;
-ALTER TABLE bookings VALIDATE CONSTRAINT bookings_custom_answers_is_object;
+-- ── Step 3: 既存行を背景でバリデート（任意・省略可）─────
+-- ⚠️ 大規模 bookings テーブル + Supabase quota 制限環境では VALIDATE が
+-- 60秒を超えてタイムアウトする恐れがあります。既存行は default 値しか
+-- 入っていないので、VALIDATE をスキップしても機能上の影響はありません。
+-- DB負荷が落ち着いたタイミングで個別実行してください。
+--
+-- ALTER TABLE events VALIDATE CONSTRAINT events_custom_questions_max_three;
+-- ALTER TABLE bookings VALIDATE CONSTRAINT bookings_custom_answers_is_object;
 
 COMMENT ON COLUMN events.custom_questions IS
   '主催者が定義したカスタム質問配列（最大3問、各要素: {id,label,type,options?}）';
