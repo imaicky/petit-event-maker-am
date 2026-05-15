@@ -39,6 +39,7 @@ import { ImageUpload } from "@/components/image-upload";
 import { PaymentMethodsField, type PaymentMethod } from "@/components/payment-methods-field";
 import { CategoryPicker } from "@/components/category-picker";
 import { TagPicker } from "@/components/tag-picker";
+import { AITitleSuggestions } from "@/components/ai-title-suggestions";
 
 // ─── Schema ────────────────────────────────────────────────────────────────
 
@@ -895,6 +896,16 @@ function NewEventPageInner() {
                       className="rounded-xl border-[#E5E5E5] transition-colors focus-visible:border-[#1A1A1A] focus-visible:ring-[#1A1A1A]/20"
                     />
                     <FieldError message={errors.description?.message} />
+                    <AITitleSuggestions
+                      description={watchedValues.description ?? ""}
+                      category={null}
+                      onApply={(t) =>
+                        setValue("title", t, {
+                          shouldValidate: true,
+                          shouldDirty: true,
+                        })
+                      }
+                    />
                   </FieldWrapper>
                 </div>
               </FormSection>

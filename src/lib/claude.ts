@@ -161,3 +161,89 @@ ${
     throw e;
   }
 }
+
+// ─── タイトル候補生成 (イベント作成時) ───────────────────
+
+const TitleSuggestionsSchema = z.object({
+  suggestions: z
+    .array(
+      z.object({
+        title: z.string().describe("イベントタイトル（20〜50文字推奨）"),
+        why: z.string().describe("このタイトル案を選んだ理由（30〜80文字）"),
+      })
+    )
+    .describe("3つのタイトル案"),
+});
+
+export type AiTitleSuggestion = {
+  title: string;
+  why: string;
+};
+
+const TITLE_SYSTEM = `あなたはイベントタイトル設計のエキスパートです。
+3つの**異なる方向性**のタイトル案を生成してください。
+
+## 各案の方向性（重複しないこと）
+1. **ベネフィット型**: 参加者が得られる価値を前面に出す（例: "プロンプトで成果を倍にする"）
+2. **問題提起型**: 参加者の悩みに刺さる（例: "ChatGPTは使えるけど深く活用できない人へ"）
+3. **インスピレーション型**: 知的好奇心を刺激する（例: "Claude Code で開発を変える"）
+
+## 禁止事項
+- 抽象的な美辞麗句（"次世代の", "革新的な", "AI時代の…" 等）
+- 具体性のないバズワード羅列
+- 主催者の名前を含む
+- 50文字を超える
+- 「！」「!?」の濫用
+
+## トーン
+- 動詞型・具体的
+- 主観 < 便益
+- ターゲット明示（"初心者向け" / "中級者以上" 等）`;
+
+export async function generateTitleSuggestions(input: {
+  description: string;
+  category?: string | null;
+}): Promise<AiTitleSuggestion[]> {
+  const client = getClaudeClient();
+
+  const userMessage = `## イベントの説明
+${input.description}
+
+## カテゴリ
+${input.category ?? "（未指定）"}
+
+上記から、3つの異なる方向性のタイトル案を提案してください。`;
+
+  try {
+    const response = await client.messages.parse({
+      model: DEFAULT_MODEL,
+      max_tokens: 1024,
+      system: [
+        {
+          type: "text",
+          text: TITLE_SYSTEM,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: [{ role: "user", content: userMessage }],
+      output_config: {
+        format: zodOutputFormat(TitleSuggestionsSchema),
+      },
+    });
+
+    const parsed = response.parsed_output;
+    if (!parsed) throw new Error("Claude returned no structured output");
+    return parsed.suggestions.slice(0, 3);
+  } catch (e) {
+    if (e instanceof Anthropic.RateLimitError) {
+      throw new Error("Claude APIのレート制限に達しました");
+    }
+    if (e instanceof Anthropic.AuthenticationError) {
+      throw new Error("ANTHROPIC_API_KEY が無効です");
+    }
+    if (e instanceof Anthropic.APIError) {
+      throw new Error(`Claude API エラー (${e.status}): ${e.message}`);
+    }
+    throw e;
+  }
+}
