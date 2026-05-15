@@ -21,6 +21,7 @@ import { ViewTracker } from "@/components/view-tracker";
 import { FavoriteButton } from "@/components/favorite-button";
 import { QRCodeButton } from "@/components/qr-code-button";
 import { RelatedEvents } from "@/components/related-events";
+import { OrganizerSeries } from "@/components/organizer-series";
 import { InviteLinkPanel } from "@/components/invite-link-panel";
 import { buildGoogleCalendarUrl } from "@/lib/calendar";
 import { createClient } from "@/lib/supabase/server";
@@ -352,6 +353,22 @@ export default async function EventPage({ params, searchParams }: EventPageProps
     notFound();
   }
   const isAuthed = !!authUser;
+
+  // 主催者プロフィールを取得（OrganizerSeries で名前とusername使う）
+  let organizerProfile: { display_name: string | null; username: string | null } | null = null;
+  if (event.creator_id && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    try {
+      const admin = createAdminClient();
+      const { data } = await admin
+        .from("profiles")
+        .select("display_name, username")
+        .eq("id", event.creator_id)
+        .maybeSingle();
+      organizerProfile = data as { display_name: string | null; username: string | null } | null;
+    } catch {
+      organizerProfile = null;
+    }
+  }
   // 管理者判定（招待リンクパネルなど主催者専用UIに使う）
   const SUPER_ADMIN_EMAILS = ["imatoru@gmail.com"];
   const isSuperAdmin =
@@ -891,7 +908,19 @@ export default async function EventPage({ params, searchParams }: EventPageProps
               </div>
             </section>
 
-            {/* ── Related events ──────────────────────────────────── */}
+            {/* ── Other events by same organizer ─────────────────── */}
+            {event.creator_id && (
+              <OrganizerSeries
+                currentEventId={id}
+                creatorId={event.creator_id}
+                organizerName={
+                  organizerProfile?.display_name ?? event.teacher_name ?? null
+                }
+                organizerUsername={organizerProfile?.username ?? null}
+              />
+            )}
+
+            {/* ── Related events (broader matches) ──────────────────── */}
             <RelatedEvents eventId={id} />
           </article>
 
