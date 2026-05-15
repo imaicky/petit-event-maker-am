@@ -699,105 +699,111 @@ export default function DashboardPage() {
     try {
       const supabase = createClient();
 
-      // Fetch events created by this user
-      const { data: eventsData, error: eventsError } = await supabase
-        .from("events")
-        .select("*")
-        .eq("creator_id", user.id)
-        .order("created_at", { ascending: false });
+      // ─── Round 1: 互いに独立な3クエリを並列化 ─────────────
+      //   - 自分のイベント
+      //   - co-admin として参加中のイベント
+      //   - 自分のメニュー
+      const [eventsRes, adminRes, menusRes] = await Promise.all([
+        supabase
+          .from("events")
+          .select("*")
+          .eq("creator_id", user.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("event_admins")
+          .select("event_id")
+          .eq("user_id", user.id)
+          .eq("status", "accepted"),
+        supabase
+          .from("menus")
+          .select("id, title, is_published, price, category, capacity")
+          .eq("creator_id", user.id)
+          .order("created_at", { ascending: false }),
+      ]);
 
-      if (eventsError || !eventsData) {
+      if (eventsRes.error || !eventsRes.data) {
         setEvents([]);
         return;
       }
-
-      // Fetch booking counts for each event
+      const eventsData = eventsRes.data;
       const eventIds = eventsData.map((e) => e.id);
-      const { data: bookingsData } = await supabase
-        .from("bookings")
-        .select("event_id")
-        .in("event_id", eventIds)
-        .eq("status", "confirmed");
+      const sharedEventIds = (adminRes.data ?? [])
+        .map((r) => r.event_id)
+        .filter((id) => !eventIds.includes(id));
+      const menusData = menusRes.data ?? [];
+      const menuIds = menusData.map((m) => m.id);
 
+      // ─── Round 2: Round 1 の結果に依存する4クエリを並列化 ─
+      //   - 自分のイベントの confirmed 予約 (count)
+      //   - 共有イベント本体
+      //   - 共有イベントの予約数 (RLS バイパスのため /api/booking-counts)
+      //   - メニュー予約 (count)
+      const [bookingsRes, sharedEventsRes, sharedCountRes, menuBookingsRes] = await Promise.all([
+        eventIds.length > 0
+          ? supabase
+              .from("bookings")
+              .select("event_id")
+              .in("event_id", eventIds)
+              .eq("status", "confirmed")
+          : Promise.resolve({ data: [] as Array<{ event_id: string }> }),
+        sharedEventIds.length > 0
+          ? supabase
+              .from("events")
+              .select("*")
+              .in("id", sharedEventIds)
+              .order("created_at", { ascending: false })
+          : Promise.resolve({ data: null as null | typeof eventsData }),
+        sharedEventIds.length > 0
+          ? fetch("/api/booking-counts", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ event_ids: sharedEventIds }),
+            })
+              .then((r) => (r.ok ? r.json() : { counts: {} }))
+              .then((j) => (j.counts ?? {}) as Record<string, number>)
+              .catch(() => ({} as Record<string, number>))
+          : Promise.resolve({} as Record<string, number>),
+        menuIds.length > 0
+          ? supabase
+              .from("menu_bookings")
+              .select("menu_id")
+              .in("menu_id", menuIds)
+              .eq("status", "confirmed")
+          : Promise.resolve({ data: [] as Array<{ menu_id: string }> }),
+      ]);
+
+      // 予約数マップ (own)
       const countMap: Record<string, number> = {};
-      for (const b of bookingsData ?? []) {
+      for (const b of bookingsRes.data ?? []) {
         countMap[b.event_id] = (countMap[b.event_id] ?? 0) + 1;
       }
-
       const enriched: DashboardEvent[] = eventsData.map((e) => ({
         ...e,
         booking_count: countMap[e.id] ?? 0,
         is_shared: false,
       }));
 
-      // Fetch events where user is a co-admin
-      const { data: adminRecords } = await supabase
-        .from("event_admins")
-        .select("event_id")
-        .eq("user_id", user.id)
-        .eq("status", "accepted");
-
-      const sharedEventIds = (adminRecords ?? [])
-        .map((r) => r.event_id)
-        .filter((id) => !eventIds.includes(id));
-
-      let sharedEnriched: DashboardEvent[] = [];
-      if (sharedEventIds.length > 0) {
-        const { data: sharedEventsData } = await supabase
-          .from("events")
-          .select("*")
-          .in("id", sharedEventIds)
-          .order("created_at", { ascending: false });
-
-        if (sharedEventsData) {
-          // Bookings RLS hides other people's rows from co-admins, so fetch
-          // counts via the server endpoint that uses the service role.
-          const sharedCountMap: Record<string, number> = await fetch("/api/booking-counts", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ event_ids: sharedEventIds }),
-          })
-            .then((r) => (r.ok ? r.json() : { counts: {} }))
-            .then((j) => j.counts ?? {})
-            .catch(() => ({}));
-
-          sharedEnriched = sharedEventsData.map((e) => ({
-            ...e,
-            booking_count: sharedCountMap[e.id] ?? 0,
-            is_shared: true,
-          }));
-        }
-      }
+      // 共有イベント
+      const sharedCountMap = sharedCountRes as Record<string, number>;
+      const sharedEnriched: DashboardEvent[] = (sharedEventsRes.data ?? []).map((e) => ({
+        ...e,
+        booking_count: sharedCountMap[e.id] ?? 0,
+        is_shared: true,
+      }));
 
       setEvents([...enriched, ...sharedEnriched]);
 
-      // Also fetch menus
-      const { data: menusData } = await supabase
-        .from("menus")
-        .select("id, title, is_published, price, category, capacity")
-        .eq("creator_id", user.id)
-        .order("created_at", { ascending: false });
-
-      if (menusData) {
-        const menuIds = menusData.map((m) => m.id);
-        const menuCountMap: Record<string, number> = {};
-        if (menuIds.length > 0) {
-          const { data: menuBookingsData } = await supabase
-            .from("menu_bookings")
-            .select("menu_id")
-            .in("menu_id", menuIds)
-            .eq("status", "confirmed");
-          for (const b of menuBookingsData ?? []) {
-            menuCountMap[b.menu_id] = (menuCountMap[b.menu_id] ?? 0) + 1;
-          }
-        }
-        setMenus(
-          menusData.map((m) => ({
-            ...m,
-            booking_count: menuCountMap[m.id] ?? 0,
-          }))
-        );
+      // メニュー集計
+      const menuCountMap: Record<string, number> = {};
+      for (const b of menuBookingsRes.data ?? []) {
+        menuCountMap[b.menu_id] = (menuCountMap[b.menu_id] ?? 0) + 1;
       }
+      setMenus(
+        menusData.map((m) => ({
+          ...m,
+          booking_count: menuCountMap[m.id] ?? 0,
+        }))
+      );
     } finally {
       if (!silent) setEventsLoading(false);
     }

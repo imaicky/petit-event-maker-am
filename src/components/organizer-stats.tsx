@@ -33,9 +33,9 @@ export function OrganizerStats() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/dashboard/organizer-stats", {
-          cache: "no-store",
-        });
+        // ブラウザの 30秒キャッシュ (Cache-Control: private, max-age=30) を利用。
+        // 統計が直近30秒で古いことは許容、操作直後の re-fetch を抑制。
+        const res = await fetch("/api/dashboard/organizer-stats");
         if (!res.ok) {
           if (!cancelled) setLoading(false);
           return;
