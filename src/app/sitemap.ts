@@ -36,19 +36,46 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   let dynamicEntries: MetadataRoute.Sitemap = [];
 
+  // Build時にSupabaseが重くて60秒のページ生成タイムアウトに当たると
+  // ビルド全体が失敗する。サイトマップは静的部分があれば SEO 上致命傷ではないので、
+  // 動的取得は短いタイムアウトで諦め、その分は次回 revalidate に任せる。
   if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
     try {
       const admin = createAdminClient();
 
-      // Public events
-      const { data: events } = await admin
-        .from("events")
-        .select("id, slug, short_code, updated_at")
-        .eq("is_published", true)
-        .order("created_at", { ascending: false })
-        .limit(1000);
+      const timeoutMs = 15_000;
+      const withTimeout = <T>(p: PromiseLike<T>, label: string): Promise<T | null> =>
+        Promise.race<T | null>([
+          Promise.resolve(p),
+          new Promise<null>((resolve) =>
+            setTimeout(() => {
+              console.warn(`[sitemap] ${label} timed out after ${timeoutMs}ms`);
+              resolve(null);
+            }, timeoutMs)
+          ),
+        ]);
 
-      const eventEntries = ((events ?? []) as Array<{
+      const [eventsRes, profilesRes] = await Promise.all([
+        withTimeout(
+          admin
+            .from("events")
+            .select("id, slug, short_code, updated_at")
+            .eq("is_published", true)
+            .order("created_at", { ascending: false })
+            .limit(1000),
+          "events query"
+        ),
+        withTimeout(
+          admin
+            .from("profiles")
+            .select("username, updated_at")
+            .order("updated_at", { ascending: false })
+            .limit(1000),
+          "profiles query"
+        ),
+      ]);
+
+      const eventEntries = ((eventsRes?.data ?? []) as Array<{
         id: string;
         slug: string | null;
         short_code: string | null;
@@ -62,14 +89,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         priority: 0.8,
       }));
 
-      // Public profiles
-      const { data: profiles } = await admin
-        .from("profiles")
-        .select("username, updated_at")
-        .order("updated_at", { ascending: false })
-        .limit(1000);
-
-      const profileEntries = ((profiles ?? []) as Array<{
+      const profileEntries = ((profilesRes?.data ?? []) as Array<{
         username: string | null;
         updated_at: string | null;
       }>)
