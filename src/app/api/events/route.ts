@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { pushLineMessage } from "@/lib/line";
 import { generateShortCode } from "@/lib/short-code";
-import { parseCustomQuestions } from "@/lib/custom-questions";
+import { parseCustomQuestions, isMissingColumnError } from "@/lib/custom-questions";
 
 // ─── Validation ──────────────────────────────────────────────
 
@@ -193,49 +193,63 @@ export async function POST(request: NextRequest) {
       // doesn't accidentally appear as a past event before the user picks one.
       const placeholderDatetime = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-      const { data: draftEvent, error: draftErr } = await supabase
+      // 共通フィールドを抽出してから custom_questions の有無を切替可能にする
+      const draftCore = {
+        creator_id: user.id,
+        title: d.title,
+        description: d.description ?? "",
+        datetime: d.datetime || placeholderDatetime,
+        booking_deadline: d.booking_deadline || null,
+        location: d.location || null,
+        location_type: d.location_type ?? "physical",
+        online_url: d.online_url || null,
+        zoom_meeting_id: d.zoom_meeting_id || null,
+        zoom_passcode: d.zoom_passcode || null,
+        location_url: d.location_url || null,
+        capacity: d.capacity ?? 0,
+        capacity_physical: d.capacity_physical ?? null,
+        capacity_online: d.capacity_online ?? null,
+        price: d.price ?? 0,
+        image_url: d.image_url || null,
+        teacher_name: d.teacher_name || null,
+        teacher_bio: d.teacher_bio || null,
+        category: d.category || null,
+        price_note: d.price_note || null,
+        payment_method: null,
+        payment_methods: d.payment_methods && d.payment_methods.length > 0 ? d.payment_methods : null,
+        payment_link: null,
+        payment_info: null,
+        payment_deadline_days: d.payment_deadline_days ?? null,
+        bank_name: d.bank_name || null,
+        bank_branch: d.bank_branch || null,
+        bank_account_type: d.bank_account_type || null,
+        bank_account_number: d.bank_account_number || null,
+        bank_account_holder: d.bank_account_holder || null,
+        bank_note: d.bank_note || null,
+        is_limited: d.is_limited ?? false,
+        limited_passcode: d.is_limited ? (d.limited_passcode || null) : null,
+        slug,
+        short_code,
+        is_published: false,
+      };
+      let { data: draftEvent, error: draftErr } = await supabase
         .from("events")
         .insert({
-          creator_id: user.id,
-          title: d.title,
-          description: d.description ?? "",
-          datetime: d.datetime || placeholderDatetime,
-          booking_deadline: d.booking_deadline || null,
-          location: d.location || null,
-          location_type: d.location_type ?? "physical",
-          online_url: d.online_url || null,
-          zoom_meeting_id: d.zoom_meeting_id || null,
-          zoom_passcode: d.zoom_passcode || null,
-          location_url: d.location_url || null,
-          capacity: d.capacity ?? 0,
-          capacity_physical: d.capacity_physical ?? null,
-          capacity_online: d.capacity_online ?? null,
-          price: d.price ?? 0,
-          image_url: d.image_url || null,
-          teacher_name: d.teacher_name || null,
-          teacher_bio: d.teacher_bio || null,
-          category: d.category || null,
-          price_note: d.price_note || null,
-          payment_method: null,
-          payment_methods: d.payment_methods && d.payment_methods.length > 0 ? d.payment_methods : null,
-          payment_link: null,
-          payment_info: null,
-          payment_deadline_days: d.payment_deadline_days ?? null,
-          bank_name: d.bank_name || null,
-          bank_branch: d.bank_branch || null,
-          bank_account_type: d.bank_account_type || null,
-          bank_account_number: d.bank_account_number || null,
-          bank_account_holder: d.bank_account_holder || null,
-          bank_note: d.bank_note || null,
-          is_limited: d.is_limited ?? false,
-          limited_passcode: d.is_limited ? (d.limited_passcode || null) : null,
-          slug,
-          short_code,
-          is_published: false,
+          ...draftCore,
           custom_questions: parseCustomQuestions(d.custom_questions ?? []),
         } as never)
         .select()
         .single();
+      // マイグレーション未実行（custom_questions カラム無し）の場合は
+      // そのフィールドを外して再試行することで、サイトの基本機能を維持する。
+      if (draftErr && isMissingColumnError(draftErr)) {
+        console.warn("[POST /api/events draft] custom_questions column missing — retrying without it");
+        ({ data: draftEvent, error: draftErr } = await supabase
+          .from("events")
+          .insert(draftCore as never)
+          .select()
+          .single());
+      }
       if (draftErr) {
         console.error("[POST /api/events draft] Supabase error:", draftErr);
         return NextResponse.json(
@@ -261,56 +275,68 @@ export async function POST(request: NextRequest) {
     const slug = data.slug ?? generateSlug(data.title);
     const short_code = generateShortCode();
 
-    const { data: event, error } = await supabase
+    const publishCore = {
+      creator_id: user.id,
+      title: data.title,
+      description: data.description,
+      datetime: data.datetime,
+      booking_deadline: data.booking_deadline || null,
+      location: data.location || null,
+      location_type: data.location_type ?? "physical",
+      online_url: data.online_url || null,
+      zoom_meeting_id: data.zoom_meeting_id || null,
+      zoom_passcode: data.zoom_passcode || null,
+      location_url: data.location_url || null,
+      capacity: data.capacity,
+      capacity_physical: data.capacity_physical ?? null,
+      capacity_online: data.capacity_online ?? null,
+      price: data.price,
+      image_url: data.image_url || null,
+      teacher_name: data.teacher_name || null,
+      teacher_bio: data.teacher_bio || null,
+      category: data.category || null,
+      price_note: data.price_note || null,
+      payment_method: data.price > 0 ? (data.payment_method || 'stripe') : null,
+      payment_methods: data.price > 0 && data.payment_methods && data.payment_methods.length > 0
+        ? data.payment_methods
+        : null,
+      payment_link: data.price > 0 && (data.payment_methods?.includes('custom') || data.payment_method === 'custom')
+        ? (data.payment_link || null)
+        : null,
+      payment_info: data.price > 0 && (data.payment_methods?.includes('custom') || data.payment_method === 'custom')
+        ? (data.payment_info || null)
+        : null,
+      payment_deadline_days: data.payment_deadline_days ?? null,
+      bank_name: data.payment_methods?.includes('bank') ? (data.bank_name || null) : null,
+      bank_branch: data.payment_methods?.includes('bank') ? (data.bank_branch || null) : null,
+      bank_account_type: data.payment_methods?.includes('bank') ? (data.bank_account_type || null) : null,
+      bank_account_number: data.payment_methods?.includes('bank') ? (data.bank_account_number || null) : null,
+      bank_account_holder: data.payment_methods?.includes('bank') ? (data.bank_account_holder || null) : null,
+      bank_note: data.payment_methods?.includes('bank') ? (data.bank_note || null) : null,
+      is_limited: data.is_limited ?? false,
+      limited_passcode: data.is_limited ? (data.limited_passcode || null) : null,
+      slug,
+      short_code,
+      is_published: data.is_published ?? true,
+      category_id: data.category_id ?? null,
+    };
+    let { data: event, error } = await supabase
       .from("events")
       .insert({
-        creator_id: user.id,
-        title: data.title,
-        description: data.description,
-        datetime: data.datetime,
-        booking_deadline: data.booking_deadline || null,
-        location: data.location || null,
-        location_type: data.location_type ?? "physical",
-        online_url: data.online_url || null,
-        zoom_meeting_id: data.zoom_meeting_id || null,
-        zoom_passcode: data.zoom_passcode || null,
-        location_url: data.location_url || null,
-        capacity: data.capacity,
-        capacity_physical: data.capacity_physical ?? null,
-        capacity_online: data.capacity_online ?? null,
-        price: data.price,
-        image_url: data.image_url || null,
-        teacher_name: data.teacher_name || null,
-        teacher_bio: data.teacher_bio || null,
-        category: data.category || null,
-        price_note: data.price_note || null,
-        payment_method: data.price > 0 ? (data.payment_method || 'stripe') : null,
-        payment_methods: data.price > 0 && data.payment_methods && data.payment_methods.length > 0
-          ? data.payment_methods
-          : null,
-        payment_link: data.price > 0 && (data.payment_methods?.includes('custom') || data.payment_method === 'custom')
-          ? (data.payment_link || null)
-          : null,
-        payment_info: data.price > 0 && (data.payment_methods?.includes('custom') || data.payment_method === 'custom')
-          ? (data.payment_info || null)
-          : null,
-        payment_deadline_days: data.payment_deadline_days ?? null,
-        bank_name: data.payment_methods?.includes('bank') ? (data.bank_name || null) : null,
-        bank_branch: data.payment_methods?.includes('bank') ? (data.bank_branch || null) : null,
-        bank_account_type: data.payment_methods?.includes('bank') ? (data.bank_account_type || null) : null,
-        bank_account_number: data.payment_methods?.includes('bank') ? (data.bank_account_number || null) : null,
-        bank_account_holder: data.payment_methods?.includes('bank') ? (data.bank_account_holder || null) : null,
-        bank_note: data.payment_methods?.includes('bank') ? (data.bank_note || null) : null,
-        is_limited: data.is_limited ?? false,
-        limited_passcode: data.is_limited ? (data.limited_passcode || null) : null,
-        slug,
-        short_code,
-        is_published: data.is_published ?? true,
-        category_id: data.category_id ?? null,
+        ...publishCore,
         custom_questions: parseCustomQuestions(data.custom_questions ?? []),
       } as never)
       .select()
       .single();
+    // マイグレーション未実行の環境では custom_questions を外して再試行
+    if (error && isMissingColumnError(error)) {
+      console.warn("[POST /api/events] custom_questions column missing — retrying without it");
+      ({ data: event, error } = await supabase
+        .from("events")
+        .insert(publishCore as never)
+        .select()
+        .single());
+    }
 
     if (error) {
       if (error.code === "23505") {

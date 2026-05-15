@@ -7,7 +7,7 @@ import { sendBatchEmails } from "@/lib/email";
 import { wrapInHtml } from "@/lib/email-templates";
 import { logPaymentEvent } from "@/lib/payment-audit";
 import { recordInterestFromBooking } from "@/lib/user-interest";
-import { parseCustomQuestions, sanitizeAnswers } from "@/lib/custom-questions";
+import { parseCustomQuestions, sanitizeAnswers, isMissingColumnError } from "@/lib/custom-questions";
 
 // ─── Validation ──────────────────────────────────────────────
 
@@ -338,23 +338,36 @@ export async function POST(
         ).toISOString()
       : null;
 
-    const { data: inserted, error: insErr } = await admin
+    const bookingCore = {
+      event_id: eventId,
+      user_id: user?.id ?? null,
+      guest_name: data.guest_name,
+      guest_email: data.guest_email,
+      guest_phone: data.guest_phone || null,
+      status: bookingStatus,
+      attendance_format: effectiveFormat,
+      payment_status: paymentStatus,
+      payment_method: chosenMethod,
+      payment_deadline: paymentDeadline,
+    };
+    let { data: inserted, error: insErr } = await admin
       .from("bookings")
       .insert({
-        event_id: eventId,
-        user_id: user?.id ?? null,
-        guest_name: data.guest_name,
-        guest_email: data.guest_email,
-        guest_phone: data.guest_phone || null,
-        status: bookingStatus,
-        attendance_format: effectiveFormat,
-        payment_status: paymentStatus,
-        payment_method: chosenMethod,
-        payment_deadline: paymentDeadline,
+        ...bookingCore,
         custom_answers: sanitizedCustomAnswers,
       })
       .select()
       .single();
+    // マイグレーション未実行で custom_answers カラムがない環境では
+    // そのフィールドを外して再試行
+    if (insErr && isMissingColumnError(insErr)) {
+      console.warn("[POST /api/events/[id]/book] custom_answers column missing — retrying without it");
+      ({ data: inserted, error: insErr } = await admin
+        .from("bookings")
+        .insert(bookingCore)
+        .select()
+        .single());
+    }
 
     if (insErr || !inserted) {
       console.error("[POST /api/events/[id]/book] Insert error:", insErr);

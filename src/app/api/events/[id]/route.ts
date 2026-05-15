@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { canManageEvent } from "@/lib/check-event-access";
 import { promoteWaitlistOnCapacityIncrease } from "@/lib/waitlist-promotion";
-import { parseCustomQuestions } from "@/lib/custom-questions";
+import { parseCustomQuestions, isMissingColumnError } from "@/lib/custom-questions";
 
 // ─── Validation ──────────────────────────────────────────────
 
@@ -401,47 +401,59 @@ export async function PUT(
           ? (existing as { datetime: string }).datetime
           : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-      const result = await admin
+      const draftCore = {
+        title: d.title,
+        description: d.description ?? "",
+        datetime: d.datetime || existingDatetime,
+        booking_deadline: d.booking_deadline || null,
+        location: d.location || null,
+        location_type: d.location_type ?? "physical",
+        online_url: d.online_url || null,
+        zoom_meeting_id: d.zoom_meeting_id || null,
+        zoom_passcode: d.zoom_passcode || null,
+        location_url: d.location_url || null,
+        capacity: d.capacity ?? 0,
+        capacity_physical: d.capacity_physical ?? null,
+        capacity_online: d.capacity_online ?? null,
+        price: d.price ?? 0,
+        image_url: d.image_url || null,
+        teacher_name: d.teacher_name || null,
+        teacher_bio: d.teacher_bio || null,
+        category: d.category || null,
+        price_note: d.price_note || null,
+        payment_method: null,
+        payment_methods: d.payment_methods && d.payment_methods.length > 0 ? d.payment_methods : null,
+        payment_link: null,
+        payment_info: null,
+        payment_deadline_days: d.payment_deadline_days ?? null,
+        bank_name: d.bank_name || null,
+        bank_branch: d.bank_branch || null,
+        bank_account_type: d.bank_account_type || null,
+        bank_account_number: d.bank_account_number || null,
+        bank_account_holder: d.bank_account_holder || null,
+        bank_note: d.bank_note || null,
+        is_limited: d.is_limited ?? false,
+        limited_passcode: d.is_limited ? (d.limited_passcode || null) : null,
+        is_published: false,
+      };
+      let result = await admin
         .from("events")
         .update({
-          title: d.title,
-          description: d.description ?? "",
-          datetime: d.datetime || existingDatetime,
-          booking_deadline: d.booking_deadline || null,
-          location: d.location || null,
-          location_type: d.location_type ?? "physical",
-          online_url: d.online_url || null,
-          zoom_meeting_id: d.zoom_meeting_id || null,
-          zoom_passcode: d.zoom_passcode || null,
-          location_url: d.location_url || null,
-          capacity: d.capacity ?? 0,
-          capacity_physical: d.capacity_physical ?? null,
-          capacity_online: d.capacity_online ?? null,
-          price: d.price ?? 0,
-          image_url: d.image_url || null,
-          teacher_name: d.teacher_name || null,
-          teacher_bio: d.teacher_bio || null,
-          category: d.category || null,
-          price_note: d.price_note || null,
-          payment_method: null,
-          payment_methods: d.payment_methods && d.payment_methods.length > 0 ? d.payment_methods : null,
-          payment_link: null,
-          payment_info: null,
-          payment_deadline_days: d.payment_deadline_days ?? null,
-          bank_name: d.bank_name || null,
-          bank_branch: d.bank_branch || null,
-          bank_account_type: d.bank_account_type || null,
-          bank_account_number: d.bank_account_number || null,
-          bank_account_holder: d.bank_account_holder || null,
-          bank_note: d.bank_note || null,
-          is_limited: d.is_limited ?? false,
-          limited_passcode: d.is_limited ? (d.limited_passcode || null) : null,
-          is_published: false,
+          ...draftCore,
           custom_questions: parseCustomQuestions(d.custom_questions ?? []),
         } as never)
         .eq("id", id)
         .select()
         .single();
+      if (result.error && isMissingColumnError(result.error)) {
+        console.warn("[PUT /api/events/[id] draft] custom_questions column missing — retrying without it");
+        result = await admin
+          .from("events")
+          .update(draftCore as never)
+          .eq("id", id)
+          .select()
+          .single();
+      }
       event = result.data;
       error = result.error;
     } else {
@@ -458,54 +470,66 @@ export async function PUT(
 
       const data = parsed.data;
 
-      const result = await admin
+      const updateCore = {
+        title: data.title,
+        description: data.description,
+        datetime: data.datetime,
+        booking_deadline: data.booking_deadline || null,
+        location: data.location || null,
+        location_type: data.location_type ?? "physical",
+        online_url: data.online_url || null,
+        zoom_meeting_id: data.zoom_meeting_id || null,
+        zoom_passcode: data.zoom_passcode || null,
+        location_url: data.location_url || null,
+        capacity: data.capacity,
+        capacity_physical: data.capacity_physical ?? null,
+        capacity_online: data.capacity_online ?? null,
+        price: data.price,
+        image_url: data.image_url || null,
+        teacher_name: data.teacher_name || null,
+        teacher_bio: data.teacher_bio || null,
+        category: data.category || null,
+        price_note: data.price_note || null,
+        payment_method: data.price > 0 ? (data.payment_method || 'stripe') : null,
+        payment_methods: data.price > 0 && data.payment_methods && data.payment_methods.length > 0
+          ? data.payment_methods
+          : null,
+        payment_link: data.price > 0 && (data.payment_methods?.includes('custom') || data.payment_method === 'custom')
+          ? (data.payment_link || null)
+          : null,
+        payment_info: data.price > 0 && (data.payment_methods?.includes('custom') || data.payment_method === 'custom')
+          ? (data.payment_info || null)
+          : null,
+        payment_deadline_days: data.payment_deadline_days ?? null,
+        bank_name: data.payment_methods?.includes('bank') ? (data.bank_name || null) : null,
+        bank_branch: data.payment_methods?.includes('bank') ? (data.bank_branch || null) : null,
+        bank_account_type: data.payment_methods?.includes('bank') ? (data.bank_account_type || null) : null,
+        bank_account_number: data.payment_methods?.includes('bank') ? (data.bank_account_number || null) : null,
+        bank_account_holder: data.payment_methods?.includes('bank') ? (data.bank_account_holder || null) : null,
+        bank_note: data.payment_methods?.includes('bank') ? (data.bank_note || null) : null,
+        is_limited: data.is_limited ?? false,
+        limited_passcode: data.is_limited ? (data.limited_passcode || null) : null,
+        is_published: data.is_published,
+        category_id: data.category_id ?? null,
+      };
+      let result = await admin
         .from("events")
         .update({
-          title: data.title,
-          description: data.description,
-          datetime: data.datetime,
-          booking_deadline: data.booking_deadline || null,
-          location: data.location || null,
-          location_type: data.location_type ?? "physical",
-          online_url: data.online_url || null,
-          zoom_meeting_id: data.zoom_meeting_id || null,
-          zoom_passcode: data.zoom_passcode || null,
-          location_url: data.location_url || null,
-          capacity: data.capacity,
-          capacity_physical: data.capacity_physical ?? null,
-          capacity_online: data.capacity_online ?? null,
-          price: data.price,
-          image_url: data.image_url || null,
-          teacher_name: data.teacher_name || null,
-          teacher_bio: data.teacher_bio || null,
-          category: data.category || null,
-          price_note: data.price_note || null,
-          payment_method: data.price > 0 ? (data.payment_method || 'stripe') : null,
-          payment_methods: data.price > 0 && data.payment_methods && data.payment_methods.length > 0
-            ? data.payment_methods
-            : null,
-          payment_link: data.price > 0 && (data.payment_methods?.includes('custom') || data.payment_method === 'custom')
-            ? (data.payment_link || null)
-            : null,
-          payment_info: data.price > 0 && (data.payment_methods?.includes('custom') || data.payment_method === 'custom')
-            ? (data.payment_info || null)
-            : null,
-          payment_deadline_days: data.payment_deadline_days ?? null,
-          bank_name: data.payment_methods?.includes('bank') ? (data.bank_name || null) : null,
-          bank_branch: data.payment_methods?.includes('bank') ? (data.bank_branch || null) : null,
-          bank_account_type: data.payment_methods?.includes('bank') ? (data.bank_account_type || null) : null,
-          bank_account_number: data.payment_methods?.includes('bank') ? (data.bank_account_number || null) : null,
-          bank_account_holder: data.payment_methods?.includes('bank') ? (data.bank_account_holder || null) : null,
-          bank_note: data.payment_methods?.includes('bank') ? (data.bank_note || null) : null,
-          is_limited: data.is_limited ?? false,
-          limited_passcode: data.is_limited ? (data.limited_passcode || null) : null,
-          is_published: data.is_published,
-          category_id: data.category_id ?? null,
+          ...updateCore,
           custom_questions: parseCustomQuestions(data.custom_questions ?? []),
         } as never)
         .eq("id", id)
         .select()
         .single();
+      if (result.error && isMissingColumnError(result.error)) {
+        console.warn("[PUT /api/events/[id]] custom_questions column missing — retrying without it");
+        result = await admin
+          .from("events")
+          .update(updateCore as never)
+          .eq("id", id)
+          .select()
+          .single();
+      }
       event = result.data;
       error = result.error;
 

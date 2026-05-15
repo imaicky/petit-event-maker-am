@@ -100,6 +100,22 @@ export function sanitizeAnswers(
   return out;
 }
 
+/**
+ * Supabase エラーが「列が存在しない」かどうかを判定。
+ * マイグレーション未実行環境で custom_questions / custom_answers がない場合に
+ * 一度リトライするための判定ロジック。
+ *
+ * Postgres ネイティブエラー: 42703 (undefined column)
+ * PostgREST スキーマキャッシュエラー: PGRST204 / メッセージに "column" を含む
+ */
+export function isMissingColumnError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const e = error as { code?: string; message?: string };
+  if (e.code === "42703" || e.code === "PGRST204") return true;
+  const msg = (e.message ?? "").toLowerCase();
+  return msg.includes("column") && (msg.includes("does not exist") || msg.includes("could not find"));
+}
+
 /** 質問ID用のランダムslug風id生成 (UI で新規追加時に使う) */
 export function generateQuestionId(): string {
   // crypto.randomUUID は edge でも利用可、衝突しない
