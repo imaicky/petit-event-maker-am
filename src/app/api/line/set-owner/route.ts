@@ -68,10 +68,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update owner_line_user_id
+    // 既存の notify_line_user_ids を取得し、なければ追加（重複は無視）
+    const { data: cur } = await admin
+      .from("line_accounts")
+      .select("notify_line_user_ids")
+      .eq("user_id", targetUserId)
+      .single();
+    const currentIds = ((cur as { notify_line_user_ids?: string[] | null } | null)?.notify_line_user_ids ?? []) as string[];
+    const nextIds = currentIds.includes(lineUserId)
+      ? currentIds
+      : [...currentIds, lineUserId];
+
+    // owner_line_user_id 更新 + notify_line_user_ids にも append
+    // （フォロワー一覧の「通知先に設定」ボタンから押すと、その人へも実際に通知が
+    //   届くようにする。notify_line_user_ids が空のままだと book route のフォロー
+    //   バック判定でも届かないため。）
     const { error: updateError } = await admin
       .from("line_accounts")
-      .update({ owner_line_user_id: lineUserId })
+      .update({
+        owner_line_user_id: lineUserId,
+        notify_line_user_ids: nextIds,
+      })
       .eq("user_id", targetUserId);
 
     if (updateError) {
@@ -82,7 +99,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ success: true, owner_line_user_id: lineUserId });
+    return NextResponse.json({
+      success: true,
+      owner_line_user_id: lineUserId,
+      notify_line_user_ids: nextIds,
+    });
   } catch (err) {
     console.error("[POST /api/line/set-owner] Unexpected error:", err);
     return NextResponse.json(
