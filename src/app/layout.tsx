@@ -1,10 +1,5 @@
 import type { Metadata } from "next";
-import {
-  Noto_Serif_JP,
-  Josefin_Sans,
-  Noto_Sans_JP,
-  DM_Sans,
-} from "next/font/google";
+import { Noto_Serif_JP, Noto_Sans_JP } from "next/font/google";
 import "./globals.css";
 import { Suspense } from "react";
 import { AuthProvider } from "@/components/auth-provider";
@@ -13,25 +8,17 @@ import { PostHogProvider } from "@/components/posthog-provider";
 const notoSerifJP = Noto_Serif_JP({
   variable: "--font-zen-maru",
   subsets: ["latin"],
-  weight: ["400", "500", "700", "900"],
-});
-
-const josefinSans = Josefin_Sans({
-  variable: "--font-josefin",
-  subsets: ["latin"],
-  weight: ["300", "400", "600", "700"],
+  weight: ["400", "700"],
+  display: "swap",
+  preload: false,
 });
 
 const notoSansJP = Noto_Sans_JP({
   variable: "--font-noto-sans-jp",
   subsets: ["latin"],
   weight: ["400", "500", "700"],
-});
-
-const dmSans = DM_Sans({
-  variable: "--font-dm-sans",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  display: "swap",
+  preload: false,
 });
 
 const SITE_URL =
@@ -100,13 +87,14 @@ export default function RootLayout({
   return (
     <html
       lang="ja"
-      className={`${notoSerifJP.variable} ${josefinSans.variable} ${notoSansJP.variable} ${dmSans.variable} h-full antialiased`}
+      className={`${notoSerifJP.variable} ${notoSansJP.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <AuthProvider>
           <Suspense fallback={null}>
-            <PostHogProvider>{children}</PostHogProvider>
+            <PostHogProvider />
           </Suspense>
+          {children}
         </AuthProvider>
       </body>
     </html>

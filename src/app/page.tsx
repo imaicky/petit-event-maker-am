@@ -130,7 +130,8 @@ async function getPopularEvents(): Promise<EventWithBookingCount[]> {
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-export const dynamic = "force-dynamic";
+// CDN/ISRキャッシュで配信。60秒ごとに人気イベントを再取得。
+export const revalidate = 60;
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
