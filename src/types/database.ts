@@ -331,6 +331,9 @@ export type Database = {
           notify_line_user_ids: string[]
           is_active: boolean
           notify_on_booking: boolean
+          last_webhook_event_at: string | null
+          last_webhook_error: string | null
+          last_webhook_signature_failed_at: string | null
           created_at: string
           updated_at: string
         }
@@ -346,6 +349,9 @@ export type Database = {
           notify_line_user_ids?: string[]
           is_active?: boolean
           notify_on_booking?: boolean
+          last_webhook_event_at?: string | null
+          last_webhook_error?: string | null
+          last_webhook_signature_failed_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -361,6 +367,9 @@ export type Database = {
           notify_line_user_ids?: string[]
           is_active?: boolean
           notify_on_booking?: boolean
+          last_webhook_event_at?: string | null
+          last_webhook_error?: string | null
+          last_webhook_signature_failed_at?: string | null
           created_at?: string
           updated_at?: string
         }

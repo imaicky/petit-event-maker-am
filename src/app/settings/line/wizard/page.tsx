@@ -503,30 +503,55 @@ export default function LineWizardPage() {
 
           {/* ── Step: Done ────────────────────────────────────── */}
           {step === "done" && (
-            <div className="space-y-6 text-center">
-              <div className="inline-flex h-16 w-16 items-center justify-center rounded-3xl bg-[#06C755]/10 mb-2">
-                <CheckCircle2 className="h-8 w-8 text-[#06C755]" />
+            <div className="space-y-6">
+              <div className="text-center">
+                <div className="inline-flex h-16 w-16 items-center justify-center rounded-3xl bg-[#06C755]/10 mb-2">
+                  <CheckCircle2 className="h-8 w-8 text-[#06C755]" />
+                </div>
+                <h1
+                  className="text-2xl sm:text-3xl font-bold text-[#1A1A1A]"
+                  style={{ fontFamily: "var(--font-zen-maru)" }}
+                >
+                  連携完了！あと1ステップ
+                </h1>
+                <p className="text-sm text-[#666666] leading-relaxed mt-3">
+                  これでイベント公開時に LINE 公式アカウントのフォロワー全員へ告知が届きます。
+                </p>
               </div>
-              <h1
-                className="text-2xl sm:text-3xl font-bold text-[#1A1A1A]"
-                style={{ fontFamily: "var(--font-zen-maru)" }}
-              >
-                セットアップ完了！
-              </h1>
-              <p className="text-sm text-[#666666] leading-relaxed">
-                これでイベント公開時に LINE
-                公式アカウントのフォロワー全員へ告知が届きます。
-                <br />
-                参加者へのリマインダー通知も自動で動き始めます。
-              </p>
 
-              <div className="grid gap-3 sm:grid-cols-2 pt-4">
+              {/* ★ 必須: 通知先登録 */}
+              <div className="rounded-2xl border-2 border-amber-300 bg-amber-50/80 p-5">
+                <p className="text-sm font-bold text-amber-900 mb-2">
+                  ⚠️ 予約通知を受け取るには、もう1つ設定が必要です
+                </p>
+                <p className="text-xs text-amber-900/85 leading-relaxed mb-3">
+                  あなたのLINEに予約通知を届けるために、<strong>通知先LINEを登録</strong>してください。次のどちらかの方法で登録できます:
+                </p>
+                <div className="space-y-2 text-xs text-amber-900/85">
+                  <div className="rounded-lg bg-white/70 border border-amber-200 p-3">
+                    <p className="font-semibold mb-1">方法A: LINEで友だち追加してコマンド送信（簡単）</p>
+                    <ol className="list-decimal pl-4 space-y-0.5">
+                      <li>スマホで連携した公式アカウントを友だち追加</li>
+                      <li>トーク画面に「<strong>通知ON</strong>」と送信</li>
+                      <li>「✅ 通知を有効化しました」が返ってきたらOK</li>
+                    </ol>
+                  </div>
+                  <div className="rounded-lg bg-white/70 border border-amber-200 p-3">
+                    <p className="font-semibold mb-1">方法B: 設定画面でLINEユーザーIDを直接入力</p>
+                    <p className="leading-relaxed">
+                      LINE設定画面の「通知先（管理者LINE）」セクションから入力できます。
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 pt-2">
                 <Link href="/settings/line">
                   <Button
                     variant="outline"
                     className="w-full rounded-full border-[#E5E5E5]"
                   >
-                    LINE設定画面へ
+                    通知先を登録する
                   </Button>
                 </Link>
                 <Link href="/events/new">
