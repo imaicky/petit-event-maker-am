@@ -92,6 +92,7 @@ export type Database = {
           location_url: string | null
           reminder_24h_sent: boolean
           reminder_2h_sent: boolean
+          organizer_attendee_list_sent: boolean
           follower_notified_at: string | null
           capacity_physical: number | null
           capacity_online: number | null
@@ -139,6 +140,7 @@ export type Database = {
           location_url?: string | null
           reminder_24h_sent?: boolean
           reminder_2h_sent?: boolean
+          organizer_attendee_list_sent?: boolean
           follower_notified_at?: string | null
           capacity_physical?: number | null
           capacity_online?: number | null
@@ -186,6 +188,7 @@ export type Database = {
           location_url?: string | null
           reminder_24h_sent?: boolean
           reminder_2h_sent?: boolean
+          organizer_attendee_list_sent?: boolean
           follower_notified_at?: string | null
           capacity_physical?: number | null
           capacity_online?: number | null

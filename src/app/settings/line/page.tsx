@@ -116,6 +116,40 @@ const LINE_USER_ID_RE = /^U[0-9a-fA-F]{32}$/;
 const inputCls =
   "h-10 rounded-xl border-[#E5E5E5] focus-visible:border-[#1A1A1A] focus-visible:ring-[#1A1A1A]/20 bg-[#FAFAFA]";
 
+function FollowerAvatar({
+  pictureUrl,
+  displayName,
+  size = 36,
+}: {
+  pictureUrl: string | null;
+  displayName: string | null;
+  size?: number;
+}) {
+  const [errored, setErrored] = useState(false);
+  const initial = (displayName ?? "?").trim().charAt(0).toUpperCase();
+  if (!pictureUrl || errored) {
+    return (
+      <div
+        className="rounded-full bg-[#E5E5E5] flex items-center justify-center shrink-0 text-[#666666] font-semibold"
+        style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}
+      >
+        {initial !== "" ? initial : <Users className="h-4 w-4 text-[#999999]" />}
+      </div>
+    );
+  }
+  return (
+    <Image
+      src={pictureUrl}
+      alt={displayName ?? ""}
+      width={size}
+      height={size}
+      className="rounded-full shrink-0 object-cover"
+      onError={() => setErrored(true)}
+      unoptimized
+    />
+  );
+}
+
 function DiagnoseRow({
   label,
   ok,
@@ -1100,19 +1134,11 @@ export default function LineSettingsPage() {
                                 : "border-[#F2F2F2] bg-[#FAFAFA]"
                             }`}
                           >
-                            {matched?.picture_url ? (
-                              <Image
-                                src={matched.picture_url}
-                                alt={matched.display_name ?? ""}
-                                width={32}
-                                height={32}
-                                className="rounded-full shrink-0"
-                              />
-                            ) : (
-                              <div className="h-8 w-8 rounded-full bg-[#E5E5E5] flex items-center justify-center shrink-0">
-                                <UserCheck className="h-4 w-4 text-[#999999]" />
-                              </div>
-                            )}
+                            <FollowerAvatar
+                              pictureUrl={matched?.picture_url ?? null}
+                              displayName={matched?.display_name ?? null}
+                              size={32}
+                            />
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-[#1A1A1A] truncate">
                                 {matched?.display_name ?? "（プロフィール未取得）"}
@@ -1331,19 +1357,11 @@ export default function LineSettingsPage() {
                                   : "border-[#F2F2F2] bg-[#FAFAFA]"
                               }`}
                             >
-                              {f.picture_url ? (
-                                <Image
-                                  src={f.picture_url}
-                                  alt={f.display_name ?? ""}
-                                  width={36}
-                                  height={36}
-                                  className="rounded-full shrink-0"
-                                />
-                              ) : (
-                                <div className="h-9 w-9 rounded-full bg-[#E5E5E5] flex items-center justify-center shrink-0">
-                                  <Users className="h-4 w-4 text-[#999999]" />
-                                </div>
-                              )}
+                              <FollowerAvatar
+                                pictureUrl={f.picture_url}
+                                displayName={f.display_name}
+                                size={36}
+                              />
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium text-[#1A1A1A] truncate">
                                   {f.display_name || "名前なし"}

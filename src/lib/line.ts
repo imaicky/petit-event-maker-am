@@ -1359,3 +1359,156 @@ export function buildMenuBookingNotifyText(
   const capacityStr = capacity != null ? `（現在${currentCount}名／定員${capacity}名）` : `（現在${currentCount}名）`;
   return `📩 メニューに新しい申し込みがありました\n\n${menuTitle}\n${guestName}さんが申し込みました${capacityStr}`;
 }
+
+// ─── Organizer Attendee List Flex Bubble ────────────────────
+// 主催者向けに「明日開催の参加者一覧」を送るFlex Message
+
+type AttendeeForFlex = {
+  guest_name: string;
+  attendance_format?: string | null;
+};
+
+export function buildOrganizerAttendeeListFlex(
+  event: EventForFlex & { location_type?: string | null },
+  attendees: AttendeeForFlex[],
+  baseUrl: string,
+  whenLabel: string = "明日開催"
+): FlexContainer {
+  const eventUrl = `${baseUrl}/events/${event.id}/attendees`;
+  const dateStr = formatDateJa(event.datetime);
+  const total = attendees.length;
+  const MAX_LIST = 15;
+  const shown = attendees.slice(0, MAX_LIST);
+  const remaining = total - shown.length;
+
+  const nameRows = shown.map((a) => {
+    const fmt = a.attendance_format === "online" ? "オンライン" : a.attendance_format === "physical" ? "リアル" : null;
+    return {
+      type: "box",
+      layout: "baseline",
+      spacing: "sm",
+      contents: [
+        { type: "text", text: "•", size: "sm", flex: 0, color: "#999999" },
+        { type: "text", text: a.guest_name, size: "sm", color: "#1A1A1A", flex: 5, wrap: true },
+        ...(fmt
+          ? [{ type: "text", text: fmt, size: "xs", color: "#999999", flex: 0, align: "end" }]
+          : []),
+      ],
+    };
+  });
+
+  const bubble: Record<string, unknown> = {
+    type: "bubble",
+    body: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "text",
+          text: `📋 ${whenLabel}の参加者リスト`,
+          color: "#06C755",
+          size: "sm",
+          weight: "bold",
+        },
+        {
+          type: "text",
+          text: event.title,
+          weight: "bold",
+          size: "lg",
+          wrap: true,
+          margin: "md",
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          margin: "lg",
+          spacing: "sm",
+          contents: [
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "📅", size: "sm", flex: 0 },
+                { type: "text", text: dateStr, size: "sm", color: "#666666", flex: 5, wrap: true },
+              ],
+            },
+            ...(event.location
+              ? [
+                  {
+                    type: "box",
+                    layout: "baseline",
+                    spacing: "sm",
+                    contents: [
+                      { type: "text", text: "📍", size: "sm", flex: 0 },
+                      { type: "text", text: event.location, size: "sm", color: "#666666", flex: 5, wrap: true },
+                    ],
+                  },
+                ]
+              : []),
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "👥", size: "sm", flex: 0 },
+                { type: "text", text: `${total}名参加`, size: "sm", color: "#1A1A1A", weight: "bold", flex: 5 },
+              ],
+            },
+          ],
+        },
+        ...(total > 0
+          ? [
+              { type: "separator", margin: "lg" },
+              {
+                type: "box",
+                layout: "vertical",
+                margin: "md",
+                spacing: "xs",
+                contents: nameRows,
+              } as Record<string, unknown>,
+              ...(remaining > 0
+                ? [
+                    {
+                      type: "text",
+                      text: `他 ${remaining} 名`,
+                      size: "xs",
+                      color: "#999999",
+                      margin: "sm",
+                    } as Record<string, unknown>,
+                  ]
+                : []),
+            ]
+          : [
+              {
+                type: "text",
+                text: "まだ参加者がいません",
+                size: "sm",
+                color: "#999999",
+                margin: "lg",
+              } as Record<string, unknown>,
+            ]),
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#06C755",
+          action: {
+            type: "uri",
+            label: "参加者一覧を開く",
+            uri: eventUrl,
+          },
+        },
+      ],
+      flex: 0,
+    },
+  };
+
+  return bubble;
+}
