@@ -868,57 +868,68 @@ export default function AttendeesPage() {
                 }`}
               >
                 {/* Mobile layout */}
-                <div className="sm:hidden space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() => toggleAttendance(booking.id, booking.attended)}
-                        disabled={updatingAttendance !== null}
-                        className={`flex h-8 w-8 items-center justify-center rounded-full shrink-0 transition-colors ${
-                          booking.attended === true
-                            ? "bg-green-600 text-white"
-                            : "bg-[#F2F2F2] text-[#1A1A1A] hover:bg-[#E5E5E5]"
-                        } ${updatingAttendance !== null ? "opacity-50" : ""}`}
-                        aria-label={booking.attended === true ? "出席取消" : "出席にする"}
-                      >
-                        {booking.attended === true ? (
-                          <UserCheck className="h-4 w-4" />
-                        ) : (
-                          <span className="text-xs font-bold">{index + 1}</span>
-                        )}
-                      </button>
-                      <span className="text-sm font-bold text-[#1A1A1A]">
-                        {booking.guest_name}
-                      </span>
+                <div className="sm:hidden space-y-1">
+                  {/* 1行目: 出席ボタン + 名前(伸縮) + 日時 */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleAttendance(booking.id, booking.attended)}
+                      disabled={updatingAttendance !== null}
+                      className={`flex h-7 w-7 items-center justify-center rounded-full shrink-0 transition-colors ${
+                        booking.attended === true
+                          ? "bg-green-600 text-white"
+                          : "bg-[#F2F2F2] text-[#1A1A1A] hover:bg-[#E5E5E5]"
+                      } ${updatingAttendance !== null ? "opacity-50" : ""}`}
+                      aria-label={booking.attended === true ? "出席取消" : "出席にする"}
+                    >
+                      {booking.attended === true ? (
+                        <UserCheck className="h-3.5 w-3.5" />
+                      ) : (
+                        <span className="text-[11px] font-bold">{index + 1}</span>
+                      )}
+                    </button>
+                    <span className="flex-1 min-w-0 truncate text-sm font-bold text-[#1A1A1A] whitespace-nowrap">
+                      {booking.guest_name}
+                    </span>
+                    <span className="flex items-center gap-1 text-[11px] text-[#999999] whitespace-nowrap shrink-0">
+                      <Clock className="h-3 w-3" />
+                      {formatBookingDate(booking.created_at)}
+                    </span>
+                  </div>
+
+                  {/* 2行目: バッジ群（横並び・必要に応じて折り返し） */}
+                  {(booking.repeat_count && booking.repeat_count > 1) ||
+                  isPaidEvent ||
+                  event?.location_type === "hybrid" ? (
+                    <div className="flex flex-wrap items-center gap-1 pl-9">
                       <RepeaterBadge booking={booking} />
                       <PaymentBadge status={booking.payment_status} method={booking.payment_method} />
                       <AttendanceFormatPill booking={booking} />
                       <ConfirmPaymentButton booking={booking} />
                       <SendPaymentLinkButton booking={booking} />
                     </div>
-                    <span className="flex items-center gap-1 text-xs text-[#999999]">
-                      <Clock className="h-3 w-3" />
-                      {formatBookingDate(booking.created_at)}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-1 pl-[42px]">
-                    <span className="flex items-center gap-1.5 text-xs text-[#999999]">
-                      <Mail className="h-3 w-3" />
-                      {booking.guest_email}
+                  ) : null}
+
+                  {/* 3行目: 連絡先（メール・電話を改行で確実に表示） */}
+                  <div className="flex flex-col gap-0.5 pl-9">
+                    <span className="flex items-center gap-1.5 text-[11px] text-[#999999] min-w-0">
+                      <Mail className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{booking.guest_email}</span>
                     </span>
                     {booking.guest_phone && (
-                      <span className="flex items-center gap-1.5 text-xs text-[#999999]">
-                        <Phone className="h-3 w-3" />
+                      <span className="flex items-center gap-1.5 text-[11px] text-[#999999] whitespace-nowrap">
+                        <Phone className="h-3 w-3 shrink-0" />
                         {booking.guest_phone}
                       </span>
                     )}
                   </div>
-                  <div className="flex gap-2 pl-[42px]">
+
+                  {/* 4行目: アクション */}
+                  <div className="flex gap-1.5 pl-9 pt-0.5">
                     <button
                       type="button"
                       onClick={() => setEditBooking(booking)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-[#E5E5E5] px-2 py-1 text-xs text-[#999999] hover:text-[#1A1A1A] hover:border-[#1A1A1A]/30 transition-colors"
+                      className="inline-flex items-center gap-1 rounded-md border border-[#E5E5E5] px-2 py-0.5 text-[11px] text-[#999999] hover:text-[#1A1A1A] hover:border-[#1A1A1A]/30 transition-colors whitespace-nowrap"
                     >
                       <Pencil className="h-3 w-3" />
                       編集
@@ -926,7 +937,7 @@ export default function AttendeesPage() {
                     <button
                       type="button"
                       onClick={() => setCancelBooking(booking)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-red-100 px-2 py-1 text-xs text-red-400 hover:text-red-500 hover:border-red-200 transition-colors"
+                      className="inline-flex items-center gap-1 rounded-md border border-red-100 px-2 py-0.5 text-[11px] text-red-400 hover:text-red-500 hover:border-red-200 transition-colors whitespace-nowrap"
                     >
                       <UserX className="h-3 w-3" />
                       キャンセル
