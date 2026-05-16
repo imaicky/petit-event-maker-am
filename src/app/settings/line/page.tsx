@@ -199,6 +199,9 @@ export default function LineSettingsPage() {
   const [diagnose, setDiagnose] = useState<DiagnoseResult | null>(null);
   const [diagnosing, setDiagnosing] = useState(false);
 
+  // 上級者向け（直接ID入力）アコーディオン
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+
   const targetQuery = targetUserId ? `?target_user_id=${targetUserId}` : "";
   const selectedUser = adminUsers.find((u) => u.id === targetUserId);
 
@@ -303,6 +306,54 @@ export default function LineSettingsPage() {
   useEffect(() => {
     if (lineAccount) runDiagnose(true);
   }, [lineAccount, runDiagnose]);
+
+  // LINE Login OAuth コールバック後のトースト表示
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    const ok = sp.get("line_link_ok");
+    const err = sp.get("line_link_error");
+    const name = sp.get("line_link_name");
+    const pushWarn = sp.get("line_link_push_warn");
+    if (ok) {
+      const who = name ? `${decodeURIComponent(name)} さん` : "あなたのLINE";
+      if (ok === "already") {
+        showSuccess(`${who} はすでに通知先に登録されています`);
+      } else if (pushWarn) {
+        setErrorMsg(
+          `${who} を通知先に登録しましたが、テスト通知が届きませんでした。公式アカウントを「友だち追加」してください。`
+        );
+      } else {
+        showSuccess(`${who} を通知先に登録しました。LINEにテスト通知を送信しました`);
+      }
+      // パラメータを履歴から消す
+      const url = new URL(window.location.href);
+      url.searchParams.delete("line_link_ok");
+      url.searchParams.delete("line_link_error");
+      url.searchParams.delete("line_link_name");
+      url.searchParams.delete("line_link_push_warn");
+      window.history.replaceState({}, "", url.toString());
+      // 通知先一覧を最新化
+      if (lineAccount) runDiagnose(true);
+    } else if (err) {
+      const msg =
+        err === "state_mismatch"
+          ? "CSRF検証失敗。ブラウザを更新してやり直してください。"
+          : err === "no_line_account"
+          ? "LINE連携が未設定のため通知先を登録できません。"
+          : err === "forbidden"
+          ? "この操作の権限がありません。"
+          : err === "token_exchange_failed"
+          ? "LINE認証に失敗しました。LINEログインチャネルの設定を確認してください。"
+          : `LINE連携エラー: ${err}`;
+      setErrorMsg(msg);
+      const url = new URL(window.location.href);
+      url.searchParams.delete("line_link_error");
+      window.history.replaceState({}, "", url.toString());
+    }
+    // 初回マウント時のみ評価する（依存配列に searchParams を入れない）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleAddRecipient = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -947,32 +998,92 @@ export default function LineSettingsPage() {
                 </div>
               </SectionCard>
 
-              {/* ─── 通知先（管理者LINE）─ 直接入力 ──────────────── */}
-              <SectionCard title="通知先（管理者LINE）">
+              {/* ─── 通知先（管理者LINE）── 大きく簡単に ──────────────── */}
+              <SectionCard title="通知先を登録">
                 <div className="space-y-4">
                   <div className="rounded-xl bg-[#06C755]/5 border border-[#06C755]/20 p-4 space-y-1.5">
                     <p className="text-sm font-medium text-[#1A1A1A]">
-                      🔔 ここに登録したLINEに、新規予約や決済完了の通知が届きます
+                      🔔 通知を受け取る方法を選んでください（どれか1つでOK）
                     </p>
                     <p className="text-xs text-[#666666] leading-relaxed">
-                      <span className="font-medium">LINEユーザーID</span> を直接入力するか、
-                      公式アカウントを友だち追加した上でトーク画面に <span className="font-medium">「通知ON」</span> と送信してください（どちらでも追加されます）。
-                    </p>
-                    <p className="text-[11px] text-[#999999] leading-relaxed">
-                      LINEユーザーIDは <code className="px-1 py-0.5 bg-white border border-[#E5E5E5] rounded text-[10px]">U</code> から始まる33文字。
-                      LINE Developers Console の Webhook イベントログ or 「通知ON」コマンドで自動取得されます。
+                      下の<strong>3つの方法</strong>のいずれかで、あなたのLINEを通知先として登録できます。
+                      最も簡単なのは <strong className="text-[#06C755]">方法A（LINEで本人確認）</strong>です。
                     </p>
                   </div>
 
-                  {/* 現在の通知先一覧 */}
-                  {notifyIds.length === 0 ? (
-                    <div className="text-center py-6 rounded-xl border border-dashed border-[#E5E5E5] bg-[#FAFAFA]">
-                      <Bell className="h-7 w-7 text-[#E5E5E5] mx-auto mb-1.5" />
-                      <p className="text-sm text-[#999999]">
-                        通知先が未登録です
+                  {/* ─── 方法A: LINE Login（最推奨） ─── */}
+                  <div className="rounded-2xl border-2 border-[#06C755] bg-[#06C755]/5 p-5 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#06C755] text-white text-xs font-bold">
+                        A
+                      </span>
+                      <p className="text-sm font-bold text-[#1A1A1A]">
+                        LINEで本人確認して登録（推奨・最短）
                       </p>
-                      <p className="text-xs text-[#999999] mt-0.5">
-                        下のフォームから追加してください
+                    </div>
+                    <p className="text-xs text-[#666666] leading-relaxed">
+                      ボタンを押してLINEの認証画面でOKするだけ。ID入力もコマンド送信も不要です。
+                      <span className="text-[10px] text-[#999999]">（事前に公式アカウントを友だち追加しておいてください）</span>
+                    </p>
+                    <a
+                      href={`/api/auth/line/start${targetUserId ? `?target_user_id=${targetUserId}` : ""}`}
+                      className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-full bg-[#06C755] hover:bg-[#05B048] text-white px-6 py-3 text-sm font-bold transition-colors"
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                      LINEで本人確認して登録する
+                    </a>
+                  </div>
+
+                  {/* ─── 方法B: 「通知ON」メッセージ ─── */}
+                  <div className="rounded-2xl border border-[#E5E5E5] bg-white p-5 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#FAFAFA] border border-[#E5E5E5] text-[#666666] text-xs font-bold">
+                        B
+                      </span>
+                      <p className="text-sm font-semibold text-[#1A1A1A]">
+                        公式アカウントに「通知ON」と送信
+                      </p>
+                    </div>
+                    <ol className="text-xs text-[#666666] list-decimal pl-5 space-y-0.5 leading-relaxed">
+                      <li>スマホのLINEで公式アカウント「<strong>{lineAccount.channel_name}</strong>」を開く</li>
+                      <li>トーク画面に「<code className="bg-[#FAFAFA] border border-[#F2F2F2] rounded px-1 py-0.5">通知ON</code>」と送信</li>
+                      <li>Botから「✅ 通知を有効化しました」が返ってきたら完了</li>
+                    </ol>
+                    {botBasicId && (
+                      <a
+                        href={`https://line.me/R/ti/p/${botBasicId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs text-[#06C755] hover:underline mt-1"
+                      >
+                        <MessageSquare className="h-3 w-3" />
+                        公式アカウントを開く（友だち追加リンク）
+                      </a>
+                    )}
+                  </div>
+
+                  {/* ─── 方法C: 上級者向け 直接入力（折りたたみ） ─── */}
+                  <button
+                    type="button"
+                    onClick={() => setAdvancedOpen((v) => !v)}
+                    className="flex items-center gap-1.5 text-xs text-[#999999] hover:text-[#666666]"
+                  >
+                    <ChevronDown
+                      className={`h-3.5 w-3.5 transition-transform ${advancedOpen ? "rotate-180" : ""}`}
+                    />
+                    上級者向け: LINEユーザーIDを直接入力 / フォロワー一覧から選ぶ
+                  </button>
+
+                  {/* 現在の通知先一覧（常に表示） */}
+                  <div className="pt-2">
+                    <p className="text-xs font-medium text-[#666666] mb-2">
+                      現在の通知先 {notifyIds.length > 0 && <span className="text-[#06C755]">({notifyIds.length}件)</span>}
+                    </p>
+                  {notifyIds.length === 0 ? (
+                    <div className="text-center py-4 rounded-xl border border-dashed border-[#E5E5E5] bg-[#FAFAFA]">
+                      <Bell className="h-6 w-6 text-[#E5E5E5] mx-auto mb-1" />
+                      <p className="text-xs text-[#999999]">
+                        まだ登録されていません
                       </p>
                     </div>
                   ) : (
@@ -1034,44 +1145,11 @@ export default function LineSettingsPage() {
                       })}
                     </div>
                   )}
+                  </div>
 
-                  {/* 直接入力フォーム */}
-                  <form onSubmit={handleAddRecipient} className="space-y-2">
-                    <Label className="text-xs font-medium text-[#666666]">
-                      LINEユーザーIDを追加
-                    </Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="text"
-                        placeholder="U で始まる33文字"
-                        value={newRecipientId}
-                        onChange={(e) => setNewRecipientId(e.target.value)}
-                        className={`${inputCls} flex-1 font-mono text-xs`}
-                        autoComplete="off"
-                      />
-                      <Button
-                        type="submit"
-                        disabled={addingRecipient || !newRecipientId.trim()}
-                        className="h-10 px-4 rounded-full bg-[#06C755] text-white hover:bg-[#05b04c] gap-1.5 disabled:opacity-60"
-                      >
-                        {addingRecipient ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <>
-                            <UserPlus className="h-4 w-4" />
-                            追加
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                    <p className="text-[11px] text-[#999999]">
-                      追加時にこのLINEへテストメッセージを送信します。届かない場合は「友だち追加」が完了していません。
-                    </p>
-                  </form>
-
-                  {/* テスト送信 */}
+                  {/* テスト送信（通知先がある時のみ常時表示） */}
                   {notifyIds.length > 0 && (
-                    <div className="pt-2 border-t border-[#F2F2F2]">
+                    <div className="pt-1">
                       <Button
                         type="button"
                         variant="outline"
@@ -1086,6 +1164,45 @@ export default function LineSettingsPage() {
                         )}
                         登録済み全員にテスト通知を送る
                       </Button>
+                    </div>
+                  )}
+
+                  {/* ── 上級者向け: 直接入力フォーム（折りたたみ） ── */}
+                  {advancedOpen && (
+                    <div className="mt-2 rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-4 space-y-3">
+                      <p className="text-xs text-[#666666] leading-relaxed">
+                        <strong>方法C</strong>: LINEユーザーID（<code className="bg-white border border-[#E5E5E5] rounded px-1 py-0.5 text-[10px]">U</code> から始まる33文字）を直接入力します。
+                        Webhookログ・Botコマンド・LINE公式IDチェッカーなどから取得してください。
+                      </p>
+                      <form onSubmit={handleAddRecipient} className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="text"
+                            placeholder="U で始まる33文字"
+                            value={newRecipientId}
+                            onChange={(e) => setNewRecipientId(e.target.value)}
+                            className={`${inputCls} flex-1 font-mono text-xs bg-white`}
+                            autoComplete="off"
+                          />
+                          <Button
+                            type="submit"
+                            disabled={addingRecipient || !newRecipientId.trim()}
+                            className="h-10 px-4 rounded-full bg-[#06C755] text-white hover:bg-[#05b04c] gap-1.5 disabled:opacity-60"
+                          >
+                            {addingRecipient ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <UserPlus className="h-4 w-4" />
+                                追加
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                        <p className="text-[11px] text-[#999999]">
+                          追加時にこのLINEへテストメッセージを送信します。届かない場合は「友だち追加」が完了していません。
+                        </p>
+                      </form>
                     </div>
                   )}
                 </div>
