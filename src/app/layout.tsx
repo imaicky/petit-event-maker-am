@@ -92,9 +92,8 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <AuthProvider>
           <Suspense fallback={null}>
-            <PostHogProvider />
+            <PostHogProvider>{children}</PostHogProvider>
           </Suspense>
-          {children}
         </AuthProvider>
       </body>
     </html>
