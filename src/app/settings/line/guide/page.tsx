@@ -660,6 +660,35 @@ export default function LineSetupGuidePage() {
           </div>
         </Link>
 
+        {/* 重要: Messaging APIはDevelopers Consoleでのみ設定可能の注意書き */}
+        <div className="mb-8 rounded-2xl border-2 border-amber-300 bg-amber-50 p-5">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-amber-700 mt-0.5 shrink-0" />
+            <div className="space-y-2">
+              <p className="text-sm font-bold text-amber-900">
+                Messaging APIの設定は <span className="underline">LINE Developers Console</span> から行います
+              </p>
+              <p className="text-xs text-amber-900/80 leading-relaxed">
+                LINEのサービス画面は2つあります。間違えやすいので注意してください:
+              </p>
+              <div className="space-y-1.5 text-xs text-amber-900/80">
+                <p>
+                  ✅ <strong className="text-amber-900">LINE Developers Console</strong>（<code className="font-mono text-[10px] bg-white/60 px-1 py-0.5 rounded">developers.line.biz</code>）
+                  — チャネル作成・トークン発行・シークレット取得・Webhook URL設定 など
+                </p>
+                <p>
+                  ⚪️ <strong>LINE Official Account Manager</strong>（<code className="font-mono text-[10px] bg-white/60 px-1 py-0.5 rounded">manager.line.biz</code>）
+                  — 応答メッセージOFF・あいさつメッセージ・配信 など
+                </p>
+              </div>
+              <p className="text-xs text-amber-900/80 leading-relaxed pt-1">
+                Messaging API のトークン・シークレット・Webhookは <strong className="text-amber-900">必ず Developers Console</strong> から取得・設定してください。
+                Official Account Manager 側にはこれらの項目はありません。
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Video walkthrough */}
         <VideoEmbed
           title="LINE連携ガイド動画"

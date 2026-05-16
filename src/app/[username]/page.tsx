@@ -243,6 +243,13 @@ export default async function TeacherProfilePage({
     // follows table not yet migrated — show no count, hide button
   }
   const isSelf = viewerId === profile.id;
+  // 主催者がフォロワー数を非公開にしている場合は数字を隠す。
+  // ただし本人プロフィール閲覧時は自分用に常に表示する。
+  // マイグレーション未適用環境では undefined になるので true 扱い。
+  const showFollowerCount =
+    isSelf ||
+    (profile as { show_follower_count?: boolean | null }).show_follower_count !==
+      false;
 
   return (
     <div className="min-h-dvh bg-[#FAFAFA]">
@@ -355,11 +362,15 @@ export default async function TeacherProfilePage({
             <p className="text-xl font-bold text-[#1A1A1A] tabular-nums">{totalParticipants}</p>
             <p className="text-xs text-[#999999] mt-0.5">総参加者数</p>
           </div>
-          <div className="w-px bg-[#E5E5E5]" />
-          <div className="flex-1 text-center py-4 px-3">
-            <p className="text-xl font-bold text-[#1A1A1A] tabular-nums">{followState.followerCount}</p>
-            <p className="text-xs text-[#999999] mt-0.5">フォロワー</p>
-          </div>
+          {showFollowerCount && (
+            <>
+              <div className="w-px bg-[#E5E5E5]" />
+              <div className="flex-1 text-center py-4 px-3">
+                <p className="text-xl font-bold text-[#1A1A1A] tabular-nums">{followState.followerCount}</p>
+                <p className="text-xs text-[#999999] mt-0.5">フォロワー</p>
+              </div>
+            </>
+          )}
           {totalReviewCount > 0 && (
             <>
               <div className="w-px bg-[#E5E5E5]" />

@@ -25,6 +25,10 @@ import {
   BookOpen,
   Shield,
   ChevronDown,
+  Stethoscope,
+  ShieldAlert,
+  UserPlus,
+  Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,8 +88,74 @@ type AdminUser = {
   line_channel_name: string | null;
 };
 
+type DiagnoseResult = {
+  channel: {
+    has_token: boolean;
+    has_secret: boolean;
+    bot_info_ok: boolean;
+    bot_user_id: string | null;
+    bot_basic_id: string | null;
+    channel_name: string | null;
+  };
+  webhook: {
+    last_event_at: string | null;
+    last_error: string | null;
+    last_signature_failed_at: string | null;
+  };
+  recipients: {
+    owner: string | null;
+    notify_count: number;
+    notify_ids: string[];
+    notify_on_booking: boolean;
+  };
+  warnings: string[];
+};
+
+const LINE_USER_ID_RE = /^U[0-9a-fA-F]{32}$/;
+
 const inputCls =
   "h-10 rounded-xl border-[#E5E5E5] focus-visible:border-[#1A1A1A] focus-visible:ring-[#1A1A1A]/20 bg-[#FAFAFA]";
+
+function DiagnoseRow({
+  label,
+  ok,
+  warn,
+  sublabel,
+}: {
+  label: string;
+  ok: boolean;
+  warn?: boolean;
+  sublabel: string;
+}) {
+  const tone = !ok ? "red" : warn ? "amber" : "green";
+  const bgCls =
+    tone === "red"
+      ? "bg-red-50 border-red-100"
+      : tone === "amber"
+      ? "bg-amber-50 border-amber-100"
+      : "bg-[#06C755]/5 border-[#06C755]/15";
+  const textCls =
+    tone === "red"
+      ? "text-red-700"
+      : tone === "amber"
+      ? "text-amber-700"
+      : "text-[#06C755]";
+  return (
+    <div className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 ${bgCls}`}>
+      <div className="flex items-center gap-2 min-w-0">
+        {tone === "red" ? (
+          <X className="h-4 w-4 text-red-600 shrink-0" />
+        ) : tone === "amber" ? (
+          <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+        ) : (
+          <Check className="h-4 w-4 text-[#06C755] shrink-0" />
+        )}
+        <span className="text-sm font-medium text-[#1A1A1A] truncate">{label}</span>
+      </div>
+      <span className={`text-xs ${textCls} truncate text-right`}>{sublabel}</span>
+    </div>
+  );
+}
 
 // ─── Main component ──────────────────────────────────────────
 
@@ -117,6 +187,17 @@ export default function LineSettingsPage() {
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
   const [targetUserId, setTargetUserId] = useState<string | null>(null);
   const [showUserPicker, setShowUserPicker] = useState(false);
+
+  // 通知先 (notify_line_user_ids) 直接編集
+  const [notifyIds, setNotifyIds] = useState<string[]>([]);
+  const [newRecipientId, setNewRecipientId] = useState("");
+  const [addingRecipient, setAddingRecipient] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [testPushing, setTestPushing] = useState(false);
+
+  // 連携診断
+  const [diagnose, setDiagnose] = useState<DiagnoseResult | null>(null);
+  const [diagnosing, setDiagnosing] = useState(false);
 
   const targetQuery = targetUserId ? `?target_user_id=${targetUserId}` : "";
   const selectedUser = adminUsers.find((u) => u.id === targetUserId);
@@ -194,6 +275,137 @@ export default function LineSettingsPage() {
   useEffect(() => {
     if (lineAccount) fetchFollowers();
   }, [lineAccount, fetchFollowers]);
+
+  // 診断結果を取得（notify_ids / has_secret などはこれが正）
+  const runDiagnose = useCallback(
+    async (silent = false) => {
+      if (!silent) setDiagnosing(true);
+      try {
+        const res = await fetch("/api/line/diagnose", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(targetUserId ? { target_user_id: targetUserId } : {}),
+        });
+        if (res.ok) {
+          const json = (await res.json()) as DiagnoseResult;
+          setDiagnose(json);
+          setNotifyIds(json.recipients.notify_ids);
+        }
+      } catch {
+        // ignore
+      } finally {
+        if (!silent) setDiagnosing(false);
+      }
+    },
+    [targetUserId]
+  );
+
+  useEffect(() => {
+    if (lineAccount) runDiagnose(true);
+  }, [lineAccount, runDiagnose]);
+
+  const handleAddRecipient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = newRecipientId.trim();
+    if (!id) return;
+    if (!LINE_USER_ID_RE.test(id)) {
+      setErrorMsg("LINEユーザーIDは U で始まる33文字の英数字です（例: U1234567890abcdef1234567890abcdef）");
+      return;
+    }
+    setAddingRecipient(true);
+    setErrorMsg(null);
+    try {
+      const res = await fetch("/api/line/notify-recipients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "add",
+          line_user_id: id,
+          ...(targetUserId ? { target_user_id: targetUserId } : {}),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setErrorMsg(json.error || "追加に失敗しました");
+        return;
+      }
+      setNotifyIds(json.notify_line_user_ids ?? []);
+      if (json.owner_line_user_id !== undefined) {
+        setOwnerLineUserId(json.owner_line_user_id);
+      }
+      setNewRecipientId("");
+      showSuccess(json.already_registered ? "すでに登録済みです" : "通知先を追加しました。テストメッセージがLINEに届きます");
+      // 状態を完全に同期
+      runDiagnose(true);
+    } catch {
+      setErrorMsg("追加に失敗しました。もう一度お試しください。");
+    } finally {
+      setAddingRecipient(false);
+    }
+  };
+
+  const handleRemoveRecipient = async (lineUserId: string) => {
+    setRemovingId(lineUserId);
+    setErrorMsg(null);
+    try {
+      const res = await fetch("/api/line/notify-recipients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "remove",
+          line_user_id: lineUserId,
+          skip_preflight: true,
+          ...(targetUserId ? { target_user_id: targetUserId } : {}),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setErrorMsg(json.error || "削除に失敗しました");
+        return;
+      }
+      setNotifyIds(json.notify_line_user_ids ?? []);
+      if (json.owner_line_user_id !== undefined) {
+        setOwnerLineUserId(json.owner_line_user_id);
+      }
+      showSuccess("通知先を削除しました");
+      runDiagnose(true);
+    } catch {
+      setErrorMsg("削除に失敗しました");
+    } finally {
+      setRemovingId(null);
+    }
+  };
+
+  const handleTestPush = async () => {
+    setTestPushing(true);
+    setErrorMsg(null);
+    try {
+      const res = await fetch("/api/line/test-push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipient: "all",
+          ...(targetUserId ? { target_user_id: targetUserId } : {}),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setErrorMsg(json.error || "テスト送信に失敗しました");
+        return;
+      }
+      const ok = (json.results ?? []).filter((r: { ok: boolean }) => r.ok).length;
+      const fail = (json.results ?? []).filter((r: { ok: boolean }) => !r.ok).length;
+      if (fail === 0) {
+        showSuccess(`${ok}件すべてに送信成功しました。LINEを確認してください`);
+      } else {
+        setErrorMsg(`成功 ${ok}件 / 失敗 ${fail}件`);
+      }
+    } catch {
+      setErrorMsg("テスト送信に失敗しました");
+    } finally {
+      setTestPushing(false);
+    }
+  };
 
   const showSuccess = (msg: string) => {
     setSuccessMsg(msg);
@@ -512,6 +724,56 @@ export default function LineSettingsPage() {
           ) : lineAccount ? (
             /* ─── Connected state ─── */
             <>
+              {/* ── 警告バナー: シークレット欠落 ── */}
+              {diagnose && !diagnose.channel.has_secret && (
+                <section className="rounded-2xl border-2 border-red-200 bg-red-50/70 overflow-hidden">
+                  <div className="p-5 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <ShieldAlert className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                      <div className="flex-1 space-y-1">
+                        <p className="text-sm font-bold text-red-700">
+                          チャネルシークレットが未設定です
+                        </p>
+                        <p className="text-xs text-red-700/80 leading-relaxed">
+                          webhookの署名検証ができないため、友だち追加や「通知ON」コマンドが処理されません。
+                          LINE Developers Console から **チャネルシークレット** を取得して再連携してください。
+                        </p>
+                        <a
+                          href="https://developers.line.biz/console/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs font-medium text-red-700 hover:text-red-800 underline underline-offset-2 mt-1"
+                        >
+                          LINE Developers Console を開く →
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {/* ── 警告バナー: 通知先未設定 ── */}
+              {diagnose && diagnose.channel.has_secret &&
+                diagnose.recipients.notify_count === 0 &&
+                !diagnose.recipients.owner && (
+                <section className="rounded-2xl border-2 border-amber-300 bg-amber-50/80 overflow-hidden">
+                  <div className="p-5 space-y-2">
+                    <div className="flex items-start gap-3">
+                      <Bell className="h-5 w-5 text-amber-700 shrink-0 mt-0.5" />
+                      <div className="flex-1 space-y-1">
+                        <p className="text-sm font-bold text-amber-900">
+                          通知先が未設定です — このままだと予約があっても通知が届きません
+                        </p>
+                        <p className="text-xs text-amber-900/80 leading-relaxed">
+                          下の <span className="font-semibold">「通知先（管理者LINE）」</span> セクションで、
+                          自分のLINEユーザーIDを入力するか、公式アカウントを友だち追加した上でトーク画面で「通知ON」と送信してください。
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              )}
+
               <section className="rounded-2xl bg-white border-2 border-[#06C755]/40 overflow-hidden">
                 <div className="px-6 py-4 border-b border-[#06C755]/10 bg-[#06C755]/5">
                   <div className="flex items-center justify-between">
@@ -682,6 +944,243 @@ export default function LineSettingsPage() {
                   <p className="text-xs text-[#999999]">
                     Webhook URLを設定すると、友だち追加・ブロック解除を自動検知できます
                   </p>
+                </div>
+              </SectionCard>
+
+              {/* ─── 通知先（管理者LINE）─ 直接入力 ──────────────── */}
+              <SectionCard title="通知先（管理者LINE）">
+                <div className="space-y-4">
+                  <div className="rounded-xl bg-[#06C755]/5 border border-[#06C755]/20 p-4 space-y-1.5">
+                    <p className="text-sm font-medium text-[#1A1A1A]">
+                      🔔 ここに登録したLINEに、新規予約や決済完了の通知が届きます
+                    </p>
+                    <p className="text-xs text-[#666666] leading-relaxed">
+                      <span className="font-medium">LINEユーザーID</span> を直接入力するか、
+                      公式アカウントを友だち追加した上でトーク画面に <span className="font-medium">「通知ON」</span> と送信してください（どちらでも追加されます）。
+                    </p>
+                    <p className="text-[11px] text-[#999999] leading-relaxed">
+                      LINEユーザーIDは <code className="px-1 py-0.5 bg-white border border-[#E5E5E5] rounded text-[10px]">U</code> から始まる33文字。
+                      LINE Developers Console の Webhook イベントログ or 「通知ON」コマンドで自動取得されます。
+                    </p>
+                  </div>
+
+                  {/* 現在の通知先一覧 */}
+                  {notifyIds.length === 0 ? (
+                    <div className="text-center py-6 rounded-xl border border-dashed border-[#E5E5E5] bg-[#FAFAFA]">
+                      <Bell className="h-7 w-7 text-[#E5E5E5] mx-auto mb-1.5" />
+                      <p className="text-sm text-[#999999]">
+                        通知先が未登録です
+                      </p>
+                      <p className="text-xs text-[#999999] mt-0.5">
+                        下のフォームから追加してください
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {notifyIds.map((id) => {
+                        const matched = followers.find((f) => f.line_user_id === id);
+                        const isOwner = ownerLineUserId === id;
+                        return (
+                          <div
+                            key={id}
+                            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 border ${
+                              isOwner
+                                ? "border-[#06C755]/30 bg-[#06C755]/5"
+                                : "border-[#F2F2F2] bg-[#FAFAFA]"
+                            }`}
+                          >
+                            {matched?.picture_url ? (
+                              <Image
+                                src={matched.picture_url}
+                                alt={matched.display_name ?? ""}
+                                width={32}
+                                height={32}
+                                className="rounded-full shrink-0"
+                              />
+                            ) : (
+                              <div className="h-8 w-8 rounded-full bg-[#E5E5E5] flex items-center justify-center shrink-0">
+                                <UserCheck className="h-4 w-4 text-[#999999]" />
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-[#1A1A1A] truncate">
+                                {matched?.display_name ?? "（プロフィール未取得）"}
+                              </p>
+                              <p className="text-[10px] text-[#999999] truncate font-mono">
+                                {id}
+                              </p>
+                            </div>
+                            {isOwner && (
+                              <span className="text-[10px] font-medium text-[#06C755] shrink-0 px-2 py-0.5 rounded-full bg-[#06C755]/10">
+                                主通知先
+                              </span>
+                            )}
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              onClick={() => handleRemoveRecipient(id)}
+                              disabled={removingId === id}
+                              className="h-7 w-7 rounded-full border-[#E5E5E5] shrink-0"
+                            >
+                              {removingId === id ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <X className="h-3 w-3 text-[#999999]" />
+                              )}
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* 直接入力フォーム */}
+                  <form onSubmit={handleAddRecipient} className="space-y-2">
+                    <Label className="text-xs font-medium text-[#666666]">
+                      LINEユーザーIDを追加
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="text"
+                        placeholder="U で始まる33文字"
+                        value={newRecipientId}
+                        onChange={(e) => setNewRecipientId(e.target.value)}
+                        className={`${inputCls} flex-1 font-mono text-xs`}
+                        autoComplete="off"
+                      />
+                      <Button
+                        type="submit"
+                        disabled={addingRecipient || !newRecipientId.trim()}
+                        className="h-10 px-4 rounded-full bg-[#06C755] text-white hover:bg-[#05b04c] gap-1.5 disabled:opacity-60"
+                      >
+                        {addingRecipient ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <>
+                            <UserPlus className="h-4 w-4" />
+                            追加
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    <p className="text-[11px] text-[#999999]">
+                      追加時にこのLINEへテストメッセージを送信します。届かない場合は「友だち追加」が完了していません。
+                    </p>
+                  </form>
+
+                  {/* テスト送信 */}
+                  {notifyIds.length > 0 && (
+                    <div className="pt-2 border-t border-[#F2F2F2]">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleTestPush}
+                        disabled={testPushing}
+                        className="h-9 rounded-full border-[#E5E5E5] gap-2 text-xs"
+                      >
+                        {testPushing ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Send className="h-3.5 w-3.5" />
+                        )}
+                        登録済み全員にテスト通知を送る
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </SectionCard>
+
+              {/* ─── 連携診断 ────────────────────────────────── */}
+              <SectionCard title="連携診断">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-start gap-2">
+                      <Stethoscope className="h-4 w-4 text-[#666666] mt-0.5" />
+                      <p className="text-xs text-[#666666] leading-relaxed">
+                        トークン・シークレット・webhook受信・通知先設定の状態をチェックします
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => runDiagnose(false)}
+                      disabled={diagnosing}
+                      className="h-9 rounded-full border-[#E5E5E5] gap-1.5 text-xs shrink-0"
+                    >
+                      {diagnosing ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Stethoscope className="h-3.5 w-3.5" />
+                      )}
+                      診断を実行
+                    </Button>
+                  </div>
+
+                  {diagnose && (
+                    <div className="space-y-2">
+                      <DiagnoseRow
+                        label="チャネルアクセストークン"
+                        ok={diagnose.channel.has_token && diagnose.channel.bot_info_ok}
+                        sublabel={diagnose.channel.has_token ? (diagnose.channel.bot_info_ok ? "有効" : "LINE API応答なし") : "未設定"}
+                      />
+                      <DiagnoseRow
+                        label="チャネルシークレット"
+                        ok={diagnose.channel.has_secret}
+                        sublabel={diagnose.channel.has_secret ? "設定済み" : "未設定（webhook署名検証不可）"}
+                      />
+                      <DiagnoseRow
+                        label="Webhook受信"
+                        ok={!!diagnose.webhook.last_event_at}
+                        warn={!!diagnose.webhook.last_event_at && Date.now() - new Date(diagnose.webhook.last_event_at).getTime() > 86400000}
+                        sublabel={
+                          diagnose.webhook.last_event_at
+                            ? `最終: ${new Date(diagnose.webhook.last_event_at).toLocaleString("ja-JP")}`
+                            : "未受信"
+                        }
+                      />
+                      <DiagnoseRow
+                        label="署名検証"
+                        ok={!diagnose.webhook.last_signature_failed_at && diagnose.channel.has_secret}
+                        warn={!!diagnose.webhook.last_signature_failed_at}
+                        sublabel={
+                          diagnose.webhook.last_signature_failed_at
+                            ? `失敗あり: ${new Date(diagnose.webhook.last_signature_failed_at).toLocaleString("ja-JP")}`
+                            : diagnose.channel.has_secret
+                            ? "問題なし"
+                            : "シークレット未設定"
+                        }
+                      />
+                      <DiagnoseRow
+                        label="通知先"
+                        ok={diagnose.recipients.notify_count > 0 || !!diagnose.recipients.owner}
+                        sublabel={`${diagnose.recipients.notify_count}件登録${diagnose.recipients.owner ? " / 主通知先あり" : ""}`}
+                      />
+                      <DiagnoseRow
+                        label="新規予約のLINE通知"
+                        ok={diagnose.recipients.notify_on_booking}
+                        sublabel={diagnose.recipients.notify_on_booking ? "ON" : "OFF"}
+                      />
+                      {diagnose.webhook.last_error && (
+                        <div className="rounded-xl bg-red-50 border border-red-100 px-3 py-2.5 text-xs text-red-700">
+                          <p className="font-medium mb-0.5">最終エラー</p>
+                          <p className="leading-relaxed">{diagnose.webhook.last_error}</p>
+                        </div>
+                      )}
+                      {diagnose.warnings.length > 0 && (
+                        <div className="rounded-xl bg-amber-50 border border-amber-100 px-3 py-2.5 space-y-1">
+                          <p className="text-xs font-medium text-amber-900">対処が必要な項目</p>
+                          <ul className="space-y-1">
+                            {diagnose.warnings.map((w, i) => (
+                              <li key={i} className="text-xs text-amber-900/90 leading-relaxed">
+                                • {w}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </SectionCard>
 
@@ -1008,20 +1507,21 @@ export default function LineSettingsPage() {
                     </Label>
                     <Input
                       type="password"
-                      placeholder="チャネルシークレットを貼り付け"
+                      placeholder="チャネルシークレット（必須）を貼り付け"
                       value={secret}
                       onChange={(e) => setSecret(e.target.value)}
                       className={inputCls}
                       autoComplete="off"
+                      required
                     />
-                    <p className="text-xs text-[#999999]">
-                      Webhook署名検証に使用します（友だち追加の自動検知に必要）
+                    <p className="text-xs text-red-600 font-medium">
+                      ⚠ webhook署名検証に使用します。未入力だと友だち追加・通知ON コマンドが一切動きません。
                     </p>
                   </div>
 
                   <Button
                     type="submit"
-                    disabled={submitting || !token.trim()}
+                    disabled={submitting || !token.trim() || !secret.trim()}
                     className="h-10 px-6 rounded-full bg-[#06C755] text-white hover:bg-[#05b04c] gap-2 disabled:opacity-60 shadow-sm"
                   >
                     {submitting ? (

@@ -47,8 +47,18 @@ type LineWebhookBody = {
 // Always returns 200 to prevent LINE from retrying.
 
 export async function POST(request: NextRequest) {
+  // 診断ログ用に最後にDB更新するためのコンテキストを保持
+  let accountIdForLogging: string | null = null;
+  const admin = (() => {
+    try {
+      return createAdminClient();
+    } catch {
+      return null;
+    }
+  })();
+
   try {
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !admin) {
       console.error("[webhook] SUPABASE_SERVICE_ROLE_KEY is not set");
       return NextResponse.json({ status: "ok" });
     }
@@ -71,7 +81,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Look up the line_account by bot_user_id
-    const admin = createAdminClient();
     const { data: lineAccount, error: laErr } = await admin
       .from("line_accounts")
       .select("id, channel_access_token, channel_secret, notify_line_user_ids")
@@ -83,16 +92,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ status: "ok" });
     }
 
+    accountIdForLogging = lineAccount.id as string;
+
     // Verify signature
     if (!lineAccount.channel_secret) {
       console.error("[webhook] channel_secret not set for account:", lineAccount.id);
+      await admin
+        .from("line_accounts")
+        .update({ last_webhook_error: "channel_secret 未設定。LINE Developers Console から取得して再連携してください。" })
+        .eq("id", lineAccount.id);
       return NextResponse.json({ status: "ok" });
     }
 
     if (!verifyLineSignature(rawBody, signature, lineAccount.channel_secret)) {
       console.error("[webhook] Invalid signature");
+      await admin
+        .from("line_accounts")
+        .update({
+          last_webhook_signature_failed_at: new Date().toISOString(),
+          last_webhook_error: "署名検証失敗。channel_secret が LINE Developers Console の値と一致しているか確認してください。",
+        })
+        .eq("id", lineAccount.id);
       return NextResponse.json({ status: "ok" });
     }
+
+    // 検証通過 — 正常受信時刻を更新
+    await admin
+      .from("line_accounts")
+      .update({
+        last_webhook_event_at: new Date().toISOString(),
+        last_webhook_error: null,
+      })
+      .eq("id", lineAccount.id);
 
     // Process events
     for (const event of events) {
@@ -158,6 +189,40 @@ export async function POST(request: NextRequest) {
           line_message_id: msg.id,
         });
 
+        // メッセージ送信者をフォロワー一覧にも upsert
+        // （webhook URL を設定する前に友だち追加した人を回収する保険）
+        {
+          const { data: existingFollower } = await admin
+            .from("line_followers")
+            .select("id")
+            .eq("line_account_id", lineAccount.id)
+            .eq("line_user_id", userId)
+            .maybeSingle();
+          if (!existingFollower) {
+            let displayName: string | null = null;
+            let pictureUrl: string | null = null;
+            const profile = await getLineUserProfile(lineAccount.channel_access_token, userId);
+            if (profile.ok) {
+              displayName = profile.data.displayName;
+              pictureUrl = profile.data.pictureUrl ?? null;
+            }
+            await admin
+              .from("line_followers")
+              .upsert(
+                {
+                  line_account_id: lineAccount.id,
+                  line_user_id: userId,
+                  display_name: displayName,
+                  picture_url: pictureUrl,
+                  is_following: true,
+                  followed_at: new Date().toISOString(),
+                  unfollowed_at: null,
+                },
+                { onConflict: "line_account_id,line_user_id" }
+              );
+          }
+        }
+
         // Notification opt-in/out commands (multi-admin support)
         if (msg.type === "text" && msg.text && lineAccount.channel_access_token) {
           const text = msg.text;
@@ -212,6 +277,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "ok" });
   } catch (err) {
     console.error("[webhook] Unexpected error:", err);
+    // 診断ログにも残す
+    if (admin && accountIdForLogging) {
+      try {
+        await admin
+          .from("line_accounts")
+          .update({
+            last_webhook_error: `処理中エラー: ${err instanceof Error ? err.message : String(err)}`,
+          })
+          .eq("id", accountIdForLogging);
+      } catch {
+        // logging失敗は無視（200を返すことを優先）
+      }
+    }
     // Always return 200 to LINE
     return NextResponse.json({ status: "ok" });
   }

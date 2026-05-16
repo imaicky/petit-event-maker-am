@@ -87,6 +87,7 @@ const profileFormSchema = z.object({
     .nullable()
     .optional()
     .or(z.literal("")),
+  show_follower_count: z.boolean().optional(),
 });
 
 type ProfileFormValues = z.infer<typeof profileFormSchema>;
@@ -184,6 +185,7 @@ export default function ProfileSettingsPage() {
       sns_twitter: "",
       sns_facebook: "",
       sns_website: "",
+      show_follower_count: true,
     },
   });
 
@@ -198,6 +200,10 @@ export default function ProfileSettingsPage() {
   useEffect(() => {
     if (profile && !profileLoaded) {
       const sns = (profile.sns_links ?? {}) as SnsLinks;
+      // show_follower_count はマイグレーション未適用環境では undefined になり得るので
+      // その場合は安全側に倒して true (公開) として扱う。
+      const showFollowerCount =
+        (profile as { show_follower_count?: boolean | null }).show_follower_count;
       reset({
         username: profile.username,
         display_name: profile.display_name ?? "",
@@ -207,6 +213,7 @@ export default function ProfileSettingsPage() {
         sns_twitter: sns.twitter ?? "",
         sns_facebook: sns.facebook ?? "",
         sns_website: sns.website ?? "",
+        show_follower_count: showFollowerCount ?? true,
       });
       setProfileLoaded(true);
     }
@@ -234,17 +241,35 @@ export default function ProfileSettingsPage() {
       if (data.sns_facebook) snsLinks.facebook = data.sns_facebook;
       if (data.sns_website) snsLinks.website = data.sns_website;
 
-      const { error } = await supabase
+      // show_follower_count は新カラム。マイグレーション未適用環境では
+      // update に含めると 42703 (undefined_column) が返るので、まずは含めて
+      // 試し、それ専用のエラーだけ握りつぶしてリトライする。
+      const baseUpdate = {
+        username: data.username,
+        display_name: data.display_name || null,
+        bio: data.bio || null,
+        avatar_url: data.avatar_url || null,
+        sns_links: Object.keys(snsLinks).length > 0 ? snsLinks : null,
+        updated_at: new Date().toISOString(),
+      } as const;
+      const updatePayload: Record<string, unknown> = {
+        ...baseUpdate,
+        show_follower_count: data.show_follower_count ?? true,
+      };
+
+      let { error } = await supabase
         .from("profiles")
-        .update({
-          username: data.username,
-          display_name: data.display_name || null,
-          bio: data.bio || null,
-          avatar_url: data.avatar_url || null,
-          sns_links: Object.keys(snsLinks).length > 0 ? snsLinks : null,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updatePayload)
         .eq("id", user.id);
+
+      if (error && error.code === "42703") {
+        // フォロワー数の公開設定カラムがまだ DB に無い環境向けフォールバック。
+        const retry = await supabase
+          .from("profiles")
+          .update(baseUpdate)
+          .eq("id", user.id);
+        error = retry.error;
+      }
 
       if (error) {
         if (error.code === "23505") {
@@ -584,6 +609,25 @@ export default function ProfileSettingsPage() {
                 </Link>
               </div>
             </div>
+          </SectionCard>
+
+          {/* 公開設定 */}
+          <SectionCard title="公開設定">
+            <label className="flex cursor-pointer items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-[#1A1A1A]">
+                  フォロワー数を公開する
+                </p>
+                <p className="mt-0.5 text-xs text-[#999999] leading-relaxed">
+                  オフにすると、あなたのプロフィールページにフォロワー数が表示されなくなります。フォロー機能自体は引き続き利用できます。
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                {...register("show_follower_count")}
+                className="mt-0.5 h-5 w-5 shrink-0 rounded border-[#E5E5E5] text-[#1A1A1A] focus:ring-[#1A1A1A]/20"
+              />
+            </label>
           </SectionCard>
 
           {/* Instagram link page */}

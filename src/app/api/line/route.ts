@@ -83,6 +83,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "権限がありません" }, { status: 403 });
     }
 
+    // 新規連携時は channel_secret 必須（既存更新時のみ省略可）
+    {
+      const adminClient = createAdminClient();
+      const { data: existing } = await adminClient
+        .from("line_accounts")
+        .select("channel_secret")
+        .eq("user_id", targetUserId)
+        .maybeSingle();
+      const isNew = !existing;
+      const existingHasSecret = !!(existing as { channel_secret?: string | null } | null)?.channel_secret;
+      const provided = typeof channelSecret === "string" && channelSecret.trim().length > 0;
+      if ((isNew || !existingHasSecret) && !provided) {
+        return NextResponse.json(
+          {
+            error:
+              "チャネルシークレットは必須です。LINE Developers Console の「基本設定」タブから取得して入力してください。",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     // Validate token by fetching bot info
     const botResult = await getLineBotInfo(token.trim());
     if (!botResult.ok) {
