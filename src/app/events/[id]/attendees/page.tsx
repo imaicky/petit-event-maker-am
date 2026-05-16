@@ -878,11 +878,21 @@ export default function AttendeesPage() {
                 }`}
               >
                 {/* Mobile layout — 1人1行 + タップで詳細展開 */}
+                {/* NOTE: <button> 内に <button>/<a> をネストすると HTML 仕様違反になり
+                    Safari 等でクリックが伝播しなかったりレイアウトが崩れるため、
+                    行コンテナは <div role="button"> で実装する。 */}
                 <div className="sm:hidden">
-                  <button
-                    type="button"
+                  <div
+                    role="button"
+                    tabIndex={0}
                     onClick={() => toggleExpanded(booking.id)}
-                    className="flex w-full items-center gap-1.5 text-left"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggleExpanded(booking.id);
+                      }
+                    }}
+                    className="flex w-full items-center gap-1.5 text-left cursor-pointer"
                     aria-expanded={expandedIds.has(booking.id)}
                   >
                     {/* 出席トグル（行展開とは別ボタン） */}
@@ -981,7 +991,7 @@ export default function AttendeesPage() {
                         expandedIds.has(booking.id) ? "rotate-180" : ""
                       }`}
                     />
-                  </button>
+                  </div>
 
                   {/* 展開時に詳細表示 */}
                   {expandedIds.has(booking.id) && (
