@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { Suspense, useEffect, type ReactNode } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import posthog from "posthog-js";
 import { useAuth } from "@/components/auth-provider";
@@ -23,7 +23,9 @@ export function PostHogProvider({ children }: { children: ReactNode }) {
 
   return (
     <>
-      <PostHogPageView />
+      <Suspense fallback={null}>
+        <PostHogPageView />
+      </Suspense>
       <PostHogIdentify />
       {children}
     </>
