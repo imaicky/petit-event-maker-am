@@ -147,6 +147,8 @@ export default function AttendeesPage() {
   const [surveyResult, setSurveyResult] = useState<string | null>(null);
   const [sendingPaymentBulk, setSendingPaymentBulk] = useState(false);
   const [paymentBulkResult, setPaymentBulkResult] = useState<string | null>(null);
+  const [sendingAttendeeList, setSendingAttendeeList] = useState(false);
+  const [attendeeListResult, setAttendeeListResult] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   function toggleExpanded(id: string) {
@@ -333,6 +335,29 @@ export default function AttendeesPage() {
       setSurveyResult("ネットワークエラーが発生しました");
     } finally {
       setSendingSurvey(false);
+    }
+  }
+
+  async function sendAttendeeListNow() {
+    if (!window.confirm("現在の参加者リストを主催者LINEに送信します。よろしいですか？")) return;
+    setSendingAttendeeList(true);
+    setAttendeeListResult(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/send-attendee-list`, {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setAttendeeListResult(json.error ?? "送信に失敗しました");
+        return;
+      }
+      setAttendeeListResult(
+        `✅ ${json.recipients_count}件のLINEに参加者リスト（${json.attendees_count}名）を送信しました`
+      );
+    } catch {
+      setAttendeeListResult("送信に失敗しました");
+    } finally {
+      setSendingAttendeeList(false);
     }
   }
 
@@ -652,6 +677,23 @@ export default function AttendeesPage() {
                   <Download className="h-3.5 w-3.5" />
                   CSV
                 </button>
+                <button
+                  type="button"
+                  onClick={sendAttendeeListNow}
+                  disabled={sendingAttendeeList}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[#06C755]/30 bg-[#06C755]/10 px-3 text-xs font-medium text-[#06C755] hover:bg-[#06C755]/15 transition-colors disabled:opacity-50"
+                  title="現在の参加者リストを主催者LINEへ即時送信"
+                >
+                  {sendingAttendeeList ? (
+                    <span className="text-[10px]">送信中…</span>
+                  ) : (
+                    <>
+                      <Send className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">LINEで参加者リストを送る</span>
+                      <span className="sm:hidden">LINE送信</span>
+                    </>
+                  )}
+                </button>
                 {event.location_type === "hybrid" && (
                   <button
                     type="button"
@@ -708,6 +750,18 @@ export default function AttendeesPage() {
         {paymentBulkResult && (
           <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
             {paymentBulkResult}
+          </div>
+        )}
+
+        {attendeeListResult && (
+          <div
+            className={`mb-3 rounded-xl border px-3 py-2 text-sm ${
+              attendeeListResult.startsWith("✅")
+                ? "border-[#06C755]/30 bg-[#06C755]/5 text-[#06C755]"
+                : "border-red-200 bg-red-50 text-red-700"
+            }`}
+          >
+            {attendeeListResult}
           </div>
         )}
 
