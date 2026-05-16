@@ -296,7 +296,7 @@ function TemplatePicker({ onApply }: { onApply: (template: EventTemplate) => voi
           <p className="mt-0.5 text-xs text-[#999999]">
             {selectedTemplate
               ? `「${selectedTemplate.category}」を適用中`
-              : "6種類のひな形からワンタップで入力できます"}
+              : "ワンタップで入力を時短"}
           </p>
         </div>
         {expanded ? (
@@ -1149,7 +1149,7 @@ function NewEventPageInner() {
                   <FieldWrapper
                     label="カテゴリ"
                     optional
-                    hint="近いものを1つ選ぶと、関連イベントへのレコメンドや参加者の興味分析の精度が上がります"
+                    hint="近いジャンルを1つ選ぶと検索・レコメンド精度が上がります"
                   >
                     <CategoryPicker
                       value={categoryId}
@@ -1160,11 +1160,12 @@ function NewEventPageInner() {
                   <FieldWrapper
                     label="タグ（複数選択可）"
                     optional
-                    hint="形式・対象レベル・使用ツール・トピックを選ぶと検索でヒットしやすくなります"
+                    hint="形式・対象などのタグで検索ヒット率アップ"
                   >
                     <TagPicker
                       selectedIds={tagIds}
                       onChange={setTagIds}
+                      collapsible
                     />
                   </FieldWrapper>
 

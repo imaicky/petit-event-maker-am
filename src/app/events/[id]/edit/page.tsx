@@ -1340,9 +1340,9 @@ export default function EditEventPage() {
                     <span className="ml-2 text-xs font-normal text-[#999999]">複数選択可</span>
                   </label>
                   <p className="mb-3 text-xs text-[#999999]">
-                    形式・対象レベル・使用ツール・トピックを選ぶと検索でヒットしやすくなります
+                    形式・対象などのタグで検索ヒット率アップ
                   </p>
-                  <TagPicker selectedIds={tagIds} onChange={setTagIds} />
+                  <TagPicker selectedIds={tagIds} onChange={setTagIds} collapsible />
                 </div>
                 <div>
                   <label className="mb-2 block text-sm font-medium text-[#1A1A1A]">
