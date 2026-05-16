@@ -147,6 +147,16 @@ export default function AttendeesPage() {
   const [surveyResult, setSurveyResult] = useState<string | null>(null);
   const [sendingPaymentBulk, setSendingPaymentBulk] = useState(false);
   const [paymentBulkResult, setPaymentBulkResult] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  function toggleExpanded(id: string) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   const fetchData = useCallback(async () => {
     if (!eventId || !user) return;
@@ -861,88 +871,159 @@ export default function AttendeesPage() {
             {bookings.map((booking, index) => (
               <div
                 key={booking.id}
-                className={`rounded-xl bg-white border px-4 py-2.5 transition-colors hover:border-[#1A1A1A]/20 ${
+                className={`rounded-lg bg-white border px-2 py-1 sm:rounded-xl sm:px-4 sm:py-2.5 transition-colors hover:border-[#1A1A1A]/20 ${
                   booking.attended === true
                     ? "border-green-200 bg-green-50/30"
                     : "border-[#E5E5E5]"
                 }`}
               >
-                {/* Mobile layout */}
-                <div className="sm:hidden space-y-1">
-                  {/* 1行目: 出席ボタン + 名前(伸縮) + 日時 */}
-                  <div className="flex items-center gap-2">
+                {/* Mobile layout — 1人1行 + タップで詳細展開 */}
+                <div className="sm:hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleExpanded(booking.id)}
+                    className="flex w-full items-center gap-1.5 text-left"
+                    aria-expanded={expandedIds.has(booking.id)}
+                  >
+                    {/* 出席トグル（行展開とは別ボタン） */}
                     <button
                       type="button"
-                      onClick={() => toggleAttendance(booking.id, booking.attended)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleAttendance(booking.id, booking.attended);
+                      }}
                       disabled={updatingAttendance !== null}
-                      className={`flex h-7 w-7 items-center justify-center rounded-full shrink-0 transition-colors ${
+                      className={`flex h-6 w-6 items-center justify-center rounded-full shrink-0 transition-colors ${
                         booking.attended === true
                           ? "bg-green-600 text-white"
-                          : "bg-[#F2F2F2] text-[#1A1A1A] hover:bg-[#E5E5E5]"
+                          : "bg-[#F2F2F2] text-[#1A1A1A]"
                       } ${updatingAttendance !== null ? "opacity-50" : ""}`}
                       aria-label={booking.attended === true ? "出席取消" : "出席にする"}
                     >
                       {booking.attended === true ? (
-                        <UserCheck className="h-3.5 w-3.5" />
+                        <UserCheck className="h-3 w-3" />
                       ) : (
-                        <span className="text-[11px] font-bold">{index + 1}</span>
+                        <span className="text-[10px] font-bold tabular-nums">{index + 1}</span>
                       )}
                     </button>
-                    <span className="flex-1 min-w-0 truncate text-sm font-bold text-[#1A1A1A] whitespace-nowrap">
+
+                    {/* 名前（+ リピーター数表示）。flex-1 で伸縮、truncate で省略 */}
+                    <span className="flex-1 min-w-0 truncate text-[13px] font-bold text-[#1A1A1A] whitespace-nowrap">
                       {booking.guest_name}
+                      {(booking.repeat_count ?? 1) > 1 && (
+                        <sup className="ml-0.5 text-[9px] font-medium text-purple-600">
+                          ×{booking.repeat_count}
+                        </sup>
+                      )}
                     </span>
-                    <span className="flex items-center gap-1 text-[11px] text-[#999999] whitespace-nowrap shrink-0">
-                      <Clock className="h-3 w-3" />
-                      {formatBookingDate(booking.created_at)}
-                    </span>
-                  </div>
 
-                  {/* 2行目: バッジ群（横並び・必要に応じて折り返し） */}
-                  {(booking.repeat_count && booking.repeat_count > 1) ||
-                  isPaidEvent ||
-                  event?.location_type === "hybrid" ? (
-                    <div className="flex flex-wrap items-center gap-1 pl-9">
-                      <RepeaterBadge booking={booking} />
-                      <PaymentBadge status={booking.payment_status} method={booking.payment_method} />
-                      <AttendanceFormatPill booking={booking} />
-                      <ConfirmPaymentButton booking={booking} />
-                      <SendPaymentLinkButton booking={booking} />
-                    </div>
-                  ) : null}
-
-                  {/* 3行目: 連絡先（メール・電話を改行で確実に表示） */}
-                  <div className="flex flex-col gap-0.5 pl-9">
-                    <span className="flex items-center gap-1.5 text-[11px] text-[#999999] min-w-0">
-                      <Mail className="h-3 w-3 shrink-0" />
-                      <span className="truncate">{booking.guest_email}</span>
-                    </span>
-                    {booking.guest_phone && (
-                      <span className="flex items-center gap-1.5 text-[11px] text-[#999999] whitespace-nowrap">
-                        <Phone className="h-3 w-3 shrink-0" />
-                        {booking.guest_phone}
+                    {/* 支払バッジ（コンパクト） */}
+                    {isPaidEvent && booking.payment_status === "paid" && (
+                      <span className="inline-flex items-center rounded-full bg-green-100 text-green-700 px-1.5 py-0 text-[10px] font-medium whitespace-nowrap shrink-0">
+                        💳済
                       </span>
                     )}
-                  </div>
+                    {isPaidEvent && booking.payment_status === "pending" && (
+                      <span className="inline-flex items-center rounded-full bg-yellow-100 text-yellow-800 px-1.5 py-0 text-[10px] font-medium whitespace-nowrap shrink-0">
+                        {booking.payment_method === "onsite" ? "現地" : "未"}
+                      </span>
+                    )}
+                    {isPaidEvent && booking.payment_status === "refunded" && (
+                      <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-500 px-1.5 py-0 text-[10px] font-medium whitespace-nowrap shrink-0">
+                        返金
+                      </span>
+                    )}
 
-                  {/* 4行目: アクション */}
-                  <div className="flex gap-1.5 pl-9 pt-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setEditBooking(booking)}
-                      className="inline-flex items-center gap-1 rounded-md border border-[#E5E5E5] px-2 py-0.5 text-[11px] text-[#999999] hover:text-[#1A1A1A] hover:border-[#1A1A1A]/30 transition-colors whitespace-nowrap"
-                    >
-                      <Pencil className="h-3 w-3" />
-                      編集
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCancelBooking(booking)}
-                      className="inline-flex items-center gap-1 rounded-md border border-red-100 px-2 py-0.5 text-[11px] text-red-400 hover:text-red-500 hover:border-red-200 transition-colors whitespace-nowrap"
-                    >
-                      <UserX className="h-3 w-3" />
-                      キャンセル
-                    </button>
-                  </div>
+                    {/* 参加形式（コンパクト・hybrid のみ・タップで切替） */}
+                    {event?.location_type === "hybrid" && (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAttendanceFormat(
+                            booking.id,
+                            (booking.attendance_format ?? "physical") === "online"
+                              ? "physical"
+                              : "online"
+                          );
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setAttendanceFormat(
+                              booking.id,
+                              (booking.attendance_format ?? "physical") === "online"
+                                ? "physical"
+                                : "online"
+                            );
+                          }
+                        }}
+                        className={`inline-flex items-center rounded-full px-1.5 py-0 text-[10px] font-medium whitespace-nowrap shrink-0 cursor-pointer ${
+                          (booking.attendance_format ?? "physical") === "online"
+                            ? "bg-sky-100 text-sky-700"
+                            : "bg-amber-100 text-amber-700"
+                        } ${updatingFormat === booking.id ? "opacity-50" : ""}`}
+                      >
+                        {(booking.attendance_format ?? "physical") === "online" ? "🎥" : "📍"}
+                      </span>
+                    )}
+
+                    {/* 申込日 */}
+                    <span className="text-[10px] text-[#999999] whitespace-nowrap shrink-0 tabular-nums">
+                      {formatBookingDate(booking.created_at)}
+                    </span>
+
+                    {/* 展開アイコン */}
+                    <ChevronDown
+                      className={`h-3 w-3 text-[#999999] shrink-0 transition-transform ${
+                        expandedIds.has(booking.id) ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+
+                  {/* 展開時に詳細表示 */}
+                  {expandedIds.has(booking.id) && (
+                    <div className="mt-1.5 pl-7 pb-1 space-y-1 border-t border-[#F2F2F2] pt-1.5">
+                      <a
+                        href={`mailto:${booking.guest_email}`}
+                        className="flex items-center gap-1.5 text-[11px] text-[#666666] hover:text-[#1A1A1A]"
+                      >
+                        <Mail className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{booking.guest_email}</span>
+                      </a>
+                      {booking.guest_phone && (
+                        <a
+                          href={`tel:${booking.guest_phone}`}
+                          className="flex items-center gap-1.5 text-[11px] text-[#666666] hover:text-[#1A1A1A]"
+                        >
+                          <Phone className="h-3 w-3 shrink-0" />
+                          {booking.guest_phone}
+                        </a>
+                      )}
+                      <div className="flex flex-wrap gap-1 pt-0.5">
+                        <ConfirmPaymentButton booking={booking} />
+                        <SendPaymentLinkButton booking={booking} />
+                        <button
+                          type="button"
+                          onClick={() => setEditBooking(booking)}
+                          className="inline-flex items-center gap-1 rounded-md border border-[#E5E5E5] px-2 py-0.5 text-[11px] text-[#999999] hover:text-[#1A1A1A] hover:border-[#1A1A1A]/30 transition-colors whitespace-nowrap"
+                        >
+                          <Pencil className="h-3 w-3" />
+                          編集
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCancelBooking(booking)}
+                          className="inline-flex items-center gap-1 rounded-md border border-red-100 px-2 py-0.5 text-[11px] text-red-400 hover:text-red-500 hover:border-red-200 transition-colors whitespace-nowrap"
+                        >
+                          <UserX className="h-3 w-3" />
+                          キャンセル
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Desktop layout */}
