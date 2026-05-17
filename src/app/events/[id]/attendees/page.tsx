@@ -149,6 +149,8 @@ export default function AttendeesPage() {
   const [paymentBulkResult, setPaymentBulkResult] = useState<string | null>(null);
   const [sendingAttendeeList, setSendingAttendeeList] = useState(false);
   const [attendeeListResult, setAttendeeListResult] = useState<string | null>(null);
+  const [sendingOnlineInfo, setSendingOnlineInfo] = useState(false);
+  const [onlineInfoResult, setOnlineInfoResult] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   function toggleExpanded(id: string) {
@@ -335,6 +337,44 @@ export default function AttendeesPage() {
       setSurveyResult("ネットワークエラーが発生しました");
     } finally {
       setSendingSurvey(false);
+    }
+  }
+
+  async function sendOnlineInfoNotice() {
+    if (!event) return;
+    const isHybrid = event.location_type === "hybrid";
+    let target: "all" | "online_only" = "all";
+    if (isHybrid) {
+      const onlineOnly = window.confirm(
+        "ハイブリッドイベントです。\n\n[OK] オンライン参加者のみに送る\n[キャンセル] 全員に送る"
+      );
+      target = onlineOnly ? "online_only" : "all";
+    } else {
+      if (!window.confirm("確定済みの参加者全員にオンライン参加情報をメールで送信します。よろしいですか？")) return;
+    }
+    const extra = window.prompt(
+      "任意で本文に追加するメッセージがあれば入力してください（空欄でもOK）",
+      ""
+    );
+    if (extra === null) return; // キャンセル
+    setSendingOnlineInfo(true);
+    setOnlineInfoResult(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/notify-online-info`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ extra_message: extra, target }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setOnlineInfoResult(json.error ?? "送信に失敗しました");
+        return;
+      }
+      setOnlineInfoResult(`✅ ${json.sent}/${json.total}名にオンライン情報をメール送信しました`);
+    } catch {
+      setOnlineInfoResult("送信に失敗しました");
+    } finally {
+      setSendingOnlineInfo(false);
     }
   }
 
@@ -694,6 +734,25 @@ export default function AttendeesPage() {
                     </>
                   )}
                 </button>
+                {(event.location_type === "online" || event.location_type === "hybrid") && (
+                  <button
+                    type="button"
+                    onClick={sendOnlineInfoNotice}
+                    disabled={sendingOnlineInfo}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-blue-300 bg-blue-50 px-3 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50"
+                    title="参加者にオンライン参加情報（ZoomURL等）をメールで一斉通知"
+                  >
+                    {sendingOnlineInfo ? (
+                      <span className="text-[10px]">送信中…</span>
+                    ) : (
+                      <>
+                        📺
+                        <span className="hidden sm:inline">参加者にオンライン情報を通知</span>
+                        <span className="sm:hidden">オンライン情報</span>
+                      </>
+                    )}
+                  </button>
+                )}
                 {event.location_type === "hybrid" && (
                   <button
                     type="button"
@@ -762,6 +821,18 @@ export default function AttendeesPage() {
             }`}
           >
             {attendeeListResult}
+          </div>
+        )}
+
+        {onlineInfoResult && (
+          <div
+            className={`mb-3 rounded-xl border px-3 py-2 text-sm ${
+              onlineInfoResult.startsWith("✅")
+                ? "border-blue-200 bg-blue-50 text-blue-700"
+                : "border-red-200 bg-red-50 text-red-700"
+            }`}
+          >
+            {onlineInfoResult}
           </div>
         )}
 
