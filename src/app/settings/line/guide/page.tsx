@@ -130,24 +130,31 @@ function StepBadge({ n }: { n: number }) {
 // ─── Step mockups ────────────────────────────────────────────
 
 function Step1Mockup() {
+  // LINE公式アカウント新規作成（manager.line.biz/signup）の模型
   return (
-    <BrowserFrame url="developers.line.biz/console/">
-      <div className="p-4 sm:p-6 space-y-4 bg-[#FAFAFA] min-h-[180px]">
-        <div className="text-xs text-[#999] mb-2">プロバイダー</div>
-        <div className="space-y-2">
-          <div className="bg-white border border-[#E5E5E5] rounded-lg px-4 py-3 text-sm text-[#666] opacity-40">
-            既存のプロバイダー...
+    <BrowserFrame url="manager.line.biz/signup">
+      <div className="p-4 sm:p-6 space-y-3 bg-[#FAFAFA] min-h-[180px]">
+        <div className="text-sm font-medium text-[#1A1A1A] mb-2">
+          LINE公式アカウントを作成
+        </div>
+        <div className="bg-white border border-[#E5E5E5] rounded-lg px-4 py-2.5">
+          <div className="text-[11px] text-[#999]">アカウント名 <span className="text-red-400">*</span></div>
+          <div className="bg-[#F2F2F2] rounded px-2 py-1 text-[10px] font-mono text-[#999] mt-1">
+            例: ○○教室 / イベント案内
           </div>
         </div>
-        <div className="pt-2">
-          <Highlight label="ここをクリック">
+        <div className="bg-white border border-[#E5E5E5] rounded-lg px-4 py-2.5 opacity-60">
+          <div className="text-[11px] text-[#999]">メールアドレス・業種など</div>
+        </div>
+        <div className="pt-1">
+          <Highlight label="クリックして作成">
             <button className="bg-[#06C755] text-white text-sm font-medium px-4 py-2 rounded-lg w-full text-center">
-              + 新規プロバイダー作成
+              アカウントを作成
             </button>
           </Highlight>
         </div>
-        <div className="text-[11px] text-[#999] mt-2">
-          プロバイダー名 = あなたのサービス名（公開されます）
+        <div className="text-[11px] text-[#999] mt-1">
+          アカウント名 = 友だち追加時に表示される公式アカウントの名前
         </div>
       </div>
     </BrowserFrame>
@@ -155,31 +162,24 @@ function Step1Mockup() {
 }
 
 function Step2Mockup() {
+  // Official Account Manager の「Messaging API」設定画面の模型
   return (
-    <BrowserFrame url="developers.line.biz/console/channel/new">
-      <div className="p-4 sm:p-6 bg-[#FAFAFA] min-h-[180px]">
-        <div className="text-xs text-[#999] mb-3">
-          チャネルの種類を選択してください
+    <BrowserFrame url="manager.line.biz/account/@xxx/setting/messaging-api">
+      <div className="p-4 sm:p-6 bg-[#FAFAFA] min-h-[180px] space-y-3">
+        <div className="text-xs text-[#999] mb-1">設定 ＞ Messaging API</div>
+        <div className="text-sm font-medium text-[#1A1A1A]">
+          Messaging APIを利用する
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="bg-white border border-[#E5E5E5] rounded-lg p-4 opacity-40">
-            <div className="text-sm font-medium text-[#1A1A1A] mb-1">
-              LINE Login
-            </div>
-            <div className="text-[11px] text-[#999]">
-              Webアプリにログイン機能を追加
-            </div>
-          </div>
-          <Highlight label="こちらを選択">
-            <div className="bg-white border border-[#E5E5E5] rounded-lg p-4">
-              <div className="text-sm font-medium text-[#1A1A1A] mb-1">
-                Messaging API
-              </div>
-              <div className="text-[11px] text-[#999]">
-                ボットでメッセージを送受信
-              </div>
-            </div>
-          </Highlight>
+        <p className="text-[11px] text-[#666] leading-relaxed">
+          有効化すると、Bot機能でメッセージを送受信したり、LINE Developers Console で API キー（チャネルトークン・シークレット）を取得できるようになります。
+        </p>
+        <Highlight label="ここをクリック">
+          <button className="bg-[#06C755] text-white text-sm font-medium px-4 py-2 rounded-lg w-full text-center">
+            Messaging APIを利用する
+          </button>
+        </Highlight>
+        <div className="text-[11px] text-[#999] mt-1">
+          → プロバイダー（屋号や個人名）を選択／作成 → 同名チャネルが Developers Console に自動生成
         </div>
       </div>
     </BrowserFrame>
@@ -660,30 +660,32 @@ export default function LineSetupGuidePage() {
           </div>
         </Link>
 
-        {/* 重要: Messaging APIはDevelopers Consoleでのみ設定可能の注意書き */}
+        {/* 重要: LINEの2つの画面の使い分け（仕様変更対応版） */}
         <div className="mb-8 rounded-2xl border-2 border-amber-300 bg-amber-50 p-5">
           <div className="flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-amber-700 mt-0.5 shrink-0" />
             <div className="space-y-2">
               <p className="text-sm font-bold text-amber-900">
-                Messaging APIの設定は <span className="underline">LINE Developers Console</span> から行います
+                LINEの画面は2つ。役割が違うので使い分けてください
               </p>
               <p className="text-xs text-amber-900/80 leading-relaxed">
-                LINEのサービス画面は2つあります。間違えやすいので注意してください:
+                以前は LINE Developers Console から直接「Messaging API」チャネルを作成できましたが、
+                <strong className="text-amber-900">現在は仕様変更により、まず Official Account Manager で LINE公式アカウントを作成し、そこで Messaging API を有効化する</strong>
+                流れになっています。
               </p>
-              <div className="space-y-1.5 text-xs text-amber-900/80">
+              <div className="space-y-1.5 text-xs text-amber-900/80 pt-1">
                 <p>
-                  ✅ <strong className="text-amber-900">LINE Developers Console</strong>（<code className="font-mono text-[10px] bg-white/60 px-1 py-0.5 rounded">developers.line.biz</code>）
-                  — チャネル作成・トークン発行・シークレット取得・Webhook URL設定 など
+                  ① <strong className="text-amber-900">LINE Official Account Manager</strong>（<code className="font-mono text-[10px] bg-white/60 px-1 py-0.5 rounded">manager.line.biz</code>）
+                  — 公式アカウント作成・<strong>Messaging API有効化</strong>・応答メッセージOFF・配信 など
                 </p>
                 <p>
-                  ⚪️ <strong>LINE Official Account Manager</strong>（<code className="font-mono text-[10px] bg-white/60 px-1 py-0.5 rounded">manager.line.biz</code>）
-                  — 応答メッセージOFF・あいさつメッセージ・配信 など
+                  ② <strong className="text-amber-900">LINE Developers Console</strong>（<code className="font-mono text-[10px] bg-white/60 px-1 py-0.5 rounded">developers.line.biz</code>）
+                  — チャネルトークン発行・シークレット取得・Webhook URL設定 など
                 </p>
               </div>
               <p className="text-xs text-amber-900/80 leading-relaxed pt-1">
-                Messaging API のトークン・シークレット・Webhookは <strong className="text-amber-900">必ず Developers Console</strong> から取得・設定してください。
-                Official Account Manager 側にはこれらの項目はありません。
+                <strong className="text-amber-900">作成 → ① / 鍵の取得・Webhook → ②</strong> と覚えてください。
+                Developers Console を直接開いても「LINE公式アカウントを作成する」というボタンしか出ず、ここからチャネル作成は始められません。
               </p>
             </div>
           </div>
@@ -718,7 +720,7 @@ export default function LineSetupGuidePage() {
               <div>
                 <p className="text-sm font-medium text-[#1A1A1A]">パソコンのブラウザ</p>
                 <p className="text-xs text-[#999] mt-0.5">
-                  LINE Developersコンソールでの操作はパソコンで行います。Chrome, Safari, Firefoxなど。
+                  Official Account Manager と LINE Developers Console での操作はパソコンで行います。Chrome, Safari, Firefoxなど。
                 </p>
               </div>
             </div>
@@ -745,37 +747,38 @@ export default function LineSetupGuidePage() {
               <StepBadge n={1} />
               <div>
                 <h2 className="text-lg font-bold text-[#1A1A1A]">
-                  LINE Developersにログイン
+                  LINE公式アカウントを作成
                 </h2>
                 <p className="text-sm text-[#666] mt-1 leading-relaxed">
-                  まず
+                  <span className="font-bold text-[#1A1A1A]">LINEの仕様変更により、Messaging APIチャネルは LINE公式アカウントを作成すると自動で生成される</span>
+                  ようになりました。まずは
                   <a
-                    href="https://developers.line.biz/console/"
+                    href="https://manager.line.biz/"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-[#06C755] underline underline-offset-2 hover:no-underline inline-flex items-center gap-1"
                   >
-                    LINE Developersコンソール
+                    LINE Official Account Manager
                     <ExternalLink className="h-3 w-3" />
                   </a>
-                  にアクセスします。「LINEアカウントでログイン」ボタンが表示されるので、お使いのLINEアカウント（メールアドレスとパスワード、またはQRコードログイン）でログインしてください。
+                  にアクセスし、お使いのLINEアカウントでログインしてください。
                 </p>
                 <p className="text-sm text-[#666] mt-2 leading-relaxed">
-                  初めてアクセスする場合は、開発者情報の登録画面が表示されます。お名前とメールアドレスを入力して登録してください。
-                  その後、「<strong className="text-[#1A1A1A]">プロバイダー</strong>」を作成する画面が表示されます。
-                  プロバイダーとは、LINEのサービスを管理するための「組織」のようなもので、この中にチャネル（Bot）を作成していきます。
+                  初めての方は「<strong className="text-[#1A1A1A]">アカウントを作成</strong>」をクリックし、
+                  アカウント名・メールアドレス・業種などを入力して公式アカウントを作成します。
+                  この時点では、まだ Bot 機能（Messaging API）は無効です。
                 </p>
               </div>
             </div>
             <div className="ml-11">
               <Step1Mockup />
               <NoteBox>
-                <strong>プロバイダー名は友だち追加時にユーザーに表示されます。</strong>
+                <strong>アカウント名は友だち追加時にユーザーに表示されます。</strong>
                 サービス名や教室名、団体名などがおすすめです。個人名を入れると友だち追加をためらわれる場合があるので避けましょう。
                 （例: 「○○料理教室」「△△コミュニティ」）
               </NoteBox>
               <TipBox>
-                既にLINE Developersアカウントをお持ちで、別のプロバイダーが表示されている場合は、既存のプロバイダーを選択してその中にチャネルを追加することもできます。
+                既にLINE公式アカウントをお持ちの方は新規作成は不要です。ステップ2に進んでください。
               </TipBox>
             </div>
           </section>
@@ -786,27 +789,31 @@ export default function LineSetupGuidePage() {
               <StepBadge n={2} />
               <div>
                 <h2 className="text-lg font-bold text-[#1A1A1A]">
-                  Messaging APIチャネルを作成
+                  Messaging APIを有効化（プロバイダーも同時作成）
                 </h2>
                 <p className="text-sm text-[#666] mt-1 leading-relaxed">
-                  プロバイダーの画面で「<strong className="text-[#1A1A1A]">新規チャネル作成</strong>」をクリックします。
-                  チャネルの種類を選ぶ画面が表示されるので、
-                  <strong className="text-[#1A1A1A]">「Messaging API」</strong>
-                  を選択してください。これがイベント通知に使うBotの本体になります。
+                  Official Account Manager のサイドメニューから「<strong className="text-[#1A1A1A]">設定</strong>」→「<strong className="text-[#1A1A1A]">Messaging API</strong>」を開き、
+                  「<strong className="text-[#1A1A1A]">Messaging APIを利用する</strong>」ボタンをクリックします。
+                </p>
+                <p className="text-sm text-[#666] mt-2 leading-relaxed">
+                  プロバイダー（あなたのサービスを管理する「組織」のようなもの）を選択／新規作成する画面が表示されるので、
+                  屋号や個人名を入力してプロバイダーを作成してください。
+                  完了すると、<strong className="text-[#1A1A1A]">LINE Developers Console</strong> 側に同名のチャネルが自動的に作成されます。
                 </p>
               </div>
             </div>
             <div className="ml-11">
               <Step2Mockup />
               <NoteBox>
-                <strong>「LINE Login」と間違えやすいので注意！</strong>
-                「LINE Login」はWebサイトにLINEログインボタンを追加するためのもので、メッセージ送信はできません。
-                必ず<strong>「Messaging API」</strong>を選んでください。
+                <strong>LINE Developers Console から直接「Messaging API」チャネルは作成できなくなりました。</strong>
+                以前は Developers Console の「新規チャネル作成」→「Messaging API」で作っていましたが、
+                現在はその画面に「LINE公式アカウントを作成する」ボタンしか表示されません。
+                必ず Official Account Manager 側から有効化してください。
               </NoteBox>
 
               <div className="mt-6 space-y-3">
                 <p className="text-sm text-[#666] leading-relaxed">
-                  「Messaging API」を選択すると、チャネルの詳細を入力するフォームが表示されます。以下の項目を入力してください:
+                  プロバイダーを作成する際に、以下のような項目を入力します:
                 </p>
                 <Step2FormMockup />
                 <div className="rounded-xl bg-white border border-[#E5E5E5] p-4 mt-4">
@@ -855,10 +862,20 @@ export default function LineSetupGuidePage() {
               <StepBadge n={3} />
               <div>
                 <h2 className="text-lg font-bold text-[#1A1A1A]">
-                  チャネルアクセストークンを取得
+                  チャネルアクセストークンを取得（Developers Console）
                 </h2>
                 <p className="text-sm text-[#666] mt-1 leading-relaxed">
-                  チャネルを作成したら、そのチャネルの設定ページが表示されます。
+                  ステップ2でMessaging APIを有効化すると、
+                  <a
+                    href="https://developers.line.biz/console/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#06C755] underline underline-offset-2 hover:no-underline inline-flex items-center gap-1"
+                  >
+                    LINE Developers Console
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                  にチャネルが自動作成されています。Developers Console を開いて該当チャネルをクリックし、
                   左側メニューの「<strong className="text-[#1A1A1A]">Messaging API設定</strong>」タブをクリックしてください。
                 </p>
                 <p className="text-sm text-[#666] mt-2 leading-relaxed">

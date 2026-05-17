@@ -239,38 +239,62 @@ export default function LineWizardPage() {
                 className="text-2xl font-bold text-[#1A1A1A]"
                 style={{ fontFamily: "var(--font-zen-maru)" }}
               >
-                ① チャネルを作成する
+                ① LINE公式アカウントを作成 → Messaging APIを有効化
               </h1>
               <p className="text-sm text-[#666666] leading-relaxed">
-                LINE Developers にログインし、Messaging API
-                チャネルを作成してください。すでにチャネルがある方はそのまま次へ進めます。
+                LINEの仕様変更で、Messaging APIチャネルは
+                <span className="font-bold text-[#1A1A1A]">LINE公式アカウント作成時に自動で生成される</span>
+                ようになりました。以下の流れで進めてください。すでに公式アカウントがある方は <span className="font-bold">②</span> から始めてOKです。
               </p>
 
               <ol className="space-y-3 text-sm text-[#1A1A1A] list-decimal pl-5 [&>li]:pl-1">
-                <li>下のボタンから LINE Developers コンソールを開く</li>
-                <li>新規プロバイダーを作成（屋号や個人名でOK）</li>
                 <li>
-                  作成したプロバイダー内で「<span className="font-bold">Messaging API</span>」チャネルを新規作成
+                  <span className="font-bold">LINE公式アカウントを作成</span>（下の緑ボタン）
+                  <div className="text-xs text-[#666666] mt-0.5">アカウント名・業種・メールアドレス等を入力</div>
                 </li>
-                <li>チャネル名・アイコン・説明を入力（ユーザーに見える情報）</li>
-                <li>作成後のチャネル設定画面までたどり着けたら次へ</li>
+                <li>
+                  作成後、<span className="font-bold">LINE Official Account Manager</span> にログイン
+                </li>
+                <li>
+                  「<span className="font-bold">設定</span>」→「<span className="font-bold">Messaging API</span>」を開く
+                </li>
+                <li>
+                  「<span className="font-bold">Messaging APIを利用する</span>」をクリック → プロバイダー（屋号や個人名でOK）を選択／作成
+                </li>
+                <li>
+                  これで <span className="font-bold">LINE Developers Console</span> 側に同名のチャネルが自動作成されます
+                </li>
+                <li>
+                  Developers Console を開き、作成されたチャネルの設定画面までたどり着けたら次へ
+                </li>
               </ol>
 
-              <a
-                href="https://developers.line.biz/console/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-full bg-[#06C755] hover:bg-[#05b34c] text-white px-5 py-3 text-sm font-bold transition-colors"
-              >
-                LINE Developers を開く
-                <ExternalLink className="h-4 w-4" />
-              </a>
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href="https://manager.line.biz/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-full bg-[#06C755] hover:bg-[#05b34c] text-white px-5 py-3 text-sm font-bold transition-colors"
+                >
+                  LINE公式アカウントを作成・管理
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+                <a
+                  href="https://developers.line.biz/console/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-full border border-[#06C755] text-[#06C755] hover:bg-[#06C755]/5 px-5 py-3 text-sm font-bold transition-colors"
+                >
+                  LINE Developers Console
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </div>
 
               <div className="rounded-2xl border border-[#FFE2A8] bg-[#FFF8E1] p-4 text-xs text-[#8B6914] leading-relaxed">
-                <p className="font-bold mb-1">⚠️ 「LINE Login」ではなく「Messaging API」</p>
+                <p className="font-bold mb-1">⚠️ Developers Console から直接「Messaging API」チャネルは作成できません</p>
                 <p>
-                  チャネル作成時に必ず「Messaging API」を選んでください。LINE
-                  Login を選ぶと連携できません。
+                  以前は Developers Console で「Messaging API」を選んで作成できましたが、
+                  <span className="font-bold">現在は Official Account Manager 側で公式アカウントを作成し、Messaging API を有効化する流れ</span>に変わっています（Developers Consoleには「LINE公式アカウントを作成する」ボタンしか出ません）。
                 </p>
               </div>
             </div>
