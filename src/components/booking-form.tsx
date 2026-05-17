@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -155,6 +155,15 @@ export function BookingForm({
     resolver: zodResolver(bookingSchema),
   });
 
+  // 下部CTAボタンの「送信中」状態を反映するためのイベント送出
+  useEffect(() => {
+    if (isSubmitting) {
+      window.dispatchEvent(new CustomEvent("booking-form-submit-start"));
+    } else {
+      window.dispatchEvent(new CustomEvent("booking-form-submit-end"));
+    }
+  }, [isSubmitting]);
+
   const onSubmit = async (data: BookingFormValues) => {
     setServerError(null);
     if (price > 0 && availableMethods.length > 1 && !selectedMethod) {
@@ -246,6 +255,22 @@ export function BookingForm({
       setServerError("ネットワークエラーが発生しました。もう一度お試しください。");
     }
   };
+
+  // モバイル下部の固定 CTA「申し込む」から submit を依頼されたとき発火する。
+  // ref で常に最新の onSubmit を参照する（stale closure 回避）。
+  const onSubmitRef = useRef(onSubmit);
+  useEffect(() => {
+    onSubmitRef.current = onSubmit;
+  });
+  useEffect(() => {
+    const handler = () => {
+      void handleSubmit((data) => onSubmitRef.current(data))();
+    };
+    window.addEventListener("booking-form-request-submit", handler);
+    return () => {
+      window.removeEventListener("booking-form-request-submit", handler);
+    };
+  }, [handleSubmit]);
 
   const isFull = remainingSpots <= 0;
   const isLow = !isFull && remainingSpots > 0 && remainingSpots <= 3;

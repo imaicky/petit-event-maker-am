@@ -15,6 +15,7 @@ import { StoriesDownloadButton } from "@/components/stories-download-button";
 import { ResendConfirmation } from "@/components/resend-confirmation";
 import { SoldOutStamp } from "@/components/sold-out-stamp";
 import { LineSchedulePrompt } from "@/components/line-schedule-prompt";
+import { MobileBookingCTA } from "@/components/mobile-booking-cta";
 import { EventAdminBar } from "@/components/event-admin-bar";
 import { PasscodeGate, PasscodeAutoUnlock } from "@/components/passcode-gate";
 import { ViewTracker } from "@/components/view-tracker";
@@ -972,36 +973,12 @@ export default async function EventPage({ params, searchParams }: EventPageProps
       </div>
 
       {/* Mobile: fixed bottom CTA */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-white/20 glass px-4 py-3 lg:hidden" style={{ boxShadow: "0 -4px 24px -4px rgba(0, 0, 0, 0.08)" }}>
-        <div className="mx-auto flex max-w-md items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-[#1A1A1A]">
-              {event.title}
-            </p>
-            <p className="text-xs font-bold text-[#1A1A1A]">
-              {event.price === 0
-                ? "無料"
-                : `¥${event.price.toLocaleString("ja-JP")}`}
-            </p>
-          </div>
-          {isClosed ? (
-            <span className="shrink-0 rounded-xl bg-[#999999] px-6 py-3 text-sm font-bold text-white">
-              受付終了
-            </span>
-          ) : (
-            <a
-              href="#booking-form"
-              className={`shine-on-hover shrink-0 rounded-xl px-6 py-3 text-sm font-bold text-white transition-all duration-200 ${
-                remaining <= 0
-                  ? "bg-gradient-to-r from-[#FF8C00] to-[#E67700] shadow-lg shadow-[#FF8C00]/30 hover:from-[#E67700] hover:to-[#CC6A00] hover:shadow-xl active:scale-95"
-                  : "bg-gradient-to-r from-[#E8590C] to-[#D9480F] shadow-lg shadow-[#E8590C]/30 hover:from-[#D9480F] hover:to-[#C92A2A] hover:shadow-xl active:scale-95"
-              }`}
-            >
-              {remaining <= 0 ? "キャンセル待ち" : "申し込む"}
-            </a>
-          )}
-        </div>
-      </div>
+      <MobileBookingCTA
+        eventTitle={event.title}
+        price={event.price}
+        isClosed={isClosed}
+        remaining={remaining}
+      />
 
       {/* Spacer for mobile fixed bottom bar */}
       <div className="h-20 lg:hidden" />
