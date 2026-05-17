@@ -29,6 +29,7 @@ import {
   ShieldAlert,
   UserPlus,
   Send,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -426,6 +427,54 @@ export default function LineSettingsPage() {
       setErrorMsg("追加に失敗しました。もう一度お試しください。");
     } finally {
       setAddingRecipient(false);
+    }
+  };
+
+  // 「プロフィール未取得」表示の通知先について、LINE Bot API からプロフィールを
+  // 再取得して line_followers に upsert する。lineUserId 省略時は未取得の全件を一括更新。
+  const [refreshingProfileId, setRefreshingProfileId] = useState<string | "ALL" | null>(null);
+  const handleRefreshProfile = async (lineUserId?: string) => {
+    setRefreshingProfileId(lineUserId ?? "ALL");
+    setErrorMsg(null);
+    try {
+      const res = await fetch("/api/line/notify-recipients/refresh-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...(lineUserId ? { line_user_id: lineUserId } : {}),
+          ...(targetUserId ? { target_user_id: targetUserId } : {}),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setErrorMsg(json.error || "プロフィール取得に失敗しました");
+        return;
+      }
+      const results = (json.results ?? []) as Array<{
+        line_user_id: string;
+        ok: boolean;
+        display_name?: string | null;
+        error?: string;
+      }>;
+      const okCount = results.filter((r) => r.ok).length;
+      const failCount = results.length - okCount;
+      // フォロワー一覧を再フェッチして表示を反映
+      await fetchFollowers();
+      if (results.length === 0) {
+        showSuccess("プロフィール未取得の通知先はありません");
+      } else if (failCount === 0) {
+        showSuccess(`プロフィールを更新しました（${okCount}件）`);
+      } else if (okCount === 0) {
+        setErrorMsg(
+          `取得できませんでした（${failCount}件）。公式アカウントを友だち追加していないか、ブロックされている可能性があります。`
+        );
+      } else {
+        showSuccess(`更新${okCount}件 / 取得失敗${failCount}件`);
+      }
+    } catch {
+      setErrorMsg("プロフィール取得に失敗しました");
+    } finally {
+      setRefreshingProfileId(null);
     }
   };
 
@@ -1152,6 +1201,23 @@ export default function LineSettingsPage() {
                                 主通知先
                               </span>
                             )}
+                            {!matched?.display_name && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                onClick={() => handleRefreshProfile(id)}
+                                disabled={refreshingProfileId === id || refreshingProfileId === "ALL"}
+                                title="プロフィールを再取得（友だち追加が前提）"
+                                className="h-7 w-7 rounded-full border-[#06C755]/30 text-[#06C755] hover:bg-[#06C755]/10 shrink-0"
+                              >
+                                {refreshingProfileId === id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <RefreshCw className="h-3 w-3" />
+                                )}
+                              </Button>
+                            )}
                             <Button
                               type="button"
                               variant="outline"
@@ -1169,6 +1235,22 @@ export default function LineSettingsPage() {
                           </div>
                         );
                       })}
+                      {/* 未取得が複数あるときの一括取得ボタン */}
+                      {notifyIds.some((id) => !followers.find((f) => f.line_user_id === id)?.display_name) && (
+                        <button
+                          type="button"
+                          onClick={() => handleRefreshProfile()}
+                          disabled={refreshingProfileId !== null}
+                          className="w-full mt-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-[#06C755]/40 bg-[#06C755]/5 px-3 py-2 text-xs font-medium text-[#06C755] hover:bg-[#06C755]/10 disabled:opacity-50 transition-colors"
+                        >
+                          {refreshingProfileId === "ALL" ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-3 w-3" />
+                          )}
+                          プロフィール未取得をまとめて再取得
+                        </button>
+                      )}
                     </div>
                   )}
                   </div>

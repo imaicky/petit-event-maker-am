@@ -11,6 +11,7 @@ import {
   Smartphone,
   Info,
   Sparkles,
+  RefreshCw,
 } from "lucide-react";
 import { Header } from "@/components/header";
 import { VideoEmbed } from "@/components/video-embed";
@@ -1160,6 +1161,46 @@ export default function LineSetupGuidePage() {
                   4. それでもダメな場合: LINEアプリで公式アカウントを一度ブロック → ブロック解除すると再検知されます
                 </span>
               </NoteBox>
+
+              {/* 通知先のプロフィール（表示名・アイコン）が取れる条件 */}
+              <div className="mt-6 rounded-2xl border border-[#06C755]/30 bg-[#06C755]/5 p-4 sm:p-5">
+                <p className="text-sm font-bold text-[#06C755] mb-2 flex items-center gap-2">
+                  <RefreshCw className="h-4 w-4" />
+                  通知先の表示名・アイコンが出ない場合（プロフィール未取得）
+                </p>
+                <p className="text-xs text-[#1A1A1A] leading-relaxed mb-3">
+                  通知先一覧で「<strong>（プロフィール未取得）</strong>」と出るのは、LINE側のプロフィール（表示名・アイコン）がまだアプリ側に保存されていない状態です。
+                  以下のいずれかで自動的に表示されるようになります。
+                </p>
+                <div className="space-y-2 text-xs text-[#1A1A1A]">
+                  <div className="flex items-start gap-2">
+                    <span className="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#06C755] text-white text-[10px] font-bold">1</span>
+                    <span>
+                      <strong>公式アカウントを友だち追加</strong>している場合 →
+                      Webhook経由でプロフィールが自動取得されます（友だち追加 → 通知先登録の順だとこちら）
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#06C755] text-white text-[10px] font-bold">2</span>
+                    <span>
+                      <strong>「LINEで本人確認して登録」ボタン</strong>を使った場合 →
+                      ボタンを押した瞬間にプロフィールが取得・保存されます
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#06C755] text-white text-[10px] font-bold">3</span>
+                    <span>
+                      <strong>既に「プロフィール未取得」になっている場合</strong> →
+                      通知先カードの右端の <RefreshCw className="inline h-3 w-3 align-text-bottom" /> ボタン、もしくは下部の「
+                      <strong>プロフィール未取得をまとめて再取得</strong>」を押すとLINE Bot APIから取得し直します
+                    </span>
+                  </div>
+                </div>
+                <p className="text-[11px] text-[#1A1A1A]/70 leading-relaxed mt-3 pt-3 border-t border-[#06C755]/20">
+                  <strong>注意:</strong> 再取得ボタンが失敗する場合、その人が公式アカウントを友だち追加していない、もしくはブロックしている可能性があります。
+                  友だち追加してもらってから再度ボタンを押してください。
+                </p>
+              </div>
             </div>
           </section>
 
