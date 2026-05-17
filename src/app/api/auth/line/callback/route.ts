@@ -99,6 +99,7 @@ export async function GET(request: NextRequest) {
   const profile = (await profileRes.json()) as {
     userId?: string;
     displayName?: string;
+    pictureUrl?: string;
   };
   if (!profile.userId) {
     return NextResponse.redirect(
@@ -161,6 +162,35 @@ export async function GET(request: NextRequest) {
     updates.owner_line_user_id = profile.userId;
   }
   await admin.from("line_accounts").update(updates).eq("id", account.id);
+
+  // line_followers にプロフィールを保存（通知先表示の「プロフィール未取得」を防ぐ）
+  // pushOk なら友だち追加済みとみなして is_following=true で記録する。
+  // pushOk=false の場合でも display_name/picture_url は保存して表示に使う。
+  try {
+    const nowIso = new Date().toISOString();
+    const followerRow = pushOk
+      ? {
+          line_account_id: account.id,
+          line_user_id: profile.userId,
+          display_name: profile.displayName ?? null,
+          picture_url: profile.pictureUrl ?? null,
+          is_following: true,
+          followed_at: nowIso,
+          unfollowed_at: null,
+        }
+      : {
+          line_account_id: account.id,
+          line_user_id: profile.userId,
+          display_name: profile.displayName ?? null,
+          picture_url: profile.pictureUrl ?? null,
+        };
+    await admin
+      .from("line_followers")
+      .upsert(followerRow, { onConflict: "line_account_id,line_user_id" });
+  } catch (err) {
+    console.error("[line login] follower upsert failed:", err);
+    // 通知先登録自体は成功させるため、ここでは redirect しない
+  }
 
   // クッキー削除
   const successParams: Record<string, string> = {
