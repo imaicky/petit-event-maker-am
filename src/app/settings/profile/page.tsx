@@ -262,8 +262,10 @@ export default function ProfileSettingsPage() {
         .update(updatePayload)
         .eq("id", user.id);
 
-      if (error && error.code === "42703") {
-        // フォロワー数の公開設定カラムがまだ DB に無い環境向けフォールバック。
+      // PostgREST が返す未知カラムのエラー: 42703 (undefined_column) 以外に
+      // PGRST204 (no matching row in schema cache) も出るケースがある。両方を
+      // フォールバック対象として、show_follower_count を抜いて再試行する。
+      if (error && (error.code === "42703" || error.code === "PGRST204")) {
         const retry = await supabase
           .from("profiles")
           .update(baseUpdate)
@@ -272,8 +274,17 @@ export default function ProfileSettingsPage() {
       }
 
       if (error) {
+        // 原因切り分けのためコンソールに詳細を出す
+        console.error("[profile update] failed", {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        });
         if (error.code === "23505") {
           setServerError("このユーザー名はすでに使われています。");
+        } else if (error.message) {
+          setServerError(`保存に失敗しました: ${error.message}`);
         } else {
           setServerError("保存に失敗しました。もう一度お試しください。");
         }
