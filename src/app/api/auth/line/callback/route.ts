@@ -164,12 +164,15 @@ export async function GET(request: NextRequest) {
   await admin.from("line_accounts").update(updates).eq("id", account.id);
 
   // line_followers にプロフィールを保存（通知先表示の「プロフィール未取得」を防ぐ）
-  // pushOk なら友だち追加済みとみなして is_following=true で記録する。
-  // pushOk=false の場合でも display_name/picture_url は保存して表示に使う。
+  // LINE Login で本人確認が完了している以上、フォロワー一覧にも表示するため
+  // is_following=true で記録する。実際の友だち追加状態とは別の意味合いになるが、
+  // 「通知先として登録した本人」が画面上に出ない方が UX 上の問題が大きいため。
   try {
     const nowIso = new Date().toISOString();
-    const followerRow = pushOk
-      ? {
+    await admin
+      .from("line_followers")
+      .upsert(
+        {
           line_account_id: account.id,
           line_user_id: profile.userId,
           display_name: profile.displayName ?? null,
@@ -177,16 +180,9 @@ export async function GET(request: NextRequest) {
           is_following: true,
           followed_at: nowIso,
           unfollowed_at: null,
-        }
-      : {
-          line_account_id: account.id,
-          line_user_id: profile.userId,
-          display_name: profile.displayName ?? null,
-          picture_url: profile.pictureUrl ?? null,
-        };
-    await admin
-      .from("line_followers")
-      .upsert(followerRow, { onConflict: "line_account_id,line_user_id" });
+        },
+        { onConflict: "line_account_id,line_user_id" }
+      );
   } catch (err) {
     console.error("[line login] follower upsert failed:", err);
     // 通知先登録自体は成功させるため、ここでは redirect しない

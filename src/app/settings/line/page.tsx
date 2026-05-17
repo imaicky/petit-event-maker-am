@@ -342,6 +342,50 @@ export default function LineSettingsPage() {
     if (lineAccount) runDiagnose(true);
   }, [lineAccount, runDiagnose]);
 
+  // ─── ロード後の自動補完 ───────────────────────────────
+  // 通知先IDのうち line_followers に display_name が無いものを、ページ表示後に
+  // 1回だけサイレントで Bot API から取得し直す。本人確認だけで友だち追加していない
+  // 既存ユーザーの「プロフィール未取得」を自動的に解消するための処理。
+  const [autoRefreshAttempted, setAutoRefreshAttempted] = useState(false);
+  useEffect(() => {
+    setAutoRefreshAttempted(false);
+  }, [targetUserId]);
+  useEffect(() => {
+    if (autoRefreshAttempted) return;
+    if (!lineAccount) return;
+    if (followersLoading) return;
+    if (notifyIds.length === 0) return;
+    const hasMissing = notifyIds.some(
+      (id) => !followers.find((f) => f.line_user_id === id)?.display_name
+    );
+    if (!hasMissing) return;
+    setAutoRefreshAttempted(true);
+    // 非同期で投げっぱなし（UIをブロックしない）
+    void (async () => {
+      try {
+        const res = await fetch("/api/line/notify-recipients/refresh-profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(targetUserId ? { target_user_id: targetUserId } : {}),
+        });
+        if (res.ok) {
+          // 取得できたものだけでも反映するため followers を再取得
+          await fetchFollowers();
+        }
+      } catch {
+        // サイレントに失敗（ユーザーには再取得ボタンを別途用意済み）
+      }
+    })();
+  }, [
+    autoRefreshAttempted,
+    lineAccount,
+    followersLoading,
+    notifyIds,
+    followers,
+    targetUserId,
+    fetchFollowers,
+  ]);
+
   // LINE Login OAuth コールバック後のトースト表示
   useEffect(() => {
     if (typeof window === "undefined") return;
