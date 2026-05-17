@@ -29,7 +29,7 @@ const SITE_DESCRIPTION =
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: `${SITE_NAME} — AI教育者向けイベントプラットフォーム`,
+    default: SITE_NAME,
     template: `%s | ${SITE_NAME}`,
   },
   description: SITE_DESCRIPTION,
@@ -56,13 +56,13 @@ export const metadata: Metadata = {
     type: "website",
     locale: "ja_JP",
     siteName: SITE_NAME,
-    title: `${SITE_NAME} — AI教育者向けイベントプラットフォーム`,
+    title: SITE_NAME,
     description: SITE_DESCRIPTION,
     url: SITE_URL,
   },
   twitter: {
     card: "summary_large_image",
-    title: `${SITE_NAME} — AI教育者向けイベントプラットフォーム`,
+    title: SITE_NAME,
     description: SITE_DESCRIPTION,
   },
   robots: {
