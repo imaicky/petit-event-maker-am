@@ -29,6 +29,10 @@ import {
   CreditCard,
   RefreshCw,
   BarChart3,
+  Rocket,
+  Undo2,
+  AlertTriangle,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/header";
@@ -339,12 +343,18 @@ function EventCard({
   event,
   index = 0,
   onLineNotify,
+  onPublishChange,
 }: {
   event: DashboardEvent;
   index?: number;
   onLineNotify: (event: DashboardEvent) => void;
+  onPublishChange?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [justPublished, setJustPublished] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const router = useRouter();
 
   const fillRate = event.capacity
     ? Math.round((event.booking_count / event.capacity) * 100)
@@ -360,6 +370,55 @@ function EventCard({
     await navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handlePublish = async () => {
+    if (publishing) return;
+    const ok = window.confirm(
+      `「${event.title}」を公開しますか？\n公開すると一覧やフィードに表示されます。`
+    );
+    if (!ok) return;
+    setPublishing(true);
+    setPublishError(null);
+    try {
+      const res = await fetch(`/api/events/${event.id}/publish`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (data?.needsEdit) {
+          setPublishError(data.error || "編集ページで必要項目を入力してください");
+          setTimeout(() => {
+            router.push(`/events/${event.id}/edit`);
+          }, 1500);
+        } else {
+          setPublishError(data?.error || "公開に失敗しました");
+        }
+        return;
+      }
+      setJustPublished(true);
+      onPublishChange?.();
+      setTimeout(() => setJustPublished(false), 8000);
+    } catch {
+      setPublishError("通信エラーが発生しました");
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const handleUndoPublish = async () => {
+    setPublishing(true);
+    try {
+      const res = await fetch(`/api/events/${event.id}/publish`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setJustPublished(false);
+        onPublishChange?.();
+      }
+    } finally {
+      setPublishing(false);
+    }
   };
 
   const delayClass =
@@ -381,6 +440,28 @@ function EventCard({
     <div
       className={`group rounded-2xl border border-[#E5E5E5] bg-white p-4 hover:border-[#1A1A1A]/30 transition-all card-hover-tilt animate-fade-in-up ${delayClass}`}
     >
+      {justPublished && (
+        <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 animate-in fade-in-0 slide-in-from-top-1">
+          <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-800">
+            <Check className="h-3.5 w-3.5" />
+            公開しました
+          </span>
+          <button
+            onClick={handleUndoPublish}
+            disabled={publishing}
+            className="inline-flex items-center gap-1 text-xs font-medium text-emerald-800 hover:text-emerald-900 underline disabled:opacity-50"
+          >
+            <Undo2 className="h-3 w-3" />
+            元に戻す
+          </button>
+        </div>
+      )}
+      {publishError && (
+        <div className="mb-3 flex items-center gap-2 rounded-xl bg-red-50 border border-red-200 px-3 py-2">
+          <AlertTriangle className="h-3.5 w-3.5 text-red-600 shrink-0" />
+          <span className="text-xs text-red-800 leading-snug">{publishError}</span>
+        </div>
+      )}
       <div className="flex items-start gap-3">
         {/* Date block */}
         <div
@@ -520,6 +601,21 @@ function EventCard({
 
       {/* Action buttons */}
       <div className="mt-3 pt-3 border-t border-[#F2F2F2] flex items-center gap-2 flex-wrap">
+        {!event.is_published && !isPast && (
+          <button
+            type="button"
+            onClick={handlePublish}
+            disabled={publishing}
+            className="inline-flex items-center gap-1.5 h-8 rounded-full bg-[#1A1A1A] text-white px-3 text-xs font-bold hover:bg-[#111111] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {publishing ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Rocket className="h-3 w-3" />
+            )}
+            今すぐ公開
+          </button>
+        )}
         <Link href={`/events/${event.id}/attendees`}>
           <Button
             variant="outline"
@@ -613,6 +709,203 @@ function EventCard({
           )
         )}
       </div>
+    </div>
+  );
+}
+
+// --- Admin event card (super-admin only) -----------------------------------
+
+function AdminEventCard({
+  event,
+  onDeleted,
+}: {
+  event: DashboardEvent & { creator_email?: string };
+  onDeleted: () => void;
+}) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [titleInput, setTitleInput] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const titleMatches = titleInput.trim() === event.title.trim();
+
+  const handleDelete = async () => {
+    if (!titleMatches || deleting) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/events/${event.id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data?.error || "削除に失敗しました");
+        setDeleting(false);
+        return;
+      }
+      onDeleted();
+    } catch {
+      setError("通信エラーが発生しました");
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="group rounded-2xl border border-[#E5E5E5] bg-white p-4 hover:border-[#1A1A1A]/30 transition-all">
+      <div className="flex items-start gap-3">
+        <div
+          className={`flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl text-center ${
+            new Date(event.datetime) < new Date()
+              ? "bg-[#F2F2F2] text-[#999999]"
+              : "bg-[#F7F7F7] text-[#1A1A1A]"
+          }`}
+        >
+          <span className="text-xs font-medium leading-none">
+            {new Date(event.datetime).toLocaleDateString("ja-JP", {
+              month: "numeric",
+              timeZone: TZ,
+            })}
+            月
+          </span>
+          <span className="mt-0.5 text-xl font-bold leading-none">
+            {new Date(event.datetime).toLocaleDateString("ja-JP", {
+              day: "numeric",
+              timeZone: TZ,
+            })}
+          </span>
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+            <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600 max-w-[150px] truncate">
+              <Users className="h-2.5 w-2.5 shrink-0" />
+              {event.creator_email}
+            </span>
+            {event.is_published ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#404040]/10 px-2 py-0.5 text-xs font-medium text-[#404040]">
+                <Eye className="h-2.5 w-2.5" />
+                公開中
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#F2F2F2] px-2 py-0.5 text-xs font-medium text-[#999999]">
+                <EyeOff className="h-2.5 w-2.5" />
+                下書き
+              </span>
+            )}
+          </div>
+          <h3 className="text-sm font-bold text-[#1A1A1A] leading-snug line-clamp-2">
+            {event.title}
+          </h3>
+          <div className="flex items-center gap-1.5 mt-1 text-xs text-[#999999]">
+            <Users className="h-3 w-3 text-[#1A1A1A]" />
+            <span className="font-medium text-[#1A1A1A]">{event.booking_count}</span>
+            {event.capacity && <span>/ {event.capacity}名</span>}
+          </div>
+        </div>
+
+        <Link href={`/events/${event.id}/edit`} className="shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 rounded-xl text-[#999999] hover:bg-[#F2F2F2] hover:text-[#1A1A1A]"
+            aria-label="編集"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </Link>
+      </div>
+
+      <div className="mt-3 pt-3 border-t border-[#F2F2F2] flex items-center gap-2 flex-wrap">
+        <Link href={`/events/${event.id}/attendees`}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 rounded-full border-[#1A1A1A]/20 gap-1 text-xs font-medium text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-white transition-colors"
+          >
+            <Users className="h-3 w-3" />
+            参加者
+            {event.booking_count > 0 && (
+              <span className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-[#1A1A1A]/10 px-1 text-[10px] font-bold">
+                {event.booking_count}
+              </span>
+            )}
+          </Button>
+        </Link>
+        <Link href={`/events/${event.id}`}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 rounded-full text-xs gap-1"
+          >
+            <Eye className="h-3 w-3" />
+            詳細
+          </Button>
+        </Link>
+        <button
+          type="button"
+          onClick={() => {
+            setConfirmOpen(true);
+            setTitleInput("");
+            setError(null);
+          }}
+          className="ml-auto inline-flex items-center gap-1 h-7 rounded-full border border-red-200 bg-red-50 px-2.5 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors"
+          aria-label="管理者削除"
+        >
+          <Trash2 className="h-3 w-3" />
+          削除
+        </button>
+      </div>
+
+      {confirmOpen && (
+        <div className="mt-3 rounded-xl border border-red-200 bg-red-50/60 p-3 animate-in fade-in-0">
+          <div className="flex items-start gap-2 mb-2">
+            <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+            <div className="text-xs text-red-900 leading-relaxed">
+              <p className="font-bold mb-0.5">管理者権限による削除</p>
+              <p>
+                参加者・予約データも含めて削除され、元に戻せません。
+                確認のため、下にイベントタイトルを入力してください。
+              </p>
+            </div>
+          </div>
+          <p className="text-[11px] text-red-900/70 mb-1">
+            入力するタイトル:{" "}
+            <span className="font-mono font-bold">{event.title}</span>
+          </p>
+          <input
+            type="text"
+            value={titleInput}
+            onChange={(e) => setTitleInput(e.target.value)}
+            placeholder="イベントタイトルを入力"
+            className="w-full rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs focus:outline-none focus:border-red-400"
+            autoFocus
+          />
+          {error && (
+            <p className="mt-2 text-xs text-red-700">{error}</p>
+          )}
+          <div className="mt-2 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirmOpen(false)}
+              disabled={deleting}
+              className="text-xs text-[#666666] hover:text-[#1A1A1A] px-2 py-1 disabled:opacity-50"
+            >
+              キャンセル
+            </button>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={!titleMatches || deleting}
+              className="inline-flex items-center gap-1 rounded-full bg-red-600 text-white px-3 py-1.5 text-xs font-bold hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {deleting ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Trash2 className="h-3 w-3" />
+              )}
+              完全に削除
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1122,6 +1415,7 @@ export default function DashboardPage() {
                             setLineDialogEvent(ev);
                             setLineDialogOpen(true);
                           }}
+                          onPublishChange={() => fetchEvents(true)}
                         />
                       ))}
                     </div>
@@ -1194,105 +1488,12 @@ export default function DashboardPage() {
                       </div>
                     ) : (
                       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                        {allEvents.map((event, i) => (
-                          <div
+                        {allEvents.map((event) => (
+                          <AdminEventCard
                             key={event.id}
-                            className="group rounded-2xl border border-[#E5E5E5] bg-white p-4 hover:border-[#1A1A1A]/30 transition-all"
-                          >
-                            <div className="flex items-start gap-3">
-                              {/* Date block */}
-                              <div
-                                className={`flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl text-center ${
-                                  new Date(event.datetime) < new Date()
-                                    ? "bg-[#F2F2F2] text-[#999999]"
-                                    : "bg-[#F7F7F7] text-[#1A1A1A]"
-                                }`}
-                              >
-                                <span className="text-xs font-medium leading-none">
-                                  {new Date(event.datetime).toLocaleDateString("ja-JP", {
-                                    month: "numeric",
-                                    timeZone: TZ,
-                                  })}
-                                  月
-                                </span>
-                                <span className="mt-0.5 text-xl font-bold leading-none">
-                                  {new Date(event.datetime).toLocaleDateString("ja-JP", {
-                                    day: "numeric",
-                                    timeZone: TZ,
-                                  })}
-                                </span>
-                              </div>
-
-                              <div className="flex-1 min-w-0">
-                                {/* Owner badge */}
-                                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600 max-w-[150px] truncate">
-                                    <Users className="h-2.5 w-2.5 shrink-0" />
-                                    {event.creator_email}
-                                  </span>
-                                  {event.is_published ? (
-                                    <span className="inline-flex items-center gap-1 rounded-full bg-[#404040]/10 px-2 py-0.5 text-xs font-medium text-[#404040]">
-                                      <Eye className="h-2.5 w-2.5" />
-                                      公開中
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1 rounded-full bg-[#F2F2F2] px-2 py-0.5 text-xs font-medium text-[#999999]">
-                                      <EyeOff className="h-2.5 w-2.5" />
-                                      下書き
-                                    </span>
-                                  )}
-                                </div>
-                                <h3 className="text-sm font-bold text-[#1A1A1A] leading-snug line-clamp-2">
-                                  {event.title}
-                                </h3>
-                                <div className="flex items-center gap-1.5 mt-1 text-xs text-[#999999]">
-                                  <Users className="h-3 w-3 text-[#1A1A1A]" />
-                                  <span className="font-medium text-[#1A1A1A]">{event.booking_count}</span>
-                                  {event.capacity && <span>/ {event.capacity}名</span>}
-                                </div>
-                              </div>
-
-                              <Link href={`/events/${event.id}/edit`} className="shrink-0">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0 rounded-xl text-[#999999] hover:bg-[#F2F2F2] hover:text-[#1A1A1A]"
-                                  aria-label="編集"
-                                >
-                                  <ChevronRight className="h-4 w-4" />
-                                </Button>
-                              </Link>
-                            </div>
-
-                            {/* Quick actions */}
-                            <div className="mt-3 pt-3 border-t border-[#F2F2F2] flex items-center gap-2">
-                              <Link href={`/events/${event.id}/attendees`}>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-7 rounded-full border-[#1A1A1A]/20 gap-1 text-xs font-medium text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-white transition-colors"
-                                >
-                                  <Users className="h-3 w-3" />
-                                  参加者
-                                  {event.booking_count > 0 && (
-                                    <span className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-[#1A1A1A]/10 px-1 text-[10px] font-bold">
-                                      {event.booking_count}
-                                    </span>
-                                  )}
-                                </Button>
-                              </Link>
-                              <Link href={`/events/${event.id}`}>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-7 rounded-full text-xs gap-1"
-                                >
-                                  <Eye className="h-3 w-3" />
-                                  詳細
-                                </Button>
-                              </Link>
-                            </div>
-                          </div>
+                            event={event}
+                            onDeleted={() => fetchAllEvents()}
+                          />
                         ))}
                       </div>
                     )}

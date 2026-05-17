@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { canManageEvent } from "@/lib/check-event-access";
+import { canManageEvent, isSuperAdmin } from "@/lib/check-event-access";
 import { promoteWaitlistOnCapacityIncrease } from "@/lib/waitlist-promotion";
 import { parseCustomQuestions, isMissingColumnError } from "@/lib/custom-questions";
 
@@ -655,7 +655,7 @@ export async function DELETE(
     // Fetch existing event to verify ownership
     const { data: existing, error: fetchError } = await supabase
       .from("events")
-      .select("id, creator_id")
+      .select("id, creator_id, title")
       .eq("id", id)
       .single();
 
@@ -666,20 +666,33 @@ export async function DELETE(
       );
     }
 
-    if (existing.creator_id !== user.id) {
+    const isCreator = existing.creator_id === user.id;
+    const superAdmin = isCreator ? false : await isSuperAdmin(supabase, user.id);
+
+    if (!isCreator && !superAdmin) {
       return NextResponse.json(
         { error: "このイベントを削除する権限がありません" },
         { status: 403 }
       );
     }
 
-    const { error } = await supabase.from("events").delete().eq("id", id);
+    // super-admin が他人のイベントを削除する場合は RLS をバイパスするため admin client を使用
+    const deleter = superAdmin && process.env.SUPABASE_SERVICE_ROLE_KEY
+      ? createAdminClient()
+      : supabase;
+    const { error } = await deleter.from("events").delete().eq("id", id);
 
     if (error) {
       console.error("[DELETE /api/events/[id]] Supabase error:", error);
       return NextResponse.json(
         { error: "イベントの削除に失敗しました" },
         { status: 500 }
+      );
+    }
+
+    if (superAdmin) {
+      console.log(
+        `[admin-delete] user=${user.email} deleted event=${id} title="${existing.title}" creator=${existing.creator_id}`
       );
     }
 

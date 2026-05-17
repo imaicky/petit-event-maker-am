@@ -205,7 +205,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const resetPassword = useCallback(
     async (email: string): Promise<{ error: string | null }> => {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + "/api/auth/callback?next=/settings/profile",
+        redirectTo: window.location.origin + "/api/auth/callback?next=/auth/reset-password",
       });
       if (error) return { error: error.message };
       return { error: null };

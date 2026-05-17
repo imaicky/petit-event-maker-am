@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -513,6 +513,8 @@ export default function EditEventPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCreator, setIsCreator] = useState(false);
   const [canEdit, setCanEdit] = useState(false);
+  // この送信で is_published を上書きしたい場合の意図フラグ。送信後に null に戻す。
+  const publishIntentRef = useRef<boolean | null>(null);
 
   const {
     register,
@@ -759,6 +761,11 @@ export default function EditEventPage() {
     setServerError(null);
     setSaveSuccess(false);
 
+    // 「公開する」ボタンから来た送信は publishIntentRef を見て上書きする
+    const willPublish =
+      publishIntentRef.current !== null ? publishIntentRef.current : isPublished;
+    publishIntentRef.current = null;
+
     const payload = {
       title: data.title,
       description: data.description,
@@ -807,18 +814,23 @@ export default function EditEventPage() {
       limited_passcode: data.is_limited ? (data.limited_passcode || undefined) : undefined,
       teacher_name: data.teacher_name,
       teacher_bio: data.teacher_bio,
-      is_published: isPublished,
+      is_published: willPublish,
       category_id: categoryId ?? null,
       tag_ids: tagIds,
       custom_questions: customQuestions,
     };
+
+    // 公開状態を新しく ON にした場合は state にも反映
+    if (willPublish !== isPublished) {
+      setIsPublished(willPublish);
+    }
 
     // If capacity increased AND there are waitlisted bookings, ask for
     // confirmation before promoting them. Capacity decreases or no waitlist
     // → fall through and submit immediately.
     const newCapacity = Number(data.capacity);
     if (
-      isPublished &&
+      willPublish &&
       typeof originalCapacity === "number" &&
       newCapacity > originalCapacity &&
       waitlistCount > 0
@@ -997,14 +1009,17 @@ export default function EditEventPage() {
                 プレビュー
               </a>
 
-              {/* Publish toggle */}
-              <button
-                type="button"
-                onClick={() => setIsPublished((v) => !v)}
-                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all border ${
+              {/* Publish status badge (display-only — use dashboard's 「今すぐ公開」 button or 「下書き保存」 to change state) */}
+              <span
+                title={
                   isPublished
-                    ? "bg-[#404040]/10 text-[#404040] border-[#404040]/20 hover:bg-[#404040]/20"
-                    : "bg-[#F2F2F2] text-[#999999] border-[#E5E5E5] hover:bg-[#E5E5E5]"
+                    ? "このイベントは公開されています"
+                    : "下書き状態です。ダッシュボードの「今すぐ公開」ボタンから公開できます"
+                }
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border ${
+                  isPublished
+                    ? "bg-[#404040]/10 text-[#404040] border-[#404040]/20"
+                    : "bg-[#F2F2F2] text-[#999999] border-[#E5E5E5]"
                 }`}
               >
                 {isPublished ? (
@@ -1018,7 +1033,7 @@ export default function EditEventPage() {
                     下書き
                   </>
                 )}
-              </button>
+              </span>
             </div>
           </div>
         </div>
@@ -1444,36 +1459,68 @@ export default function EditEventPage() {
 
             {/* Save buttons */}
             <div className="space-y-2">
+              {!isPublished && (
+                <Button
+                  type="button"
+                  onClick={() => {
+                    publishIntentRef.current = true;
+                    handleSubmit(onSubmit)();
+                  }}
+                  disabled={isSubmitting || savingDraft}
+                  className="h-12 w-full rounded-xl bg-[#1A1A1A] text-base font-bold text-white hover:bg-[#111111] disabled:opacity-60 gap-2 shadow-sm"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      公開中...
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="h-5 w-5" />
+                      保存して公開する
+                    </>
+                  )}
+                </Button>
+              )}
               <Button
                 type="submit"
                 disabled={isSubmitting || savingDraft || !isDirty}
-                className="h-12 w-full rounded-xl bg-[#1A1A1A] text-base font-bold text-white hover:bg-[#111111] disabled:opacity-60 gap-2 shadow-sm"
+                variant={!isPublished ? "outline" : "default"}
+                className={
+                  !isPublished
+                    ? "h-11 w-full rounded-xl border-[#E5E5E5] bg-white text-sm font-medium text-[#1A1A1A] hover:bg-[#F7F7F7] disabled:opacity-60"
+                    : "h-12 w-full rounded-xl bg-[#1A1A1A] text-base font-bold text-white hover:bg-[#111111] disabled:opacity-60 gap-2 shadow-sm"
+                }
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <Loader2 className={!isPublished ? "mr-2 h-4 w-4 animate-spin" : "h-5 w-5 animate-spin"} />
                     保存中...
                   </>
+                ) : !isPublished ? (
+                  "下書きのまま変更を保存"
                 ) : (
                   "変更を保存する"
                 )}
               </Button>
-              <Button
-                type="button"
-                onClick={saveDraft}
-                disabled={isSubmitting || savingDraft}
-                variant="outline"
-                className="h-11 w-full rounded-xl border-[#E5E5E5] bg-white text-sm font-medium text-[#1A1A1A] hover:bg-[#F7F7F7] disabled:opacity-60"
-              >
-                {savingDraft ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    保存中...
-                  </>
-                ) : (
-                  "下書きとして保存（非公開）"
-                )}
-              </Button>
+              {isPublished && (
+                <Button
+                  type="button"
+                  onClick={saveDraft}
+                  disabled={isSubmitting || savingDraft}
+                  variant="outline"
+                  className="h-11 w-full rounded-xl border-[#E5E5E5] bg-white text-sm font-medium text-[#1A1A1A] hover:bg-[#F7F7F7] disabled:opacity-60"
+                >
+                  {savingDraft ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      保存中...
+                    </>
+                  ) : (
+                    "下書きに戻す（非公開）"
+                  )}
+                </Button>
+              )}
             </div>
 
             {/* Mobile preview link */}
