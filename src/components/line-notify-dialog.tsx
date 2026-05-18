@@ -58,6 +58,11 @@ export function LineNotifyDialog({
   const isMenu = targetType === "menu";
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    sent: number;
+    skipped: number;
+  } | null>(null);
   const [sent, setSent] = useState(false);
   const [scheduled, setScheduled] = useState(false);
   const [cancelled, setCancelled] = useState(false);
@@ -89,6 +94,35 @@ export function LineNotifyDialog({
       setError("送信に失敗しました");
     } finally {
       setSending(false);
+    }
+  };
+
+  // 主催者の自分のLINEに「テスト」プレフィクス付きで送信して仕上がりを確認
+  const handleTestSend = async () => {
+    if (isMenu) return; // メニュー側は未対応
+    setTesting(true);
+    setError("");
+    setTestResult(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/line-notify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, segment, test: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "テスト送信に失敗しました");
+        return;
+      }
+      setTestResult({
+        sent: data.sent ?? 0,
+        skipped: data.skipped ?? 0,
+      });
+      setTimeout(() => setTestResult(null), 6000);
+    } catch {
+      setError("テスト送信に失敗しました");
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -157,6 +191,8 @@ export function LineNotifyDialog({
         setMode("immediate");
         setScheduledAt("");
         setSegment("all");
+        setTestResult(null);
+        setTesting(false);
       }, 200);
     }
     onOpenChange(nextOpen);
@@ -417,16 +453,42 @@ export function LineNotifyDialog({
                   : "メッセージの後にイベントカード（画像・詳細・予約ボタン付き）が自動で送信されます。"}
               </p>
 
+              {testResult && (
+                <div className="flex items-start gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <p className="text-xs text-emerald-900 leading-relaxed">
+                    自分のLINEに送信しました（{testResult.sent}件）。仕上がりを確認してから本番送信してください。
+                  </p>
+                </div>
+              )}
+
               {error && (
                 <p className="text-xs text-red-500">{error}</p>
               )}
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="flex-col sm:flex-row gap-2">
+              {!isMenu && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleTestSend}
+                  disabled={sending || testing}
+                  className="w-full sm:w-auto gap-2 border-[#06C755]/30 text-[#06C755] hover:bg-[#06C755]/5"
+                  title="あなたのLINEだけに本文＋イベントカードを送信して仕上がりを確認できます"
+                >
+                  {testing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                  {testing ? "テスト送信中..." : "テスト送信"}
+                </Button>
+              )}
               {mode === "immediate" ? (
                 <Button
                   onClick={handleSend}
-                  disabled={sending}
+                  disabled={sending || testing}
                   className="w-full sm:w-auto bg-[#06C755] hover:bg-[#05b34c] text-white gap-2"
                 >
                   {sending ? (
@@ -439,7 +501,7 @@ export function LineNotifyDialog({
               ) : (
                 <Button
                   onClick={handleSchedule}
-                  disabled={sending || !scheduledAt}
+                  disabled={sending || testing || !scheduledAt}
                   className="w-full sm:w-auto bg-[#06C755] hover:bg-[#05b34c] text-white gap-2"
                 >
                   {sending ? (

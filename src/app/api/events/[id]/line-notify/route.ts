@@ -7,6 +7,8 @@ import {
   multicastFlexMessage,
   multicastLineMessage,
   buildEventFlexBubble,
+  pushFlexMessage,
+  pushLineMessage,
 } from "@/lib/line";
 import { canManageEvent } from "@/lib/check-event-access";
 
@@ -25,6 +27,8 @@ export async function POST(
     // Parse body first (stream can only be consumed once)
     const body = await request.json().catch(() => ({}));
     const customMessage = typeof body.message === "string" ? body.message.trim() : "";
+    // テスト送信フラグ: 主催者の owner_line_user_id + notify_line_user_ids のみに送る
+    const isTestMode = body.test === true;
     // Validate segment
     let segment: SegmentParam = "all";
     if (body.segment === "attendees") {
@@ -74,27 +78,29 @@ export async function POST(
       );
     }
 
-    // Must be published
-    if (!event.is_published) {
+    // Must be published — テストモードでは下書きでもOK
+    if (!isTestMode && !event.is_published) {
       return NextResponse.json(
         { error: "公開中のイベントのみ送信できます" },
         { status: 400 }
       );
     }
 
-    // Duplicate check (only for "all" segment)
-    if (segment === "all" && event.line_notified_at) {
+    // Duplicate check (only for "all" segment) — テストモードでは再送可
+    if (!isTestMode && segment === "all" && event.line_notified_at) {
       return NextResponse.json(
         { error: "このイベントは既にLINE送信済みです" },
         { status: 409 }
       );
     }
 
-    // LINE account check
+    // LINE account check — テストモードでは owner_line_user_id / notify_line_user_ids も取得
     const admin = createAdminClient();
     const { data: lineAccount } = await admin
       .from("line_accounts")
-      .select("id, channel_access_token, is_active")
+      .select(
+        "id, channel_access_token, is_active, owner_line_user_id, notify_line_user_ids"
+      )
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -120,6 +126,72 @@ export async function POST(
       { ...event, booking_count: bookingCount ?? 0 },
       baseUrl
     );
+
+    // ─── Test mode: 主催者のLINEだけに push する ─────────────
+    if (isTestMode) {
+      const la = lineAccount as {
+        owner_line_user_id?: string | null;
+        notify_line_user_ids?: string[] | null;
+      };
+      const adminIds = new Set<string>();
+      if (la.owner_line_user_id) adminIds.add(la.owner_line_user_id);
+      for (const id of la.notify_line_user_ids ?? []) adminIds.add(id);
+      const ids = Array.from(adminIds);
+      if (ids.length === 0) {
+        return NextResponse.json(
+          {
+            error:
+              "テスト送信先が見つかりません。設定 → LINE → 通知先で『LINEで本人確認して登録』してください。",
+          },
+          { status: 400 }
+        );
+      }
+      const altText = `🧪 [テスト] 🎉 ${event.title}`;
+      const testMessage = customMessage
+        ? `🧪 [テスト送信]\n${customMessage}`
+        : `🧪 [テスト送信] イベント通知のプレビューです`;
+      let sent = 0;
+      const errors: string[] = [];
+      for (const userId of ids) {
+        try {
+          const textRes = await pushLineMessage(
+            lineAccount.channel_access_token,
+            userId,
+            testMessage
+          );
+          if (!textRes.ok) errors.push(`${userId} text: ${textRes.error}`);
+          const flexRes = await pushFlexMessage(
+            lineAccount.channel_access_token,
+            userId,
+            altText,
+            bubble
+          );
+          if (!flexRes.ok) {
+            errors.push(`${userId} flex: ${flexRes.error}`);
+          } else {
+            sent++;
+          }
+        } catch (err) {
+          errors.push(
+            `${userId}: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      }
+      if (sent === 0) {
+        return NextResponse.json(
+          {
+            error: `テスト送信に失敗しました${errors.length > 0 ? `: ${errors[0]}` : ""}`,
+          },
+          { status: 502 }
+        );
+      }
+      return NextResponse.json({
+        ok: true,
+        test: true,
+        sent,
+        skipped: errors.length,
+      });
+    }
 
     // Determine target user IDs for segment delivery
     if (segment === "all") {
