@@ -96,6 +96,37 @@ async function getEvent(id: string): Promise<EventData | null> {
   }
 }
 
+async function getTiers(id: string): Promise<Array<{
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  capacity: number | null;
+  sort_order: number;
+}>> {
+  try {
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return [];
+    const admin = createAdminClient();
+    const { data } = await admin
+      .from("event_ticket_tiers")
+      .select("id, name, description, price, capacity, sort_order")
+      .eq("event_id", id)
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true })
+      .order("price", { ascending: true });
+    return (data ?? []) as Array<{
+      id: string;
+      name: string;
+      description: string | null;
+      price: number;
+      capacity: number | null;
+      sort_order: number;
+    }>;
+  } catch {
+    return [];
+  }
+}
+
 async function getPasscodeForEvent(id: string): Promise<{ is_limited: boolean; limited_passcode: string | null } | null> {
   try {
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return null;
@@ -340,7 +371,7 @@ export default async function EventPage({ params, searchParams }: EventPageProps
   const passFromUrl = typeof sp.pass === "string" ? sp.pass : undefined;
 
   const baseUrl = await getBaseUrl();
-  const [event, passcodeData, { reviews, averageRating }, favoriteState, authUser] = await Promise.all([
+  const [event, passcodeData, { reviews, averageRating }, favoriteState, authUser, tiers] = await Promise.all([
     getEvent(id),
     getPasscodeForEvent(id),
     getReviews(id, baseUrl),
@@ -350,6 +381,7 @@ export default async function EventPage({ params, searchParams }: EventPageProps
       const { data: { user } } = await supabase.auth.getUser();
       return user;
     })(),
+    getTiers(id),
   ]);
 
   if (!event) {
@@ -908,6 +940,7 @@ export default async function EventPage({ params, searchParams }: EventPageProps
                   confirmedPhysical={event.booking_count_physical}
                   confirmedOnline={event.booking_count_online}
                   customQuestions={parseCustomQuestions(event.custom_questions)}
+                  ticketTiers={tiers}
                 />
               </div>
             </section>

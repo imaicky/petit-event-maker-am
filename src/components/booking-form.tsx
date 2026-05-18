@@ -75,7 +75,18 @@ interface BookingFormProps {
   confirmedOnline?: number;
   /** 主催者が設定した事前アンケート（任意回答） */
   customQuestions?: CustomQuestion[];
+  /** PRO機能: 複数チケット種別。空 or undefined なら単一価格 */
+  ticketTiers?: TicketTier[];
 }
+
+export type TicketTier = {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  capacity: number | null;
+  sort_order: number;
+};
 
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
@@ -107,7 +118,19 @@ export function BookingForm({
   confirmedPhysical = 0,
   confirmedOnline = 0,
   customQuestions,
+  ticketTiers,
 }: BookingFormProps) {
+  const hasTiers = !!ticketTiers && ticketTiers.length > 0;
+  const [selectedTierId, setSelectedTierId] = useState<string | null>(
+    hasTiers && ticketTiers!.length === 1 ? ticketTiers![0].id : null
+  );
+  const selectedTier =
+    hasTiers && selectedTierId
+      ? ticketTiers!.find((t) => t.id === selectedTierId) ?? null
+      : null;
+  // 表示・送信に使う実効価格。複数プランの場合は選択中のプラン価格
+  const effectivePrice = selectedTier ? selectedTier.price : price;
+
   const isHybridEvent = locationType === "hybrid";
   const physicalRemaining =
     capacityPhysical == null ? null : Math.max(0, capacityPhysical - confirmedPhysical);
@@ -166,7 +189,11 @@ export function BookingForm({
 
   const onSubmit = async (data: BookingFormValues) => {
     setServerError(null);
-    if (price > 0 && availableMethods.length > 1 && !selectedMethod) {
+    if (hasTiers && !selectedTierId) {
+      setServerError("プランを選択してください");
+      return;
+    }
+    if (effectivePrice > 0 && availableMethods.length > 1 && !selectedMethod) {
       setServerError("お支払い方法を選択してください");
       return;
     }
@@ -176,8 +203,10 @@ export function BookingForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...data,
-          payment_method: price > 0 ? selectedMethod ?? availableMethods[0] : undefined,
+          payment_method:
+            effectivePrice > 0 ? selectedMethod ?? availableMethods[0] : undefined,
           attendance_format: isHybridEvent ? attendanceFormat : undefined,
+          ticket_tier_id: selectedTierId ?? undefined,
           custom_answers:
             customQuestions && customQuestions.length > 0 ? customAnswers : undefined,
         }),
@@ -305,13 +334,15 @@ export function BookingForm({
         </p>
         <div className="mt-2 flex items-center justify-between">
           <p className="text-lg font-bold text-[#1A1A1A]">
-            {price === 0 ? (
+            {effectivePrice === 0 ? (
               <span className="inline-flex items-center gap-1.5">
                 <CheckCircle2 className="h-4 w-4 text-[#404040]" />
                 <span className="text-[#404040]">無料</span>
               </span>
+            ) : hasTiers && !selectedTier ? (
+              <span className="text-sm text-[#666666]">プランを選択</span>
             ) : (
-              `¥${price.toLocaleString("ja-JP")}`
+              `¥${effectivePrice.toLocaleString("ja-JP")}`
             )}
           </p>
           {priceNote && (
@@ -483,8 +514,67 @@ export function BookingForm({
         </div>
       )}
 
+      {/* Ticket tier picker (PRO 機能: 複数プラン) */}
+      {hasTiers && !isFull && (
+        <div className="space-y-2 rounded-xl border border-[#E5E5E5] bg-white p-4">
+          <p className="text-sm font-medium text-[#1A1A1A]">プランを選択</p>
+          <div className="grid gap-2">
+            {ticketTiers!.map((tier) => {
+              const checked = selectedTierId === tier.id;
+              return (
+                <label
+                  key={tier.id}
+                  className={cn(
+                    "flex cursor-pointer items-start gap-3 rounded-lg border-2 p-3 transition-all",
+                    checked
+                      ? "border-[#1A1A1A] bg-[#F7F7F7]"
+                      : "border-[#E5E5E5] bg-white hover:border-[#1A1A1A]/40"
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="ticket_tier"
+                    value={tier.id}
+                    checked={checked}
+                    onChange={() => setSelectedTierId(tier.id)}
+                    className="h-4 w-4 mt-1 accent-[#1A1A1A]"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p
+                        className={cn(
+                          "text-sm font-bold truncate",
+                          checked ? "text-[#1A1A1A]" : "text-[#666666]"
+                        )}
+                      >
+                        {tier.name}
+                      </p>
+                      <p
+                        className={cn(
+                          "text-sm font-bold whitespace-nowrap",
+                          checked ? "text-[#1A1A1A]" : "text-[#666666]"
+                        )}
+                      >
+                        {tier.price === 0
+                          ? "無料"
+                          : `¥${tier.price.toLocaleString("ja-JP")}`}
+                      </p>
+                    </div>
+                    {tier.description && (
+                      <p className="mt-1 text-xs text-[#999999] leading-relaxed whitespace-pre-line">
+                        {tier.description}
+                      </p>
+                    )}
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Payment method picker (paid events with multiple methods) */}
-      {price > 0 && !isFull && availableMethods.length > 1 && (
+      {effectivePrice > 0 && !isFull && availableMethods.length > 1 && (
         <div className="space-y-2 rounded-xl border border-[#E5E5E5] bg-white p-4">
           <p className="text-sm font-medium text-[#1A1A1A]">お支払い方法</p>
           <div className="grid gap-2">
@@ -523,14 +613,14 @@ export function BookingForm({
       )}
 
       {/* Payment info for paid events — uses selectedMethod */}
-      {price > 0 && !isFull && (selectedMethod ?? availableMethods[0] ?? 'stripe') === 'stripe' && (
+      {effectivePrice > 0 && !isFull && (selectedMethod ?? availableMethods[0] ?? 'stripe') === 'stripe' && (
         <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3">
           <p className="text-xs text-blue-700">
             Stripeの安全な決済画面に移動します。クレジットカードで決済できます。
           </p>
         </div>
       )}
-      {price > 0 && !isFull && selectedMethod === 'bank' && (
+      {effectivePrice > 0 && !isFull && selectedMethod === 'bank' && (
         <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3">
           <p className="text-xs text-emerald-800">
             銀行振込先と振込期限を申込み完了メールでお送りします。<br />
@@ -538,14 +628,14 @@ export function BookingForm({
           </p>
         </div>
       )}
-      {price > 0 && !isFull && selectedMethod === 'onsite' && (
+      {effectivePrice > 0 && !isFull && selectedMethod === 'onsite' && (
         <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3">
           <p className="text-xs text-amber-700">
             参加費は当日、現地にてお支払いください。
           </p>
         </div>
       )}
-      {price > 0 && !isFull && selectedMethod === 'custom' && (
+      {effectivePrice > 0 && !isFull && selectedMethod === 'custom' && (
         <div className="rounded-xl bg-gray-50 border border-gray-200 px-4 py-3 space-y-1.5">
           {paymentInfo && (
             <p className="text-xs text-gray-700 whitespace-pre-line">{paymentInfo}</p>
@@ -590,11 +680,11 @@ export function BookingForm({
         {isSubmitting ? (
           <span className="flex items-center justify-center gap-2">
             <Loader2 className="h-5 w-5 animate-spin" />
-            <span>{price > 0 && !isFull && (selectedMethod ?? availableMethods[0] ?? 'stripe') === 'stripe' ? "決済ページへ移動中..." : "送信中..."}</span>
+            <span>{effectivePrice > 0 && !isFull && (selectedMethod ?? availableMethods[0] ?? 'stripe') === 'stripe' ? "決済ページへ移動中..." : "送信中..."}</span>
           </span>
         ) : isFull ? (
           "キャンセル待ちに登録"
-        ) : price > 0 && (selectedMethod ?? availableMethods[0] ?? 'stripe') === 'stripe' ? (
+        ) : effectivePrice > 0 && (selectedMethod ?? availableMethods[0] ?? 'stripe') === 'stripe' ? (
           "決済に進む"
         ) : (
           "参加を申し込む"
@@ -604,7 +694,7 @@ export function BookingForm({
       <p className="text-center text-xs text-[#999999]">
         {isFull
           ? "キャンセルが出た場合、自動的に繰り上がります"
-          : price > 0 && (paymentMethod ?? 'stripe') === 'stripe'
+          : effectivePrice > 0 && (paymentMethod ?? 'stripe') === 'stripe'
           ? "決済完了後、ご確認メールをお送りします"
           : "送信後、ご確認メールをお送りします"}
       </p>

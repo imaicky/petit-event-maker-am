@@ -47,6 +47,7 @@ import { PaymentMethodsField } from "@/components/payment-methods-field";
 import { CategoryPicker } from "@/components/category-picker";
 import { TagPicker } from "@/components/tag-picker";
 import { CustomQuestionsEditor } from "@/components/custom-questions-editor";
+import { TicketTiersEditor } from "@/components/ticket-tiers-editor";
 import { parseCustomQuestions, type CustomQuestion } from "@/lib/custom-questions";
 import { useAuth } from "@/components/auth-provider";
 import { createClient } from "@/lib/supabase/client";
@@ -149,9 +150,11 @@ function FieldError({ message }: { message?: string }) {
 
 function FormSection({
   title,
+  description,
   children,
 }: {
   title: string;
+  description?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -160,6 +163,9 @@ function FormSection({
         <h2 className="text-xs font-bold uppercase tracking-wider text-[#999999]">
           {title}
         </h2>
+        {description && (
+          <p className="mt-1 text-xs text-[#999999]">{description}</p>
+        )}
       </div>
       <div className="p-6">{children}</div>
     </section>
@@ -513,6 +519,8 @@ export default function EditEventPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCreator, setIsCreator] = useState(false);
   const [canEdit, setCanEdit] = useState(false);
+  // PRO プラン契約者か（複数チケット種別の編集可否を分岐）
+  const [isPro, setIsPro] = useState(false);
   // この送信で is_published を上書きしたい場合の意図フラグ。送信後に null に戻す。
   const publishIntentRef = useRef<boolean | null>(null);
 
@@ -645,6 +653,16 @@ export default function EditEventPage() {
           }
         } catch {
           // graceful fallback when assignments table inaccessible
+        }
+        // PRO プラン判定（Phase 1 中は全員 true）
+        try {
+          const planRes = await fetch("/api/me/plan");
+          if (planRes.ok) {
+            const planJson = await planRes.json();
+            setIsPro(!!planJson.pro);
+          }
+        } catch {
+          // ignore
         }
         if (user && event.creator_id === user.id) {
           setIsCreator(true);
@@ -1334,6 +1352,14 @@ export default function EditEventPage() {
                   />
                 )}
               </div>
+            </FormSection>
+
+            {/* 複数プラン（チケット種別） — PRO 機能 */}
+            <FormSection
+              title="複数プラン（チケット種別）"
+              description="通常 / 早割 / VIP のように複数の料金プランを用意できます。PRO 限定機能。"
+            >
+              <TicketTiersEditor eventId={eventId} isPro={isPro} />
             </FormSection>
 
             {/* Category & Tags */}

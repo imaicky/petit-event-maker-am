@@ -107,9 +107,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch booking details (include stripe_session_id for duplicate check)
+    // ticket_tier_id/amount_paid を見て、選択された tier の価格を使う。
     const { data: booking, error: bookingErr } = await admin
       .from("bookings")
-      .select("id, guest_name, guest_email, payment_status, stripe_session_id")
+      .select(
+        "id, guest_name, guest_email, payment_status, stripe_session_id, ticket_tier_id, amount_paid"
+      )
       .eq("id", booking_id)
       .single();
 
@@ -150,25 +153,50 @@ export async function POST(request: NextRequest) {
     const successUrl = `${baseUrl}/events/${event_id}/thanks?booking_id=${encodeURIComponent(booking_id)}&name=${encodeURIComponent(booking.guest_name)}&email=${encodeURIComponent(booking.guest_email)}&session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${baseUrl}/events/${event_id}?payment_cancelled=1`;
 
+    // チケット種別が指定されていればその tier の price と name を使う
+    let tierName: string | null = null;
+    let tierAmount: number | null = null;
+    if (booking.ticket_tier_id) {
+      const { data: tier } = await admin
+        .from("event_ticket_tiers")
+        .select("name, price")
+        .eq("id", booking.ticket_tier_id)
+        .maybeSingle();
+      if (tier) {
+        const t = tier as { name: string; price: number };
+        tierName = t.name;
+        tierAmount = t.price;
+      }
+    }
+    // 優先順位: tier の価格 > bookings.amount_paid > event.price
+    const chargeAmount =
+      tierAmount ??
+      (typeof booking.amount_paid === "number" ? booking.amount_paid : null) ??
+      event.price;
+    const productName = tierName
+      ? `${event.title}（${tierName}）`
+      : event.title;
+
     let session;
     if (isConnect && settings?.stripe_account_id) {
       // Connect: Direct charge with application_fee_amount
       const feeJpy = calcApplicationFee(
-        event.price,
+        chargeAmount,
         Number(settings.platform_fee_percent ?? 5),
         Number(settings.platform_fee_fixed_jpy ?? 0)
       );
       session = await createConnectCheckoutSession({
         stripeAccountId: settings.stripe_account_id,
-        amountJpy: event.price,
+        amountJpy: chargeAmount,
         feeJpy,
-        productName: event.title,
+        productName,
         productImageUrl: event.image_url ?? undefined,
         customerEmail: booking.guest_email,
         metadata: {
           booking_id,
           event_id,
           platform_fee_jpy: String(feeJpy),
+          ticket_tier_id: booking.ticket_tier_id ?? "",
         },
         successUrl,
         cancelUrl,
@@ -185,10 +213,10 @@ export async function POST(request: NextRequest) {
               price_data: {
                 currency: "jpy",
                 product_data: {
-                  name: event.title,
+                  name: productName,
                   ...(event.image_url ? { images: [event.image_url] } : {}),
                 },
-                unit_amount: event.price,
+                unit_amount: chargeAmount,
               },
               quantity: 1,
             },
@@ -197,6 +225,7 @@ export async function POST(request: NextRequest) {
           metadata: {
             booking_id,
             event_id,
+            ticket_tier_id: booking.ticket_tier_id ?? "",
           },
           success_url: successUrl,
           cancel_url: cancelUrl,

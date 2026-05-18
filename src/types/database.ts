@@ -20,6 +20,10 @@ export type Database = {
           is_teacher: boolean
           is_admin: boolean
           line_user_id: string | null
+          plan: string
+          pro_until: string | null
+          pro_stripe_subscription_id: string | null
+          pro_stripe_customer_id: string | null
           created_at: string
           updated_at: string
         }
@@ -33,6 +37,10 @@ export type Database = {
           is_teacher?: boolean
           is_admin?: boolean
           line_user_id?: string | null
+          plan?: string
+          pro_until?: string | null
+          pro_stripe_subscription_id?: string | null
+          pro_stripe_customer_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -46,6 +54,10 @@ export type Database = {
           is_teacher?: boolean
           is_admin?: boolean
           line_user_id?: string | null
+          plan?: string
+          pro_until?: string | null
+          pro_stripe_subscription_id?: string | null
+          pro_stripe_customer_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -233,6 +245,8 @@ export type Database = {
           payment_method: string | null
           payment_deadline: string | null
           payment_reminded_at: string | null
+          ticket_tier_id: string | null
+          amount_paid: number | null
           created_at: string
         }
         Insert: {
@@ -250,6 +264,8 @@ export type Database = {
           payment_method?: string | null
           payment_deadline?: string | null
           payment_reminded_at?: string | null
+          ticket_tier_id?: string | null
+          amount_paid?: number | null
           created_at?: string
         }
         Update: {
@@ -267,6 +283,8 @@ export type Database = {
           payment_method?: string | null
           payment_deadline?: string | null
           payment_reminded_at?: string | null
+          ticket_tier_id?: string | null
+          amount_paid?: number | null
           created_at?: string
         }
         Relationships: [
@@ -777,6 +795,53 @@ export type Database = {
             columns: ['user_id']
             isOneToOne: true
             referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      event_ticket_tiers: {
+        Row: {
+          id: string
+          event_id: string
+          name: string
+          description: string | null
+          price: number
+          capacity: number | null
+          sort_order: number
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          event_id: string
+          name: string
+          description?: string | null
+          price: number
+          capacity?: number | null
+          sort_order?: number
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          event_id?: string
+          name?: string
+          description?: string | null
+          price?: number
+          capacity?: number | null
+          sort_order?: number
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'event_ticket_tiers_event_id_fkey'
+            columns: ['event_id']
+            isOneToOne: false
+            referencedRelation: 'events'
             referencedColumns: ['id']
           }
         ]

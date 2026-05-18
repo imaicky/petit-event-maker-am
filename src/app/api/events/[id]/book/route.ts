@@ -34,6 +34,8 @@ const bookingSchema = z.object({
     .or(z.literal("")),
   passcode: z.string().optional(),
   payment_method: z.enum(['stripe', 'bank', 'onsite', 'custom']).optional(),
+  // 複数チケット種別の選択（PRO機能）
+  ticket_tier_id: z.string().uuid().optional(),
   // hybrid イベントでは必須。非hybrid では無視（イベントの location_type から自動決定）。
   attendance_format: z.enum(["physical", "online"]).optional(),
   // イベントのカスタム質問への任意回答。サーバー側で sanitizeAnswers により
@@ -171,6 +173,44 @@ export async function POST(
     if (!ev.is_published) {
       return NextResponse.json({ error: "このイベントは現在受付中ではありません" }, { status: 410 });
     }
+
+    // 1a. チケット種別の解決（PRO機能）。送られてきた tier_id を検証する。
+    let chosenTier: {
+      id: string;
+      name: string;
+      price: number;
+      capacity: number | null;
+    } | null = null;
+    if (data.ticket_tier_id) {
+      const { data: tierRow } = await admin
+        .from("event_ticket_tiers")
+        .select("id, name, price, capacity, event_id, is_active")
+        .eq("id", data.ticket_tier_id)
+        .maybeSingle();
+      const tier = tierRow as {
+        id: string;
+        name: string;
+        price: number;
+        capacity: number | null;
+        event_id: string;
+        is_active: boolean;
+      } | null;
+      if (!tier || tier.event_id !== eventId || !tier.is_active) {
+        return NextResponse.json(
+          { error: "選択されたプランが見つかりません" },
+          { status: 400 }
+        );
+      }
+      chosenTier = {
+        id: tier.id,
+        name: tier.name,
+        price: tier.price,
+        capacity: tier.capacity,
+      };
+    }
+    // tier の price が指定されていればそれを実効価格として使う
+    const effectivePrice = chosenTier ? chosenTier.price : ev.price;
+
     // Booking deadline: explicit cutoff overrides event start time.
     const deadline = (ev as { booking_deadline?: string | null }).booking_deadline ?? null;
     const eventStart = (ev as { datetime?: string }).datetime ?? null;
@@ -296,7 +336,7 @@ export async function POST(
     const allowedMethods: PM[] = rawAllowed.filter(isMethodConfigured);
 
     let chosenMethod: PM | null = null;
-    if ((ev.price ?? 0) > 0) {
+    if (effectivePrice > 0) {
       if (data.payment_method && allowedMethods.includes(data.payment_method as PM)) {
         chosenMethod = data.payment_method as PM;
       } else if (allowedMethods.length === 1) {
@@ -349,6 +389,8 @@ export async function POST(
       payment_status: paymentStatus,
       payment_method: chosenMethod,
       payment_deadline: paymentDeadline,
+      ticket_tier_id: chosenTier?.id ?? null,
+      amount_paid: effectivePrice > 0 ? effectivePrice : null,
     };
     let { data: inserted, error: insErr } = await admin
       .from("bookings")
@@ -435,9 +477,13 @@ export async function POST(
         type: "created",
         nextStatus: paymentStatus,
         paymentMethod: chosenMethod,
-        amount: ev.price ?? null,
+        amount: effectivePrice,
         actor: user?.id ?? "guest",
-        metadata: { booking_status: bookingStatus, payment_deadline: paymentDeadline },
+        metadata: {
+          booking_status: bookingStatus,
+          payment_deadline: paymentDeadline,
+          ticket_tier_id: chosenTier?.id ?? null,
+        },
       });
     }
 
