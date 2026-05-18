@@ -40,7 +40,7 @@ type LineNotifyDialogProps = {
 };
 
 type Mode = "immediate" | "schedule";
-type Segment = "all" | "attendees";
+type Segment = "all" | "attendees" | "tags";
 
 function formatScheduleDate(iso: string): string {
   try {
@@ -81,6 +81,11 @@ export function LineNotifyDialog({
   const [mode, setMode] = useState<Mode>("immediate");
   const [scheduledAt, setScheduledAt] = useState("");
   const [segment, setSegment] = useState<Segment>("all");
+  // タグ別配信
+  const [availableTags, setAvailableTags] = useState<
+    Array<{ tag: string; count: number }>
+  >([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   // テンプレ機能
   type Template = { id: string; name: string; body: string; use_count: number };
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -88,16 +93,26 @@ export function LineNotifyDialog({
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [newTemplateName, setNewTemplateName] = useState("");
 
-  // テンプレ一覧をロード（ダイアログが開いたら）
+  // テンプレ一覧 + タグ一覧をロード（ダイアログが開いたら）
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/line/templates");
-        if (res.ok && !cancelled) {
-          const json = await res.json();
+        const [tplRes, tagRes] = await Promise.all([
+          fetch("/api/line/templates"),
+          isMenu ? Promise.resolve(null) : fetch("/api/line/tags"),
+        ]);
+        if (cancelled) return;
+        if (tplRes.ok) {
+          const json = await tplRes.json();
           setTemplates((json.templates as Template[]) ?? []);
+        }
+        if (tagRes && tagRes.ok) {
+          const json = await tagRes.json();
+          setAvailableTags(
+            (json.tags as Array<{ tag: string; count: number }>) ?? []
+          );
         }
       } catch {
         // ignore
@@ -106,7 +121,7 @@ export function LineNotifyDialog({
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, isMenu]);
 
   const applyTemplate = async (tpl: Template) => {
     setMessage(tpl.body);
@@ -159,10 +174,25 @@ export function LineNotifyDialog({
       const apiPath = isMenu
         ? `/api/menus/${eventId}/line-notify`
         : `/api/events/${eventId}/line-notify`;
+      // セグメント payload を組み立て:
+      //   tags 配列を指定する場合は { tags: [...] }、それ以外は文字列
+      let segmentPayload: string | { tags: string[] };
+      if (segment === "tags") {
+        if (selectedTags.length === 0) {
+          setError("配信対象タグを1つ以上選択してください");
+          setSending(false);
+          return;
+        }
+        segmentPayload = { tags: selectedTags };
+      } else if (isMenu && segment === "attendees") {
+        segmentPayload = "applicants";
+      } else {
+        segmentPayload = segment;
+      }
       const res = await fetch(apiPath, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, segment: isMenu && segment === "attendees" ? "applicants" : segment }),
+        body: JSON.stringify({ message, segment: segmentPayload }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -272,6 +302,7 @@ export function LineNotifyDialog({
         setMode("immediate");
         setScheduledAt("");
         setSegment("all");
+        setSelectedTags([]);
         setTestResult(null);
         setTesting(false);
       }, 200);
@@ -296,7 +327,9 @@ export function LineNotifyDialog({
               ? "LINE公式アカウントのフォロワーにメニューを案内します"
               : segment === "all"
               ? "公式アカウントのフォロワー全員に通知します"
-              : "確定参加者のうち、本人確認済みの方のLINEに通知します"}
+              : segment === "attendees"
+              ? "確定参加者のうち、本人確認済みの方のLINEに通知します"
+              : "選択したタグを持つフォロワーに絞って通知します"}
           </DialogDescription>
         </DialogHeader>
 
@@ -437,11 +470,11 @@ export function LineNotifyDialog({
                   <label className="block text-xs font-medium text-[#666666] mb-1.5">
                     送信先
                   </label>
-                  <div className="flex gap-1 rounded-xl bg-[#F7F7F7] p-1">
+                  <div className="grid grid-cols-3 gap-1 rounded-xl bg-[#F7F7F7] p-1">
                     <button
                       type="button"
                       onClick={() => setSegment("all")}
-                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                      className={`flex items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-all ${
                         segment === "all"
                           ? "bg-white text-[#1A1A1A] shadow-sm"
                           : "text-[#999999] hover:text-[#1A1A1A]"
@@ -462,7 +495,7 @@ export function LineNotifyDialog({
                           ? "予約送信は『全員』のみ対応しています"
                           : ""
                       }
-                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                      className={`flex items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-all ${
                         mode === "schedule"
                           ? "text-[#CCCCCC] cursor-not-allowed"
                           : segment === "attendees"
@@ -471,13 +504,82 @@ export function LineNotifyDialog({
                       }`}
                     >
                       <Tag className="h-3 w-3" />
-                      {isMenu ? "申込者のみ" : "参加者のみ"}
+                      {isMenu ? "申込者" : "参加者"}
                     </button>
+                    {!isMenu && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (mode === "schedule") return;
+                          setSegment("tags");
+                        }}
+                        disabled={mode === "schedule"}
+                        title={
+                          mode === "schedule"
+                            ? "予約送信は『全員』のみ対応しています"
+                            : ""
+                        }
+                        className={`flex items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-all ${
+                          mode === "schedule"
+                            ? "text-[#CCCCCC] cursor-not-allowed"
+                            : segment === "tags"
+                            ? "bg-white text-[#1A1A1A] shadow-sm"
+                            : "text-[#999999] hover:text-[#1A1A1A]"
+                        }`}
+                      >
+                        <Tag className="h-3 w-3" />
+                        タグで絞る
+                      </button>
+                    )}
                   </div>
                   {mode === "schedule" && (
                     <p className="mt-1 text-[10px] text-[#999999]">
                       予約送信は『全員』のみ対応。参加者向けの送信は『今すぐ送信』を使ってください
                     </p>
+                  )}
+                  {/* タグ選択 */}
+                  {segment === "tags" && (
+                    <div className="mt-2 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] p-2">
+                      {availableTags.length === 0 ? (
+                        <p className="text-[11px] text-[#999999] py-1 px-1">
+                          タグ付けされたフォロワーがいません。LINE設定 → フォロワー一覧でタグを付けてください。
+                        </p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {availableTags.map((t) => {
+                            const selected = selectedTags.includes(t.tag);
+                            return (
+                              <button
+                                key={t.tag}
+                                type="button"
+                                onClick={() =>
+                                  setSelectedTags((prev) =>
+                                    prev.includes(t.tag)
+                                      ? prev.filter((x) => x !== t.tag)
+                                      : [...prev, t.tag]
+                                  )
+                                }
+                                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all ${
+                                  selected
+                                    ? "bg-[#1A1A1A] text-white"
+                                    : "bg-white border border-[#E5E5E5] text-[#666666] hover:border-[#1A1A1A]/30"
+                                }`}
+                              >
+                                #{t.tag}
+                                <span className={selected ? "text-white/70" : "text-[#999999]"}>
+                                  {t.count}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {selectedTags.length > 0 && (
+                        <p className="mt-2 text-[10px] text-[#666666]">
+                          選択中: {selectedTags.length} タグ（OR検索: いずれかのタグを持つフォロワーが対象）
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
               ) : (
