@@ -177,7 +177,9 @@ export function LineNotifyDialog({
           <DialogDescription>
             {isMenu
               ? "LINE公式アカウントのフォロワーにメニューを案内します"
-              : "LINE公式アカウントのフォロワー全員に通知します"}
+              : segment === "all"
+              ? "公式アカウントのフォロワー全員に通知します"
+              : "確定参加者のうち、本人確認済みの方のLINEに通知します"}
           </DialogDescription>
         </DialogHeader>
 
@@ -306,40 +308,52 @@ export function LineNotifyDialog({
                 </div>
               )}
 
-              {/* Segment selector */}
-              {(allowSegment || mode === "immediate") && (
-                <div>
-                  <label className="block text-xs font-medium text-[#666666] mb-1.5">
-                    送信先
-                  </label>
-                  <div className="flex gap-1 rounded-xl bg-[#F7F7F7] p-1">
-                    <button
-                      type="button"
-                      onClick={() => setSegment("all")}
-                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-                        segment === "all"
-                          ? "bg-white text-[#1A1A1A] shadow-sm"
-                          : "text-[#999999] hover:text-[#1A1A1A]"
-                      }`}
-                    >
-                      <Users className="h-3 w-3" />
-                      全員
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSegment("attendees")}
-                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-                        segment === "attendees"
-                          ? "bg-white text-[#1A1A1A] shadow-sm"
-                          : "text-[#999999] hover:text-[#1A1A1A]"
-                      }`}
-                    >
-                      <Tag className="h-3 w-3" />
-                      {isMenu ? "申込者のみ" : "参加者のみ"}
-                    </button>
-                  </div>
+              {/* Segment selector — モード問わず常に表示 */}
+              <div>
+                <label className="block text-xs font-medium text-[#666666] mb-1.5">
+                  送信先
+                </label>
+                <div className="flex gap-1 rounded-xl bg-[#F7F7F7] p-1">
+                  <button
+                    type="button"
+                    onClick={() => setSegment("all")}
+                    className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                      segment === "all"
+                        ? "bg-white text-[#1A1A1A] shadow-sm"
+                        : "text-[#999999] hover:text-[#1A1A1A]"
+                    }`}
+                  >
+                    <Users className="h-3 w-3" />
+                    全員
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (mode === "schedule") return; // 予約送信は全員のみ
+                      setSegment("attendees");
+                    }}
+                    disabled={mode === "schedule"}
+                    title={mode === "schedule" ? "予約送信は『全員』のみ対応しています" : ""}
+                    className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                      mode === "schedule"
+                        ? "text-[#CCCCCC] cursor-not-allowed"
+                        : segment === "attendees"
+                        ? "bg-white text-[#1A1A1A] shadow-sm"
+                        : "text-[#999999] hover:text-[#1A1A1A]"
+                    }`}
+                  >
+                    <Tag className="h-3 w-3" />
+                    {isMenu ? "申込者のみ" : "参加者のみ"}
+                  </button>
                 </div>
-              )}
+                {mode === "schedule" && (
+                  <p className="mt-1 text-[10px] text-[#999999]">
+                    予約送信は『全員』のみ対応。参加者向けの送信は『今すぐ送信』を使ってください
+                  </p>
+                )}
+              </div>
+              {/* allowSegment は legacy 互換目的で残す */}
+              {allowSegment && null}
 
               {/* Schedule datetime picker */}
               {mode === "schedule" && (
