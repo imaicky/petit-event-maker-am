@@ -1,7 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2, Send, CheckCircle2, Clock, X, Users, Tag } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  Loader2,
+  Send,
+  CheckCircle2,
+  Clock,
+  X,
+  Users,
+  Tag,
+  BookmarkPlus,
+  Bookmark,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -70,6 +81,76 @@ export function LineNotifyDialog({
   const [mode, setMode] = useState<Mode>("immediate");
   const [scheduledAt, setScheduledAt] = useState("");
   const [segment, setSegment] = useState<Segment>("all");
+  // テンプレ機能
+  type Template = { id: string; name: string; body: string; use_count: number };
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [showTemplatePanel, setShowTemplatePanel] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [newTemplateName, setNewTemplateName] = useState("");
+
+  // テンプレ一覧をロード（ダイアログが開いたら）
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/line/templates");
+        if (res.ok && !cancelled) {
+          const json = await res.json();
+          setTemplates((json.templates as Template[]) ?? []);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const applyTemplate = async (tpl: Template) => {
+    setMessage(tpl.body);
+    setShowTemplatePanel(false);
+    // 使用回数+1（非同期で投げっぱなし）
+    void fetch(`/api/line/templates/${tpl.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ increment_use_count: true }),
+    }).catch(() => {});
+  };
+
+  const saveAsTemplate = async () => {
+    if (!message.trim() || !newTemplateName.trim()) return;
+    setSavingTemplate(true);
+    try {
+      const res = await fetch("/api/line/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newTemplateName, body: message }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.template) {
+          setTemplates((prev) => [json.template as Template, ...prev]);
+          setNewTemplateName("");
+        }
+      }
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
+
+  const deleteTemplate = async (id: string) => {
+    if (!confirm("このテンプレートを削除しますか？")) return;
+    try {
+      const res = await fetch(`/api/line/templates/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setTemplates((prev) => prev.filter((t) => t.id !== id));
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   const handleSend = async () => {
     setSending(true);
@@ -427,12 +508,92 @@ export function LineNotifyDialog({
               )}
 
               <div>
-                <label
-                  htmlFor="line-message"
-                  className="block text-xs font-medium text-[#666666] mb-1.5"
-                >
-                  メッセージ（任意）
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label
+                    htmlFor="line-message"
+                    className="block text-xs font-medium text-[#666666]"
+                  >
+                    メッセージ（任意）
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowTemplatePanel((v) => !v)}
+                    className="inline-flex items-center gap-1 text-[11px] text-[#06C755] hover:underline"
+                  >
+                    <Bookmark className="h-3 w-3" />
+                    {showTemplatePanel
+                      ? "閉じる"
+                      : `テンプレ${templates.length > 0 ? `(${templates.length})` : ""}`}
+                  </button>
+                </div>
+
+                {/* テンプレパネル */}
+                {showTemplatePanel && (
+                  <div className="mb-2 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA] p-2 space-y-2">
+                    {templates.length > 0 ? (
+                      <ul className="max-h-40 overflow-y-auto space-y-1">
+                        {templates.map((t) => (
+                          <li
+                            key={t.id}
+                            className="flex items-start gap-2 rounded bg-white border border-[#E5E5E5] px-2 py-1.5 hover:border-[#1A1A1A]/30"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => applyTemplate(t)}
+                              className="flex-1 text-left min-w-0"
+                            >
+                              <p className="text-xs font-medium text-[#1A1A1A] truncate">
+                                {t.name}
+                              </p>
+                              <p className="text-[11px] text-[#999999] truncate">
+                                {t.body}
+                              </p>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteTemplate(t.id)}
+                              className="h-6 w-6 rounded text-[#999999] hover:bg-red-50 hover:text-red-500 shrink-0 flex items-center justify-center"
+                              aria-label="削除"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-[11px] text-[#999999] px-1 py-1">
+                        まだテンプレートはありません。下の入力欄で本文を書いた後、テンプレ名を入れて保存できます。
+                      </p>
+                    )}
+                    {/* 現在の本文をテンプレとして保存 */}
+                    {message.trim() && (
+                      <div className="flex gap-1.5 pt-1 border-t border-[#E5E5E5]">
+                        <input
+                          type="text"
+                          value={newTemplateName}
+                          onChange={(e) => setNewTemplateName(e.target.value)}
+                          placeholder="テンプレ名（例: 開催直前リマインド）"
+                          maxLength={50}
+                          className="flex-1 rounded border border-[#E5E5E5] bg-white px-2 py-1 text-xs focus:border-[#1A1A1A] focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={saveAsTemplate}
+                          disabled={savingTemplate || !newTemplateName.trim()}
+                          className="inline-flex items-center gap-1 rounded bg-[#06C755] text-white px-2 py-1 text-[11px] font-medium hover:bg-[#05b34c] disabled:opacity-50"
+                        >
+                          {savingTemplate ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <BookmarkPlus className="h-3 w-3" />
+                          )}
+                          現在の本文を保存
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <textarea
                   id="line-message"
                   className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm placeholder:text-[#CCCCCC] focus:border-[#1A1A1A] focus:outline-none focus:ring-1 focus:ring-[#1A1A1A] resize-none"

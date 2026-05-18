@@ -811,6 +811,47 @@ export type Database = {
           }
         ]
       }
+      line_message_templates: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          body: string
+          sort_order: number
+          use_count: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          body: string
+          sort_order?: number
+          use_count?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          body?: string
+          sort_order?: number
+          use_count?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'line_message_templates_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
       event_reminder_sends: {
         Row: {
           id: string
