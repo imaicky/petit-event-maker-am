@@ -378,6 +378,7 @@ export async function POST(
         ).toISOString()
       : null;
 
+    // 必須カラム（既存マイグレーション済み前提）
     const bookingCore = {
       event_id: eventId,
       user_id: user?.id ?? null,
@@ -389,21 +390,41 @@ export async function POST(
       payment_status: paymentStatus,
       payment_method: chosenMethod,
       payment_deadline: paymentDeadline,
-      ticket_tier_id: chosenTier?.id ?? null,
-      amount_paid: effectivePrice > 0 ? effectivePrice : null,
     };
+    // 新しめのカラム（マイグレーション未適用環境でも動かすため別管理）
+    const tierFields: Record<string, unknown> = {};
+    if (chosenTier) tierFields.ticket_tier_id = chosenTier.id;
+    if (effectivePrice > 0) tierFields.amount_paid = effectivePrice;
+
     let { data: inserted, error: insErr } = await admin
       .from("bookings")
       .insert({
         ...bookingCore,
+        ...tierFields,
         custom_answers: sanitizedCustomAnswers,
-      })
+      } as never)
       .select()
       .single();
-    // マイグレーション未実行で custom_answers カラムがない環境では
-    // そのフィールドを外して再試行
+    // マイグレーション未実行で ticket_tier_id / amount_paid / custom_answers
+    // などのカラムが無い環境では、それらを外して段階的に再試行する。
     if (insErr && isMissingColumnError(insErr)) {
-      console.warn("[POST /api/events/[id]/book] custom_answers column missing — retrying without it");
+      console.warn(
+        "[POST /api/events/[id]/book] unknown column — retry without tier/answers:",
+        insErr.message
+      );
+      ({ data: inserted, error: insErr } = await admin
+        .from("bookings")
+        .insert({
+          ...bookingCore,
+          custom_answers: sanitizedCustomAnswers,
+        } as never)
+        .select()
+        .single());
+    }
+    if (insErr && isMissingColumnError(insErr)) {
+      console.warn(
+        "[POST /api/events/[id]/book] custom_answers column missing — retrying with bookingCore only"
+      );
       ({ data: inserted, error: insErr } = await admin
         .from("bookings")
         .insert(bookingCore)

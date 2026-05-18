@@ -107,14 +107,50 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch booking details (include stripe_session_id for duplicate check)
-    // ticket_tier_id/amount_paid を見て、選択された tier の価格を使う。
-    const { data: booking, error: bookingErr } = await admin
-      .from("bookings")
-      .select(
-        "id, guest_name, guest_email, payment_status, stripe_session_id, ticket_tier_id, amount_paid"
-      )
-      .eq("id", booking_id)
-      .single();
+    // ticket_tier_id / amount_paid を見て、選択された tier の価格を使う。
+    // マイグレーション未適用環境では当該カラムが無いので、まず欲張った
+    // select を試し、失敗したら最低限のフィールドで再試行する。
+    type BookingShape = {
+      id: string;
+      guest_name: string;
+      guest_email: string;
+      payment_status: string;
+      stripe_session_id: string | null;
+      ticket_tier_id?: string | null;
+      amount_paid?: number | null;
+    };
+    let booking: BookingShape | null = null;
+    let bookingErr: { code?: string; message?: string } | null = null;
+    {
+      const res = await admin
+        .from("bookings")
+        .select(
+          "id, guest_name, guest_email, payment_status, stripe_session_id, ticket_tier_id, amount_paid"
+        )
+        .eq("id", booking_id)
+        .single();
+      booking = (res.data as unknown as BookingShape) ?? null;
+      bookingErr = res.error;
+      if (bookingErr) {
+        const msg = (bookingErr.message || "").toLowerCase();
+        const missingCol =
+          bookingErr.code === "42703" ||
+          bookingErr.code === "PGRST204" ||
+          msg.includes("does not exist") ||
+          msg.includes("column");
+        if (missingCol) {
+          const retry = await admin
+            .from("bookings")
+            .select(
+              "id, guest_name, guest_email, payment_status, stripe_session_id"
+            )
+            .eq("id", booking_id)
+            .single();
+          booking = (retry.data as unknown as BookingShape) ?? null;
+          bookingErr = retry.error;
+        }
+      }
+    }
 
     if (bookingErr || !booking) {
       return NextResponse.json(
@@ -153,19 +189,24 @@ export async function POST(request: NextRequest) {
     const successUrl = `${baseUrl}/events/${event_id}/thanks?booking_id=${encodeURIComponent(booking_id)}&name=${encodeURIComponent(booking.guest_name)}&email=${encodeURIComponent(booking.guest_email)}&session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${baseUrl}/events/${event_id}?payment_cancelled=1`;
 
-    // チケット種別が指定されていればその tier の price と name を使う
+    // チケット種別が指定されていればその tier の price と name を使う。
+    // event_ticket_tiers テーブルが未マイグレーションでも落ちないよう try/catch。
     let tierName: string | null = null;
     let tierAmount: number | null = null;
     if (booking.ticket_tier_id) {
-      const { data: tier } = await admin
-        .from("event_ticket_tiers")
-        .select("name, price")
-        .eq("id", booking.ticket_tier_id)
-        .maybeSingle();
-      if (tier) {
-        const t = tier as { name: string; price: number };
-        tierName = t.name;
-        tierAmount = t.price;
+      try {
+        const { data: tier } = await admin
+          .from("event_ticket_tiers")
+          .select("name, price")
+          .eq("id", booking.ticket_tier_id)
+          .maybeSingle();
+        if (tier) {
+          const t = tier as { name: string; price: number };
+          tierName = t.name;
+          tierAmount = t.price;
+        }
+      } catch (err) {
+        console.warn("[stripe/checkout] tier lookup failed (table missing?):", err);
       }
     }
     // 優先順位: tier の価格 > bookings.amount_paid > event.price
