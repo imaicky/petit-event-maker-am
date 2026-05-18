@@ -811,6 +811,124 @@ export type Database = {
           }
         ]
       }
+      line_step_sequences: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name?: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'line_step_sequences_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: true
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      line_step_messages: {
+        Row: {
+          id: string
+          sequence_id: string
+          offset_hours: number
+          body: string
+          sort_order: number
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          sequence_id: string
+          offset_hours: number
+          body: string
+          sort_order?: number
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          sequence_id?: string
+          offset_hours?: number
+          body?: string
+          sort_order?: number
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'line_step_messages_sequence_id_fkey'
+            columns: ['sequence_id']
+            isOneToOne: false
+            referencedRelation: 'line_step_sequences'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      line_step_sends: {
+        Row: {
+          id: string
+          booking_id: string
+          step_message_id: string
+          sent_at: string
+          ok: boolean
+          error: string | null
+        }
+        Insert: {
+          id?: string
+          booking_id: string
+          step_message_id: string
+          sent_at?: string
+          ok?: boolean
+          error?: string | null
+        }
+        Update: {
+          id?: string
+          booking_id?: string
+          step_message_id?: string
+          sent_at?: string
+          ok?: boolean
+          error?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'line_step_sends_booking_id_fkey'
+            columns: ['booking_id']
+            isOneToOne: false
+            referencedRelation: 'bookings'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'line_step_sends_step_message_id_fkey'
+            columns: ['step_message_id']
+            isOneToOne: false
+            referencedRelation: 'line_step_messages'
+            referencedColumns: ['id']
+          }
+        ]
+      }
       line_message_templates: {
         Row: {
           id: string

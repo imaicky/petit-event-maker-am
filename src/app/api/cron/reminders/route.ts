@@ -80,6 +80,19 @@ export async function GET(request: Request) {
       }
     }
 
+    // ─── ステップ配信（D: 申込から N時間後の自動LINE） ──────
+    let stepSent = 0;
+    try {
+      const { processStepDeliveries } = await import("@/lib/step-sender");
+      const stepResult = await processStepDeliveries(admin, now);
+      stepSent = stepResult.sent;
+      if (stepResult.errors.length > 0) {
+        errors.push(...stepResult.errors.map((e) => `step: ${e}`));
+      }
+    } catch (e) {
+      errors.push(`step delivery: ${e instanceof Error ? e.message : String(e)}`);
+    }
+
     // ─── Bank transfer reminders + auto-cancel ─────────────
     let bankReminded = 0;
     let bankCancelled = 0;
@@ -96,6 +109,7 @@ export async function GET(request: Request) {
       ok: true,
       runs_executed: runsExecuted,
       total_sent: totalSent,
+      step_sent: stepSent,
       bank_reminded: bankReminded,
       bank_cancelled: bankCancelled,
       errors: errors.length > 0 ? errors : undefined,
