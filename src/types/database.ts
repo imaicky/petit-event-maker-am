@@ -247,6 +247,9 @@ export type Database = {
           payment_reminded_at: string | null
           ticket_tier_id: string | null
           amount_paid: number | null
+          line_user_id: string | null
+          line_link_token: string | null
+          line_linked_at: string | null
           created_at: string
         }
         Insert: {
@@ -266,6 +269,9 @@ export type Database = {
           payment_reminded_at?: string | null
           ticket_tier_id?: string | null
           amount_paid?: number | null
+          line_user_id?: string | null
+          line_link_token?: string | null
+          line_linked_at?: string | null
           created_at?: string
         }
         Update: {
@@ -285,6 +291,9 @@ export type Database = {
           payment_reminded_at?: string | null
           ticket_tier_id?: string | null
           amount_paid?: number | null
+          line_user_id?: string | null
+          line_link_token?: string | null
+          line_linked_at?: string | null
           created_at?: string
         }
         Relationships: [

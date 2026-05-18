@@ -395,6 +395,9 @@ export async function POST(
     const tierFields: Record<string, unknown> = {};
     if (chosenTier) tierFields.ticket_tier_id = chosenTier.id;
     if (effectivePrice > 0) tierFields.amount_paid = effectivePrice;
+    // 申込者LINE紐付け用ワンタイムトークン
+    const { randomBytes } = await import("crypto");
+    tierFields.line_link_token = randomBytes(24).toString("hex");
 
     let { data: inserted, error: insErr } = await admin
       .from("bookings")

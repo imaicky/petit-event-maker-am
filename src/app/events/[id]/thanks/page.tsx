@@ -54,6 +54,10 @@ interface BookingExtras {
   chosenMethod: string | null;
   paymentDeadline: string | null;
   isPaymentPending: boolean;
+  // 申込者LINE紐付け用
+  bookingId: string | null;
+  lineLinkToken: string | null;
+  lineUserId: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -256,16 +260,47 @@ export default async function ThanksPage({
   //   1. booking_id + email match (UUID is unguessable, email pins the identity)
   //   2. Stripe session_id match (issued only at checkout success)
   //   3. email-only match (legacy URLs from before booking_id was added)
-  let bookingExtras: BookingExtras = { chosenMethod: null, paymentDeadline: null, isPaymentPending: false };
+  let bookingExtras: BookingExtras = {
+    chosenMethod: null,
+    paymentDeadline: null,
+    isPaymentPending: false,
+    bookingId: null,
+    lineLinkToken: null,
+    lineUserId: null,
+  };
   if (event && process.env.SUPABASE_SERVICE_ROLE_KEY) {
     try {
       const admin = createAdminClient();
-      type FoundBooking = { id: string; payment_method: string | null; payment_status: string | null; payment_deadline: string | null };
+      type FoundBooking = {
+        id: string;
+        payment_method: string | null;
+        payment_status: string | null;
+        payment_deadline: string | null;
+        line_link_token?: string | null;
+        line_user_id?: string | null;
+      };
       let booking: FoundBooking | null = null;
-      const select = "id, payment_method, payment_status, payment_deadline";
+      // Phase A 用カラムが未マイグレーション環境では select が落ちるので、
+      // 試して失敗したら旧形式で再取得する。
+      const selectFull =
+        "id, payment_method, payment_status, payment_deadline, line_link_token, line_user_id";
+      const selectLegacy = "id, payment_method, payment_status, payment_deadline";
+      let select = selectFull;
+
+      // Phase A カラム不在エラーを検知して legacy select に切り替えるヘルパー
+      const isMissingColErr = (err: { code?: string; message?: string } | null) => {
+        if (!err) return false;
+        const msg = (err.message || "").toLowerCase();
+        return (
+          err.code === "42703" ||
+          err.code === "PGRST204" ||
+          msg.includes("does not exist") ||
+          msg.includes("column")
+        );
+      };
 
       if (bookingId && guestEmail) {
-        const { data: bk } = await admin
+        let res = await admin
           .from("bookings")
           .select(select)
           .eq("id", bookingId)
@@ -273,20 +308,40 @@ export default async function ThanksPage({
           .eq("guest_email", guestEmail)
           .in("status", ["confirmed", "waitlisted"])
           .maybeSingle();
-        booking = bk as FoundBooking | null;
+        if (isMissingColErr(res.error) && select !== selectLegacy) {
+          select = selectLegacy;
+          res = await admin
+            .from("bookings")
+            .select(select)
+            .eq("id", bookingId)
+            .eq("event_id", id)
+            .eq("guest_email", guestEmail)
+            .in("status", ["confirmed", "waitlisted"])
+            .maybeSingle();
+        }
+        booking = res.data as FoundBooking | null;
       }
       if (!booking && sessionId) {
-        const { data: bk } = await admin
+        let res = await admin
           .from("bookings")
           .select(select)
           .eq("event_id", id)
           .eq("stripe_session_id", sessionId)
           .maybeSingle();
-        booking = bk as FoundBooking | null;
+        if (isMissingColErr(res.error) && select !== selectLegacy) {
+          select = selectLegacy;
+          res = await admin
+            .from("bookings")
+            .select(select)
+            .eq("event_id", id)
+            .eq("stripe_session_id", sessionId)
+            .maybeSingle();
+        }
+        booking = res.data as FoundBooking | null;
       }
       if (!booking && !bookingId && guestEmail) {
         // Legacy fallback for thanks URLs issued before booking_id was added.
-        const { data: bk } = await admin
+        let res = await admin
           .from("bookings")
           .select(select)
           .eq("event_id", id)
@@ -294,13 +349,27 @@ export default async function ThanksPage({
           .in("status", ["confirmed", "waitlisted"])
           .limit(1)
           .maybeSingle();
-        booking = bk as FoundBooking | null;
+        if (isMissingColErr(res.error) && select !== selectLegacy) {
+          select = selectLegacy;
+          res = await admin
+            .from("bookings")
+            .select(select)
+            .eq("event_id", id)
+            .eq("guest_email", guestEmail)
+            .in("status", ["confirmed", "waitlisted"])
+            .limit(1)
+            .maybeSingle();
+        }
+        booking = res.data as FoundBooking | null;
       }
       if (booking) {
         bookingExtras = {
           chosenMethod: booking.payment_method ?? null,
           paymentDeadline: booking.payment_deadline ?? null,
           isPaymentPending: booking.payment_status === "pending",
+          bookingId: booking.id,
+          lineLinkToken: booking.line_link_token ?? null,
+          lineUserId: booking.line_user_id ?? null,
         };
         // Withhold Zoom info from any pending-payment booking. This catches:
         //   - Bank: until organizer manually confirms
@@ -486,6 +555,69 @@ export default async function ThanksPage({
               友だち追加する
             </a>
           </div>
+        )}
+
+        {/* ── 申込者本人のLINE紐付け (Phase A) ────────────────────────── */}
+        {bookingExtras.bookingId && (
+          <>
+            {/* 紐付け成功フィードバック */}
+            {typeof sp?.line_link_ok === "string" && (
+              <div className="mb-6 rounded-2xl border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-900">
+                ✅ LINE通知の受け取りを有効にしました
+                {typeof sp?.line_link_name === "string" && (
+                  <span className="ml-1 font-medium">
+                    （{decodeURIComponent(sp.line_link_name)} さん）
+                  </span>
+                )}
+                。今後のリマインダーやお知らせがあなたのLINEに直接届きます。
+              </div>
+            )}
+            {/* 紐付けエラー */}
+            {typeof sp?.line_link_error === "string" && (
+              <div className="mb-6 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                ⚠️ LINE通知の登録に失敗しました（{sp.line_link_error}）。
+                もう一度お試しください。
+              </div>
+            )}
+            {/* 未紐付け＆トークン健在 → ボタン表示 */}
+            {!bookingExtras.lineUserId && bookingExtras.lineLinkToken && (
+              <div className="mb-6 rounded-2xl border border-[#06C755]/30 bg-white p-6 text-center">
+                <p className="text-base font-bold text-[#1A1A1A] mb-1">
+                  📲 リマインドをLINEで受け取る（任意）
+                </p>
+                <p className="text-xs text-[#666666] mb-4 leading-relaxed">
+                  LINEで本人確認すると、開催前のリマインダーや変更通知が
+                  あなたのLINEに直接届きます。
+                  <br />
+                  <span className="text-[#999999]">
+                    ※ 主催者の公式アカウントを友だち追加していない場合は、
+                    先に上の「友だち追加する」をお願いします。
+                  </span>
+                </p>
+                <a
+                  href={`/api/auth/line/booking-link/start?booking_id=${encodeURIComponent(
+                    bookingExtras.bookingId
+                  )}&token=${encodeURIComponent(bookingExtras.lineLinkToken)}`}
+                  className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border-2 border-[#06C755] bg-white text-base font-bold text-[#06C755] transition-all hover:bg-[#06C755]/5 active:scale-95"
+                >
+                  <svg
+                    className="h-5 w-5"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63h2.386c.349 0 .63.285.63.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63.349 0 .631.285.631.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314" />
+                  </svg>
+                  LINEで通知を受け取る
+                </a>
+              </div>
+            )}
+            {/* 紐付け済み */}
+            {bookingExtras.lineUserId && !sp?.line_link_ok && (
+              <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 text-sm text-emerald-800">
+                ✅ このご予約はLINE通知の受け取りが有効です
+              </div>
+            )}
+          </>
         )}
 
         {/* Pending payment notice (Stripe webhook race window OR bank waiting) */}
