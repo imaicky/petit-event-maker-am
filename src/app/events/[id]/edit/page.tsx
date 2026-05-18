@@ -48,6 +48,10 @@ import { CategoryPicker } from "@/components/category-picker";
 import { TagPicker } from "@/components/tag-picker";
 import { CustomQuestionsEditor } from "@/components/custom-questions-editor";
 import { TicketTiersEditor } from "@/components/ticket-tiers-editor";
+import {
+  ReminderScheduleEditor,
+  type ReminderScheduleEntry,
+} from "@/components/reminder-schedule-editor";
 import { parseCustomQuestions, type CustomQuestion } from "@/lib/custom-questions";
 import { useAuth } from "@/components/auth-provider";
 import { createClient } from "@/lib/supabase/client";
@@ -542,6 +546,8 @@ export default function EditEventPage() {
   });
   const [savingDraft, setSavingDraft] = useState(false);
   const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [reminderSchedule, setReminderSchedule] = useState<ReminderScheduleEntry[]>([]);
+  const [initialReminderSchedule, setInitialReminderSchedule] = useState<ReminderScheduleEntry[]>([]);
   const [tagIds, setTagIds] = useState<number[]>([]);
   const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>([]);
 
@@ -550,6 +556,10 @@ export default function EditEventPage() {
   const watchedPrice = watch("price");
   const watchedPaymentMethod = watch("payment_method");
   const watchedValues = watch();
+  // reminder_schedule の変更検知（state ベースなので isDirty には反映されないため自前計算）
+  const reminderScheduleDirty =
+    JSON.stringify(reminderSchedule.map((e) => e.offset_hours).sort()) !==
+    JSON.stringify(initialReminderSchedule.map((e) => e.offset_hours).sort());
 
   // ── Load existing event ───────────────────────────────────────────────────
 
@@ -633,6 +643,21 @@ export default function EditEventPage() {
         setCategoryId(
           typeof event.category_id === "number" ? event.category_id : null
         );
+        // reminder_schedule (Phase B) — 未マイグレ環境でも落ちないよう any cast
+        const rawSchedule = (event as { reminder_schedule?: unknown }).reminder_schedule;
+        const parsedSchedule: ReminderScheduleEntry[] = Array.isArray(rawSchedule)
+          ? rawSchedule
+              .filter(
+                (e): e is { offset_hours: number } =>
+                  typeof e === "object" &&
+                  e !== null &&
+                  "offset_hours" in e &&
+                  typeof (e as { offset_hours: unknown }).offset_hours === "number"
+              )
+              .map((e) => ({ offset_hours: e.offset_hours }))
+          : [];
+        setReminderSchedule(parsedSchedule);
+        setInitialReminderSchedule(parsedSchedule);
         setCustomQuestions(
           parseCustomQuestions((event as { custom_questions?: unknown }).custom_questions)
         );
@@ -836,6 +861,8 @@ export default function EditEventPage() {
       category_id: categoryId ?? null,
       tag_ids: tagIds,
       custom_questions: customQuestions,
+      // Phase B: 複数リマインダースケジュール
+      reminder_schedule: reminderSchedule,
     };
 
     // 公開状態を新しく ON にした場合は state にも反映
@@ -1362,6 +1389,19 @@ export default function EditEventPage() {
               <TicketTiersEditor eventId={eventId} isPro={isPro} />
             </FormSection>
 
+            {/* 参加者リマインダー */}
+            <FormSection
+              title="参加者リマインダー"
+              description="開催日からの逆算で複数タイミングのリマインドを設定できます。空のままなら既定（1日前 + 3時間前）"
+            >
+              <ReminderScheduleEditor
+                eventId={eventId}
+                value={reminderSchedule}
+                onChange={setReminderSchedule}
+                eventDatetime={watchedValues.datetime ?? ""}
+              />
+            </FormSection>
+
             {/* Category & Tags */}
             <FormSection title="カテゴリ・タグ">
               <div className="space-y-5">
@@ -1510,7 +1550,12 @@ export default function EditEventPage() {
               )}
               <Button
                 type="submit"
-                disabled={isSubmitting || savingDraft || !isDirty}
+                disabled={
+                  isSubmitting ||
+                  savingDraft ||
+                  // reminderSchedule の変更も dirty とみなす
+                  (!isDirty && !reminderScheduleDirty)
+                }
                 variant={!isPublished ? "outline" : "default"}
                 className={
                   !isPublished

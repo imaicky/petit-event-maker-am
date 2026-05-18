@@ -52,6 +52,15 @@ const updateEventSchema = z.object({
   category_id: z.coerce.number().int().positive().nullable().optional(),
   tag_ids: z.array(z.coerce.number().int().positive()).optional(),
   custom_questions: z.array(z.unknown()).max(3).optional(),
+  reminder_schedule: z
+    .array(
+      z.object({
+        offset_hours: z.number().int().positive().max(24 * 60),
+      })
+    )
+    .max(10)
+    .optional()
+    .nullable(),
 }).refine(
   (data) => {
     if (data.location_type === "physical" || data.location_type === "hybrid") {
@@ -367,6 +376,8 @@ export async function PUT(
     const admin = createAdminClient();
 
     // Read pre-update capacity to detect increases (used for waitlist promotion)
+    // and pre-update is_published to detect publish transitions (used for
+    // catch-up reminders when a near-term event is published late)
     const { data: preUpdate } = await admin
       .from("events")
       .select("capacity, is_published")
@@ -374,6 +385,8 @@ export async function PUT(
       .single();
     const oldCapacity =
       (preUpdate as { capacity?: number | null } | null)?.capacity ?? null;
+    const wasPublished =
+      (preUpdate as { is_published?: boolean | null } | null)?.is_published === true;
 
     let event: unknown;
     let error: { code?: string; message?: string } | null = null;
@@ -512,15 +525,34 @@ export async function PUT(
         is_published: data.is_published,
         category_id: data.category_id ?? null,
       };
+      // reminder_schedule / custom_questions は新カラムなので、未マイグレーション
+      // 環境向けに段階的フォールバックする
+      const reminderField =
+        data.reminder_schedule !== undefined
+          ? { reminder_schedule: data.reminder_schedule }
+          : {};
       let result = await admin
         .from("events")
         .update({
           ...updateCore,
+          ...reminderField,
           custom_questions: parseCustomQuestions(data.custom_questions ?? []),
         } as never)
         .eq("id", id)
         .select()
         .single();
+      if (result.error && isMissingColumnError(result.error)) {
+        console.warn("[PUT /api/events/[id]] new column missing — retrying without reminder_schedule");
+        result = await admin
+          .from("events")
+          .update({
+            ...updateCore,
+            custom_questions: parseCustomQuestions(data.custom_questions ?? []),
+          } as never)
+          .eq("id", id)
+          .select()
+          .single();
+      }
       if (result.error && isMissingColumnError(result.error)) {
         console.warn("[PUT /api/events/[id]] custom_questions column missing — retrying without it");
         result = await admin
@@ -613,6 +645,62 @@ export async function PUT(
       .select("*", { count: "exact", head: true })
       .eq("event_id", id)
       .eq("status", "confirmed");
+
+    // Phase B-3: 公開直後の取りこぼし対策
+    // 新規に公開された（または既存公開済み）イベントについて、scheduleの中に
+    // 「もう過ぎてるけどまだ送ってないリマインド」があれば即座に送る。
+    // cron は日次なので、当日に作成・公開されたイベントの 1日前リマインド等が
+    // 永遠に送られないケースをここで救う。
+    if (ev?.is_published) {
+      const justPublished = !wasPublished;
+      try {
+        const { sendReminderForOffset, shouldSendNow, effectiveSchedule, offsetLabel } =
+          await import("@/lib/reminder-sender");
+        const baseUrl =
+          process.env.NEXT_PUBLIC_BASE_URL ||
+          "https://petit-event-maker-am.vercel.app";
+        const eventForReminder = {
+          id,
+          title: ev.title ?? "",
+          datetime: ev.datetime ?? "",
+          location: ev.location ?? null,
+          location_type: ev.location_type ?? null,
+          online_url: ev.online_url ?? null,
+          zoom_meeting_id: ev.zoom_meeting_id ?? null,
+          zoom_passcode: ev.zoom_passcode ?? null,
+          price: ev.price ?? 0,
+          capacity: ev.capacity ?? null,
+          image_url: null,
+          short_code: null,
+          creator_id: ev.creator_id ?? null,
+          reminder_schedule: (event as { reminder_schedule?: unknown } | null)
+            ?.reminder_schedule,
+        };
+        const schedule = effectiveSchedule(eventForReminder);
+        const now = new Date();
+        for (const entry of schedule) {
+          if (!shouldSendNow(eventForReminder.datetime, entry.offset_hours, now))
+            continue;
+          // 新規公開時のみ即時送信。公開済みの普通の更新では再送しない
+          // （クーロンに任せる方が安全）
+          if (!justPublished) continue;
+          try {
+            await sendReminderForOffset(admin, eventForReminder, entry.offset_hours, {
+              baseUrl,
+              timeLabel: offsetLabel(entry.offset_hours),
+            });
+          } catch (err) {
+            console.error(
+              `[PUT events/${id}] catch-up reminder ${entry.offset_hours}h failed:`,
+              err
+            );
+          }
+        }
+      } catch (err) {
+        // テーブル未マイグレーション等。送信失敗は無視して保存自体は成功させる
+        console.warn(`[PUT events/${id}] catch-up reminder block error:`, err);
+      }
+    }
 
     return NextResponse.json({
       event: { ...event, booking_count: bookingCount ?? 0 },

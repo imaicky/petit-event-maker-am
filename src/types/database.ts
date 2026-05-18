@@ -104,6 +104,7 @@ export type Database = {
           location_url: string | null
           reminder_24h_sent: boolean
           reminder_2h_sent: boolean
+          reminder_schedule: Json | null
           organizer_attendee_list_sent: boolean
           follower_notified_at: string | null
           capacity_physical: number | null
@@ -152,6 +153,7 @@ export type Database = {
           location_url?: string | null
           reminder_24h_sent?: boolean
           reminder_2h_sent?: boolean
+          reminder_schedule?: Json | null
           organizer_attendee_list_sent?: boolean
           follower_notified_at?: string | null
           capacity_physical?: number | null
@@ -200,6 +202,7 @@ export type Database = {
           location_url?: string | null
           reminder_24h_sent?: boolean
           reminder_2h_sent?: boolean
+          reminder_schedule?: Json | null
           organizer_attendee_list_sent?: boolean
           follower_notified_at?: string | null
           capacity_physical?: number | null
@@ -804,6 +807,41 @@ export type Database = {
             columns: ['user_id']
             isOneToOne: true
             referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      event_reminder_sends: {
+        Row: {
+          id: string
+          event_id: string
+          offset_hours: number
+          sent_at: string
+          recipient_count: number
+          channel: 'email' | 'line' | 'both'
+        }
+        Insert: {
+          id?: string
+          event_id: string
+          offset_hours: number
+          sent_at?: string
+          recipient_count?: number
+          channel?: 'email' | 'line' | 'both'
+        }
+        Update: {
+          id?: string
+          event_id?: string
+          offset_hours?: number
+          sent_at?: string
+          recipient_count?: number
+          channel?: 'email' | 'line' | 'both'
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'event_reminder_sends_event_id_fkey'
+            columns: ['event_id']
+            isOneToOne: false
+            referencedRelation: 'events'
             referencedColumns: ['id']
           }
         ]
