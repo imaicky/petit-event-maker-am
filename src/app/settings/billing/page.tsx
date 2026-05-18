@@ -9,7 +9,7 @@
  * - OPEN_ACCESS モード中の人には「現在は全員PRO機能利用可」の説明を出す
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -48,6 +48,23 @@ const FEATURES = [
 ];
 
 export default function BillingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-col min-h-dvh bg-[#FAFAFA]">
+          <Header />
+          <div className="flex flex-1 items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-[#999999]" />
+          </div>
+        </div>
+      }
+    >
+      <BillingPageInner />
+    </Suspense>
+  );
+}
+
+function BillingPageInner() {
   const { user, isLoading: authLoading } = useAuth();
   const sp = useSearchParams();
   const upgraded = sp.get("upgraded") === "1";
