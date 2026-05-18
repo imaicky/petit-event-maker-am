@@ -1360,6 +1360,38 @@ export default function LineSettingsPage() {
                 </div>
               </SectionCard>
 
+              {/* ─── 管理ダッシュボードへのリンク ───────────────── */}
+              <Link
+                href="/settings/line/insights"
+                className="block rounded-2xl border border-[#06C755]/30 bg-gradient-to-br from-[#06C755]/5 to-[#06C755]/10 p-4 hover:border-[#06C755]/50 hover:shadow-sm transition-all"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#06C755]">
+                    <svg
+                      className="h-5 w-5 text-white"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M3 3v18h18" />
+                      <path d="m19 9-5 5-4-4-3 3" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-[#1A1A1A]">
+                      LINE管理ダッシュボード
+                    </p>
+                    <p className="mt-0.5 text-xs text-[#666666]">
+                      フォロワー推移 / 配信履歴 / 未紐付け参加者を一望
+                    </p>
+                  </div>
+                  <ChevronDown className="h-4 w-4 text-[#999999] -rotate-90" />
+                </div>
+              </Link>
+
               {/* ─── 連携診断 ────────────────────────────────── */}
               <SectionCard title="連携診断">
                 <div className="space-y-4">
