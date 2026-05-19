@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, Clock, Plus, Trash2, Bell } from "lucide-react";
+import { CheckCircle2, Clock, Plus, Trash2, Bell, Send, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -122,6 +122,50 @@ export function ReminderScheduleEditor({
     );
   };
 
+  // 「今すぐ送信」テスト機能
+  const [testingOffset, setTestingOffset] = useState<number | null>(null);
+  const [testResult, setTestResult] = useState<{ offset: number; sent: number } | null>(null);
+  const [testError, setTestError] = useState<string | null>(null);
+
+  const handleTestSend = async (offsetHours: number) => {
+    if (
+      !confirm(
+        `この offset の リマインダーを「確定参加者全員」に今すぐ送信します。よろしいですか？\n（送信ログは上書きされるため、cron でも再度送られることはありません）`
+      )
+    )
+      return;
+    setTestingOffset(offsetHours);
+    setTestResult(null);
+    setTestError(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/reminders/test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ offset_hours: offsetHours, force: true }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setTestError(json.error || "送信に失敗しました");
+        return;
+      }
+      setTestResult({ offset: offsetHours, sent: json.sent ?? 0 });
+      // 履歴も再取得
+      try {
+        const hr = await fetch(`/api/events/${eventId}/reminders`);
+        if (hr.ok) {
+          const hj = await hr.json();
+          setHistory((hj.history as SendHistory[]) ?? []);
+        }
+      } catch {
+        // ignore
+      }
+    } catch {
+      setTestError("通信エラーが発生しました");
+    } finally {
+      setTestingOffset(null);
+    }
+  };
+
   const sentMap = new Map<number, SendHistory>();
   for (const h of history) sentMap.set(h.offset_hours, h);
 
@@ -132,6 +176,8 @@ export function ReminderScheduleEditor({
         <p className="text-xs text-blue-900 leading-relaxed">
           選択したタイミングで、確定参加者にメール（および本人がLINE紐付け済みならLINE）でリマインドを自動送信します。
           設定なしの場合は「1日前」と「3時間前」がデフォルトです。
+          <br />
+          ⏰ cron は <strong>毎時0分</strong> に動作するため、最小粒度は約1時間です。すぐ確認したい場合は各項目の「今すぐ送信」ボタンを使ってください。
         </p>
       </div>
 
@@ -249,7 +295,9 @@ export function ReminderScheduleEditor({
                           </>
                         ) : scheduledAt ? (
                           <>
-                            {isPast ? "⏳ 次回cron時に送信" : "📅 送信予定: "}
+                            {isPast
+                              ? "⏳ 次の毎時cronで送信予定"
+                              : "📅 送信予定: "}
                             {!isPast &&
                               scheduledAt.toLocaleString("ja-JP", {
                                 timeZone: "Asia/Tokyo",
@@ -266,6 +314,20 @@ export function ReminderScheduleEditor({
                     </div>
                     <button
                       type="button"
+                      onClick={() => handleTestSend(entry.offset_hours)}
+                      disabled={testingOffset !== null}
+                      title="このoffsetのリマインダーを今すぐ全参加者に送信"
+                      className="h-7 px-2.5 rounded-full text-[10px] font-medium text-[#06C755] border border-[#06C755]/30 hover:bg-[#06C755]/5 flex items-center justify-center gap-1 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {testingOffset === entry.offset_hours ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Send className="h-3 w-3" />
+                      )}
+                      今すぐ送信
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => remove(entry.offset_hours)}
                       className="h-7 w-7 rounded-full text-[#999999] hover:bg-red-50 hover:text-red-500 flex items-center justify-center shrink-0"
                       aria-label="削除"
@@ -276,6 +338,16 @@ export function ReminderScheduleEditor({
                 );
               })}
           </ul>
+        )}
+        {testResult && (
+          <div className="mt-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-900">
+            ✅ {formatOffsetLabel(testResult.offset)} のリマインダーを送信しました（{testResult.sent}件）
+          </div>
+        )}
+        {testError && (
+          <div className="mt-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
+            ⚠️ {testError}
+          </div>
         )}
         {!loadingHistory && history.length > 0 && (
           <p className="mt-2 text-[10px] text-[#999999]">

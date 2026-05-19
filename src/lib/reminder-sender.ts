@@ -74,6 +74,8 @@ type SendOpts = {
   baseUrl: string;
   /** 「明日開催」など人間向けの相対表現 */
   timeLabel: string;
+  /** trueなら既存のevent_reminder_sendsチェックを無視して強制送信（再送可） */
+  force?: boolean;
 };
 
 /**
@@ -89,13 +91,22 @@ export async function sendReminderForOffset(
   opts: SendOpts
 ): Promise<number> {
   // すでに送信済みかチェック（unique 制約に頼らず明示的に確認）
-  const { data: existing } = await admin
-    .from("event_reminder_sends")
-    .select("id")
-    .eq("event_id", event.id)
-    .eq("offset_hours", offsetHours)
-    .maybeSingle();
-  if (existing) return -1;
+  // force=true なら既存ログを削除して再送する
+  if (opts.force) {
+    await admin
+      .from("event_reminder_sends")
+      .delete()
+      .eq("event_id", event.id)
+      .eq("offset_hours", offsetHours);
+  } else {
+    const { data: existing } = await admin
+      .from("event_reminder_sends")
+      .select("id")
+      .eq("event_id", event.id)
+      .eq("offset_hours", offsetHours)
+      .maybeSingle();
+    if (existing) return -1;
+  }
 
   // 確定参加者を取得（line_user_id も含めて1回で）
   const { data: bookings } = await admin
