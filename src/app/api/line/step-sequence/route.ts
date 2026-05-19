@@ -52,7 +52,9 @@ export async function GET() {
     const seq = sequence as { id: string } & Record<string, unknown>;
     const { data: messages } = await supabase
       .from("line_step_messages")
-      .select("id, offset_hours, body, sort_order, is_active, updated_at")
+      .select(
+        "id, offset_hours, body, sort_order, is_active, email_fallback, updated_at"
+      )
       .eq("sequence_id", seq.id)
       .order("offset_hours", { ascending: true });
 

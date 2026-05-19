@@ -38,6 +38,7 @@ type StepMessage = {
   body: string;
   sort_order: number;
   is_active: boolean;
+  email_fallback?: boolean;
 };
 
 const PRESETS: Array<{ offset_hours: number; label: string; hint: string }> = [
@@ -62,6 +63,7 @@ export default function StepSequencePage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newOffset, setNewOffset] = useState<number | "">("");
   const [newBody, setNewBody] = useState("");
+  const [newEmailFallback, setNewEmailFallback] = useState(true);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
 
@@ -117,7 +119,11 @@ export default function StepSequencePage() {
       const res = await fetch("/api/line/step-sequence/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ offset_hours: offset, body: text }),
+        body: JSON.stringify({
+          offset_hours: offset,
+          body: text,
+          email_fallback: newEmailFallback,
+        }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -126,10 +132,39 @@ export default function StepSequencePage() {
       }
       setNewOffset("");
       setNewBody("");
+      setNewEmailFallback(true);
       setShowAddForm(false);
       await fetchData();
     } finally {
       setAdding(false);
+    }
+  };
+
+  // 既存ステップの email_fallback トグル
+  const toggleEmailFallback = async (m: StepMessage) => {
+    const next = !(m.email_fallback ?? true);
+    // 楽観更新
+    setMessages((prev) =>
+      prev.map((x) => (x.id === m.id ? { ...x, email_fallback: next } : x))
+    );
+    try {
+      const res = await fetch(`/api/line/step-sequence/messages/${m.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email_fallback: next }),
+      });
+      if (!res.ok) {
+        // ロールバック
+        setMessages((prev) =>
+          prev.map((x) =>
+            x.id === m.id ? { ...x, email_fallback: !next } : x
+          )
+        );
+      }
+    } catch {
+      setMessages((prev) =>
+        prev.map((x) => (x.id === m.id ? { ...x, email_fallback: !next } : x))
+      );
     }
   };
 
@@ -230,12 +265,35 @@ export default function StepSequencePage() {
                         <Clock className="h-4 w-4 text-[#06C755]" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-[#1A1A1A]">
-                          申込から {offsetLabel(m.offset_hours)}
-                        </p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-bold text-[#1A1A1A]">
+                            申込から {offsetLabel(m.offset_hours)}
+                          </p>
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                              (m.email_fallback ?? true)
+                                ? "bg-blue-50 text-blue-700"
+                                : "bg-[#F2F2F2] text-[#999999]"
+                            }`}
+                          >
+                            ✉️{" "}
+                            {(m.email_fallback ?? true)
+                              ? "メール送信あり"
+                              : "メール送信なし"}
+                          </span>
+                        </div>
                         <p className="mt-1 text-sm text-[#666666] whitespace-pre-wrap leading-relaxed">
                           {m.body}
                         </p>
+                        <button
+                          type="button"
+                          onClick={() => toggleEmailFallback(m)}
+                          className="mt-2 text-[11px] text-[#06C755] hover:underline"
+                        >
+                          {(m.email_fallback ?? true)
+                            ? "LINE未紐付け者へのメール送信をOFFにする"
+                            : "LINE未紐付け者にもメールで送る（推奨）"}
+                        </button>
                       </div>
                       <button
                         type="button"
@@ -330,13 +388,30 @@ export default function StepSequencePage() {
                 onChange={(e) => setNewBody(e.target.value)}
                 rows={4}
                 maxLength={500}
-                placeholder="申込者本人のLINEに届くメッセージ"
+                placeholder="申込者本人のLINEまたはメールに届くメッセージ"
                 className="rounded-xl border-[#E5E5E5] resize-none text-sm"
               />
               <p className="mt-1 text-[10px] text-[#999999] text-right">
                 {newBody.length}/500
               </p>
             </div>
+            <label className="flex items-start gap-2 cursor-pointer rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-3">
+              <input
+                type="checkbox"
+                checked={newEmailFallback}
+                onChange={(e) => setNewEmailFallback(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-[#1A1A1A]"
+              />
+              <div className="flex-1 text-xs">
+                <p className="font-medium text-[#1A1A1A]">
+                  ✉️ LINE未紐付け者にはメールで送る（推奨）
+                </p>
+                <p className="mt-0.5 text-[#999999] leading-relaxed">
+                  LINE紐付け済みの方にはLINEで、未紐付けの方にはメールで配信。
+                  オフにするとLINE紐付け済みの方のみに届きます。
+                </p>
+              </div>
+            </label>
             {error && <p className="text-xs text-red-500">{error}</p>}
             <Button
               type="button"
@@ -367,11 +442,15 @@ export default function StepSequencePage() {
         {/* 注意書き */}
         <div className="mt-8 rounded-xl bg-amber-50 border border-amber-200 p-4">
           <p className="text-xs text-amber-900 leading-relaxed">
-            <strong>注意：</strong>
-            申込者がThanksページで「LINEで通知を受け取る」を完了している方のみに届きます。
-            未紐付けの方には届かないため、メール通知も併用してください。
+            <strong>配信ルート：</strong>
             <br />
-            また cron は1日1回（JST 9:00頃）動作するため、最小粒度は約24時間です。
+            ・ LINE紐付け済みの申込者 → <strong>LINE</strong>でプッシュ配信
+            <br />
+            ・ LINE未紐付けの申込者 →
+            ステップで「メール送信あり」になっていれば<strong>メール</strong>で配信
+            <br />
+            <br />
+            <strong>注意：</strong> cron は1日1回（JST 9:00頃）動作するため、最小粒度は約24時間です。
           </p>
         </div>
       </main>

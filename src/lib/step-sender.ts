@@ -12,6 +12,8 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { pushLineMessage } from "@/lib/line";
+import { sendBatchEmails } from "@/lib/email";
+import { wrapInHtml } from "@/lib/email-templates";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -41,7 +43,7 @@ export async function processStepDeliveries(
     // 2. それらのシーケンスのステップ一覧
     const { data: steps } = await admin
       .from("line_step_messages")
-      .select("id, sequence_id, offset_hours, body, is_active")
+      .select("id, sequence_id, offset_hours, body, is_active, email_fallback")
       .in("sequence_id", seqIds)
       .eq("is_active", true);
     const stepRows = (steps ?? []) as Array<{
@@ -49,6 +51,7 @@ export async function processStepDeliveries(
       sequence_id: string;
       offset_hours: number;
       body: string;
+      email_fallback?: boolean;
     }>;
     if (stepRows.length === 0) return { sent: 0, errors: [] };
 
@@ -91,30 +94,29 @@ export async function processStepDeliveries(
     // 主催者ごとに処理（並列化はLINE Push レートを考慮して逐次）
     for (const userId of userIds) {
       const token = tokenByUserId.get(userId);
-      if (!token) continue; // LINE未連携の主催者はスキップ
       const eventIds = eventIdsByUserId.get(userId) ?? [];
       if (eventIds.length === 0) continue;
 
-      // その主催者の confirmed bookings（line_user_id 有り）
-      let bookings: Array<{
+      // confirmed bookings を全件取得（line_user_id 有無を問わず）
+      // 未紐付け申込者にはメールでフォールバックする
+      type BookingForStep = {
         id: string;
-        line_user_id: string;
+        event_id: string;
+        line_user_id: string | null;
+        guest_name: string | null;
+        guest_email: string | null;
         created_at: string;
-      }> = [];
+      };
+      let bookings: BookingForStep[] = [];
       try {
         const { data: bks } = await admin
           .from("bookings")
-          .select("id, line_user_id, created_at")
+          .select(
+            "id, event_id, line_user_id, guest_name, guest_email, created_at"
+          )
           .in("event_id", eventIds)
-          .eq("status", "confirmed")
-          .not("line_user_id", "is", null);
-        bookings = ((bks ?? []) as Array<{
-          id: string;
-          line_user_id: string | null;
-          created_at: string;
-        }>).filter((b): b is { id: string; line_user_id: string; created_at: string } =>
-          !!b.line_user_id
-        );
+          .eq("status", "confirmed");
+        bookings = (bks ?? []) as BookingForStep[];
       } catch (err) {
         errors.push(
           `bookings fetch (${userId}): ${
@@ -125,13 +127,26 @@ export async function processStepDeliveries(
       }
       if (bookings.length === 0) continue;
 
+      // この主催者のイベントタイトルを引いておく（メール件名に使う）
+      const eventTitleById = new Map<string, string>();
+      try {
+        const { data: evRows } = await admin
+          .from("events")
+          .select("id, title")
+          .in("id", eventIds);
+        for (const e of (evRows ?? []) as Array<{ id: string; title: string }>) {
+          eventTitleById.set(e.id, e.title);
+        }
+      } catch {
+        // 件名にタイトル使えなくても続行
+      }
+
       // この主催者のステップ一覧
       const mySteps = stepRows.filter(
         (s) => userIdBySeq.get(s.sequence_id) === userId
       );
 
       // 各 booking × 各 step で送信判定
-      // 1リクエストずつ
       for (const booking of bookings) {
         const bookedAt = new Date(booking.created_at).getTime();
         for (const step of mySteps) {
@@ -147,26 +162,68 @@ export async function processStepDeliveries(
             .maybeSingle();
           if (existing) continue;
 
-          // 送信
-          const result = await pushLineMessage(
-            token,
-            booking.line_user_id,
-            step.body
-          );
+          // ─── 配信ルート決定 ────────────────────────────
+          // 1) LINE紐付け済み かつ 主催者LINE連携あり → LINE
+          // 2) LINE未紐付け かつ email_fallback=true かつ guest_email あり → Email
+          // 3) どれにも該当しなければ skipped を記録（再送はしない）
+          const emailFallback = step.email_fallback !== false; // default true
+          const canLine = !!booking.line_user_id && !!token;
+          const canEmail =
+            !canLine && emailFallback && !!booking.guest_email;
 
-          await admin.from("line_step_sends").insert({
-            booking_id: booking.id,
-            step_message_id: step.id,
-            ok: result.ok,
-            error: result.ok ? null : result.error,
-          } as never);
-
-          if (result.ok) {
-            sent++;
-          } else {
-            errors.push(
-              `push ${booking.id} step ${step.id}: ${result.error}`
+          if (canLine) {
+            const result = await pushLineMessage(
+              token!,
+              booking.line_user_id!,
+              step.body
             );
+            await admin.from("line_step_sends").insert({
+              booking_id: booking.id,
+              step_message_id: step.id,
+              ok: result.ok,
+              error: result.ok ? null : result.error,
+              channel: "line",
+            } as never);
+            if (result.ok) sent++;
+            else errors.push(`line ${booking.id} step ${step.id}: ${result.error}`);
+          } else if (canEmail) {
+            const eventTitle =
+              eventTitleById.get(booking.event_id) ?? "イベント";
+            const subject = `【${eventTitle}】主催者からのお知らせ`;
+            const html = wrapInHtml(step.body, eventTitle);
+            try {
+              await sendBatchEmails({
+                to: [booking.guest_email!],
+                subject,
+                html,
+              });
+              await admin.from("line_step_sends").insert({
+                booking_id: booking.id,
+                step_message_id: step.id,
+                ok: true,
+                channel: "email",
+              } as never);
+              sent++;
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              await admin.from("line_step_sends").insert({
+                booking_id: booking.id,
+                step_message_id: step.id,
+                ok: false,
+                error: msg,
+                channel: "email",
+              } as never);
+              errors.push(`email ${booking.id} step ${step.id}: ${msg}`);
+            }
+          } else {
+            // 送信先なし — 記録して再送ループを止める
+            await admin.from("line_step_sends").insert({
+              booking_id: booking.id,
+              step_message_id: step.id,
+              ok: false,
+              error: "no delivery channel available",
+              channel: "skipped",
+            } as never);
           }
         }
       }

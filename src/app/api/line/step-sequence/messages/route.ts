@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 const createSchema = z.object({
   offset_hours: z.number().int().min(0).max(24 * 365),
   body: z.string().min(1, "本文を入力してください").max(500),
+  email_fallback: z.boolean().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -42,13 +43,22 @@ export async function POST(request: NextRequest) {
     sequence = ins.data;
   }
 
+  const insertPayload: {
+    sequence_id: string;
+    offset_hours: number;
+    body: string;
+    email_fallback?: boolean;
+  } = {
+    sequence_id: (sequence as { id: string }).id,
+    offset_hours: parsed.data.offset_hours,
+    body: parsed.data.body,
+  };
+  if (typeof parsed.data.email_fallback === "boolean") {
+    insertPayload.email_fallback = parsed.data.email_fallback;
+  }
   const { data, error } = await supabase
     .from("line_step_messages")
-    .insert({
-      sequence_id: (sequence as { id: string }).id,
-      offset_hours: parsed.data.offset_hours,
-      body: parsed.data.body,
-    })
+    .insert(insertPayload)
     .select()
     .single();
 

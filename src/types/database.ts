@@ -854,6 +854,7 @@ export type Database = {
           body: string
           sort_order: number
           is_active: boolean
+          email_fallback: boolean
           created_at: string
           updated_at: string
         }
@@ -864,6 +865,7 @@ export type Database = {
           body: string
           sort_order?: number
           is_active?: boolean
+          email_fallback?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -874,6 +876,7 @@ export type Database = {
           body?: string
           sort_order?: number
           is_active?: boolean
+          email_fallback?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -895,6 +898,7 @@ export type Database = {
           sent_at: string
           ok: boolean
           error: string | null
+          channel: string
         }
         Insert: {
           id?: string
@@ -903,6 +907,7 @@ export type Database = {
           sent_at?: string
           ok?: boolean
           error?: string | null
+          channel?: string
         }
         Update: {
           id?: string
@@ -911,6 +916,7 @@ export type Database = {
           sent_at?: string
           ok?: boolean
           error?: string | null
+          channel?: string
         }
         Relationships: [
           {

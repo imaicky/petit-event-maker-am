@@ -9,6 +9,7 @@ const updateSchema = z.object({
   offset_hours: z.number().int().min(0).max(24 * 365).optional(),
   body: z.string().min(1).max(500).optional(),
   is_active: z.boolean().optional(),
+  email_fallback: z.boolean().optional(),
 });
 
 export async function PUT(
